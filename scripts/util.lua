@@ -21,6 +21,7 @@ util.cores = {
   texto_fraco  = "#bfa58a",
   ouro         = "#f2c14e",
   ouro_escuro  = "#b8862b",
+  texto_ouro   = "#3a2410",   -- texto em cima de fundo dourado
   verde        = "#7cc56a",
   vermelho     = "#e2604a",
   sombra       = "#00000055",
@@ -39,7 +40,7 @@ local function decimal(n, casas)
   return (s:gsub("%.", ","))
 end
 
-local sufixos = { { 1e15, "qua" }, { 1e12, "tri" }, { 1e9, "bi" }, { 1e6, "mi" }, { 1e4, "mil" } }
+local sufixos = { { 1e18, "qui" }, { 1e15, "qua" }, { 1e12, "tri" }, { 1e9, "bi" }, { 1e6, "mi" }, { 1e4, "mil" } }
 
 function util.formatar(n)
   n = math.floor(n + 0.5)

@@ -26,6 +26,7 @@
 #include "raylib.h"
 #include "atualizador.h"
 #include "cena3d.h"
+#include "sons.h"
 
 extern "C" {
 #include "lua.h"
@@ -352,6 +353,34 @@ static int l_projetar(lua_State* L) {
     return 2;
 }
 
+static bool g_sair = false;
+
+// Janela e opções -------------------------------------------------------------
+
+static int l_minimizar(lua_State*) { MinimizeWindow(); return 0; }
+static int l_sair(lua_State*) { g_sair = true; return 0; }
+static int l_alternar_tela_cheia(lua_State*) { ToggleBorderlessWindowed(); return 0; }
+static int l_tela_cheia(lua_State* L) { lua_pushboolean(L, IsWindowState(FLAG_BORDERLESS_WINDOWED_MODE)); return 1; }
+static int l_mouse_baixo(lua_State* L) { lua_pushboolean(L, IsMouseButtonDown(MOUSE_BUTTON_LEFT)); return 1; }
+static int l_roda(lua_State* L) { lua_pushnumber(L, GetMouseWheelMove()); return 1; }
+// motor.recorte(x, y, w, h): só desenha dentro desta área; sem argumentos, volta à tela toda
+static int l_recorte(lua_State* L) {
+    float z = M.camera.zoom;
+    EndScissorMode();
+    if (lua_gettop(L) >= 4) {
+        BeginScissorMode((int)(M.camera.offset.x + num(L, 1) * z), (int)(M.camera.offset.y + num(L, 2) * z),
+                         (int)std::ceil(num(L, 3) * z), (int)std::ceil(num(L, 4) * z));
+    } else {
+        BeginScissorMode((int)M.camera.offset.x, (int)M.camera.offset.y, (int)std::ceil(LARGURA * z),
+                         (int)std::ceil(ALTURA * z));
+    }
+    return 0;
+}
+
+static int l_sombras(lua_State* L) { cena3d::E.sombras = lua_toboolean(L, 1); return 0; }
+static int l_som(lua_State* L) { sons::tocar(luaL_checkstring(L, 1)); return 0; }
+static int l_volume(lua_State* L) { sons::volumes(num(L, 1), num(L, 2)); return 0; }
+
 static int l_fps(lua_State* L) {
     lua_pushinteger(L, GetFPS());
     return 1;
@@ -371,6 +400,10 @@ static void registrarApi(lua_State* L) {
         {"cena_camera", l_cena_camera}, {"cena_luz", l_cena_luz},
         {"peca", l_peca},           {"cena_desenhar", l_cena_desenhar},
         {"projetar", l_projetar},   {"fps", l_fps},
+        {"minimizar", l_minimizar}, {"sair", l_sair},
+        {"alternar_tela_cheia", l_alternar_tela_cheia}, {"tela_cheia", l_tela_cheia},
+        {"mouse_baixo", l_mouse_baixo}, {"roda", l_roda},
+        {"recorte", l_recorte},     {"sombras", l_sombras},     {"som", l_som}, {"volume", l_volume},
         {nullptr, nullptr},
     };
     luaL_newlib(L, funcoes);
@@ -748,7 +781,7 @@ int main() {
         M.pastaScripts = procurarPasta("scripts", "main.lua");
         M.pastaAssets = procurarPasta("assets", "fontes");
     }
-    M.arquivoSave = pastaDeDados() / "progresso.sav";
+    M.arquivoSave = pastaDeDados() / "progresso_v2.sav";  // o save do jogo 2D fica intacto
     if (const char* teste = getenv("TAVERNA_TESTE")) M.arquivoTeste = teste;
     if (const char* save = getenv("TAVERNA_SAVE")) M.arquivoSave = save;
 
@@ -770,13 +803,16 @@ int main() {
         return 0;  // a versão nova já está abrindo
     }
 
+    sons::iniciar();
+
     if (M.pastaScripts.empty()) {
         M.erro = "Não encontrei a pasta 'scripts' com o main.lua.\nEla precisa ficar ao lado do executável.";
     } else {
         carregarScripts();
     }
 
-    while (!WindowShouldClose()) {
+    while (!WindowShouldClose() && !g_sair) {
+        sons::atualizar();
         float dt = std::min(GetFrameTime(), 0.1f);
 
         // recarrega sozinho quando algum .lua muda
@@ -801,6 +837,12 @@ int main() {
             }
         }
 
+        if (IsMouseButtonReleased(MOUSE_BUTTON_LEFT) && M.erro.empty()) {
+            Vector2 p = GetScreenToWorld2D(GetMousePosition(), M.camera);
+            chamar("soltar", {p.x, p.y});
+        }
+        if (IsKeyPressed(KEY_ESCAPE)) chamar("tecla_esc");
+
         chamar("atualizar", {dt});
         chamar("teste", {dt});
 
@@ -818,6 +860,7 @@ int main() {
 
     chamar("ao_sair", {}, true);
     if (M.L) lua_close(M.L);
+    sons::encerrar();
     if (M.fontesProprias) {
         UnloadFont(M.fonteNormal);
         UnloadFont(M.fonteNegrito);

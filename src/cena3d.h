@@ -56,6 +56,7 @@ struct Estado {
     Luz luzes[MAX_LUZES];
     Vector3 camPos{9, 11, 15}, camAlvo{0, 0, 0};
     float fov = 28.0f;
+    bool sombras = true;
 };
 
 static Estado E;
@@ -188,7 +189,7 @@ static void desenhar(int x, int y, int w, int h, int alturaTela) {
     Vector3 centro{3.0f, 0.0f, 0.0f};
     Vector3 posSol = Vector3Add(centro, Vector3Scale(sol, 30.0f));
     Matrix luzVista = MatrixLookAt(posSol, centro, Vector3{0, 1, 0});
-    Matrix luzProj = MatrixOrtho(-17, 17, -14, 14, 1, 70);
+    Matrix luzProj = MatrixOrtho(-24, 24, -20, 20, 1, 80);
     Matrix luzVP = MatrixMultiply(luzVista, luzProj);
 
     rlEnableDepthTest();
@@ -201,7 +202,7 @@ static void desenhar(int x, int y, int w, int h, int alturaTela) {
     rlClearScreenBuffers();
     rlSetMatrixProjection(luzProj);
     rlSetMatrixModelview(luzVista);
-    for (const Peca& p : E.pecas) {
+    if (E.sombras) for (const Peca& p : E.pecas) {
         if (p.brilho >= 1.0f) continue;  // o que emite luz (fogo) não faz sombra
         DrawMesh(E.malhas[p.forma], E.matSombra, p.m);
     }

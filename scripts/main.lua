@@ -1,17 +1,35 @@
 -- =============================================================================
---  TAVERNA DE AVENTUREIROS — branch do protótipo 3D
+--  TAVERNA DE AVENTUREIROS
 --
---  Aqui o jogo abre direto na cena low poly de scripts/prototipo3d.lua.
---  Esta versão não lê nem grava o progresso salvo.
+--  O motor (C++) chama: iniciar(), atualizar(dt), desenhar(), tocar(x, y),
+--  soltar(x, y), tecla_esc() e ao_sair().
+--
+--    config.lua   números do balanceamento
+--    arvore.lua   árvore de habilidades
+--    jogo.lua     regras (não desenha nada)
+--    mundo.lua    taverna em 3D
+--    ui.lua       botões, textos e ícones
+--    telas.lua    HUD, abas e menus
+--    util.lua     funções de apoio
 -- =============================================================================
 
-local prototipo = require("prototipo3d")
+local jogo = require("jogo")
+local telas = require("telas")
 
 function iniciar()
   math.randomseed(os.time())
-  prototipo.iniciar()
+  jogo.tocar_som = motor.som
+  jogo.iniciar()
+  telas.iniciar()
 end
 
-function atualizar(dt) prototipo.atualizar(dt) end
-function desenhar() prototipo.desenhar() end
-function tocar(x, y) prototipo.tocar(x, y) end
+function atualizar(dt)
+  jogo.atualizar(dt)
+  telas.atualizar(dt)
+end
+
+function desenhar() telas.desenhar() end
+function tocar(x, y) telas.tocar(x, y) end
+function soltar(x, y) telas.soltar(x, y) end
+function tecla_esc() telas.esc() end
+function ao_sair() jogo.salvar() end

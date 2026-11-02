@@ -1,0 +1,1061 @@
+-- =============================================================================
+--  REGRAS DO JOGO: ouro, árvore, clientes, missões, mercadinho, jardim,
+--  contratados, parties, heróis, propaganda, invocação e final.
+--  Nada aqui desenha: assim os testes conseguem jogar sem abrir janela.
+-- =============================================================================
+
+local C = require("config")
+local A = require("arvore")
+local util = require("util")
+
+local J = {}
+
+J.PORTA = { x = -6.4, z = 1.1 }
+J.RUA_Z = 1.1
+J.QUADRO = { x = -2.6, z = -3.7 }
+J.BARRACA = { x = 9.3, z = -1.0 }
+
+local POS_MESAS = {
+  { x = -3.6, z = -0.7 }, { x = 0.3, z = -0.7 }, { x = 4.2, z = -0.7 },
+  { x = -3.6, z = 2.9 }, { x = 0.3, z = 2.9 }, { x = 4.2, z = 2.9 },
+  { x = 8.0, z = 2.9 }, { x = 10.7, z = 2.9 },
+}
+J.POS_MESAS = POS_MESAS
+J.BANCOS_BALCAO = { 1.4, 2.5, 3.6, 4.7 }
+
+J.TIPOS = {
+  { nome = "comum",     corpo = "#b58a5a", perna = "#4b3b2c", braco = "#a57a4e", temperamento = "calmo" },
+  { nome = "comum",     corpo = "#6f8f6a", perna = "#3e3a2e", braco = "#607f5b", temperamento = "calmo" },
+  { nome = "comum",     corpo = "#b76f62", perna = "#3f3734", braco = "#a7625a", temperamento = "calmo" },
+  { nome = "guerreiro", corpo = "#a8b4bf", perna = "#4d5560", braco = "#8e99a4", temperamento = "bravo" },
+  { nome = "guerreiro", corpo = "#a8b4bf", perna = "#6d3f2a", braco = "#b5483a", temperamento = "bravo" },
+  { nome = "mago",      corpo = "#6d4bb3", perna = "#4a2f86", braco = "#5e3fa0", temperamento = "sabio" },
+  { nome = "mago",      corpo = "#3e6db3", perna = "#27487f", braco = "#355f9e", temperamento = "sabio" },
+  { nome = "arqueiro",  corpo = "#4f8a3c", perna = "#4b3b2c", braco = "#437531", temperamento = "orgulhoso" },
+  { nome = "clerigo",   corpo = "#eadfca", perna = "#c9b98f", braco = "#ddd0b6", temperamento = "sabio" },
+}
+local PELES = { "#f1c9a5", "#e0ac7e", "#c68a5a", "#8d5a36" }
+local CHAPEUS = { "#6b4a2f", "#3e5a4b", false, "#7a3a3a" }
+local NOMES = { "Bruno", "Lia", "Tomás", "Iara", "Caio", "Nina", "Davi", "Rosa", "Otávio", "Maia",
+  "Heitor", "Clara", "Igor", "Luna", "Rui", "Vera", "Joel", "Alma" }
+
+local FOFOCAS = {
+  "Dizem que um dragão foi visto ao norte: as missões pagam mais!",
+  "Duas guildas rivais brigaram na estrada: as missões pagam mais!",
+  "Um nobre está contratando escoltas: as missões pagam mais!",
+  "Goblins saquearam uma caravana: as missões pagam mais!",
+  "O rei ofereceu recompensas pelos monstros: as missões pagam mais!",
+}
+
+local function tipo_de(nome)
+  local l = {}
+  for _, t in ipairs(J.TIPOS) do if t.nome == nome then l[#l + 1] = t end end
+  return util.escolher(l)
+end
+
+local function estado_inicial()
+  return {
+    versao = 2,
+    ouro = 0, total = 0, servidos = 0, rps = 0, tempo = 0,
+    nos = {},
+    missoes = {},           -- { rank, resta, contratado = id }
+    feitas = 0, feitas_rank = {},
+    espolios = 0, lucro_espolios = 0,
+    contratados = {},
+    parties = {},
+    prox_id = 1,
+    invocados_feitos = 0,
+    fama = 0,
+    estoque = 0, ciclo = 0, colhido = 0,
+    brigas = 0,
+    final_resta = nil, fim = false,
+    opcoes = { musica = 0.4, efeitos = 0.7, sombras = true, fps = false },
+  }
+end
+
+-- Efeitos da árvore -----------------------------------------------------------------
+
+local ef = {}
+
+local function recalcular()
+  ef = {}
+  for _, no in ipairs(A.NOS) do
+    local nv = J.estado.nos[no.id] or 0
+    if nv > 0 then
+      for k, v in pairs(no.ef) do
+        if k:sub(1, 2) == "x_" then ef[k] = (ef[k] or 1) * v ^ nv
+        else ef[k] = (ef[k] or 0) + v * nv end
+      end
+    end
+  end
+end
+
+function J.ef(k) return ef[k] or (k:sub(1, 2) == "x_" and 1 or 0) end
+function J.nivel(id) return J.estado.nos[id] or 0 end
+
+function J.custo_no(no) return math.floor(no.custo * no.mult ^ J.nivel(no.id)) end
+
+function J.no_liberado(no)
+  for _, p in ipairs(no.pre) do
+    if J.nivel(p) < 1 then return false end
+  end
+  return true
+end
+
+function J.no_maximo(no) return J.nivel(no.id) >= no.max end
+
+function J.pode_comprar_no(no)
+  return J.no_liberado(no) and not J.no_maximo(no) and J.estado.ouro >= J.custo_no(no)
+end
+
+local AVISOS = {
+  prateleira = "A prateleira de missões abriu! Aba Missões liberada.",
+  mercadinho = "O mercadinho abriu! Os aventureiros vão vender espólios.",
+  venda = "Aba de venda liberada no Mercadinho!",
+  jardim = "O jardim abriu! Aba Produção liberada.",
+  recrutador = "O recrutador chegou! Aba Aventureiros liberada.",
+  propaganda = "Propaganda liberada: seus heróis podem ficar famosos!",
+  invocacao = "O círculo de invocação foi construído!",
+}
+
+function J.comprar_no(id)
+  local no = A.POR_ID[id]
+  if not no or not J.pode_comprar_no(no) then return false end
+  J.estado.ouro = J.estado.ouro - J.custo_no(no)
+  J.estado.nos[id] = J.nivel(id) + 1
+  recalcular()
+  J.ajustar_equipe()
+  if AVISOS[id] then J.avisar(AVISOS[id]) end
+  return true
+end
+
+function J.tem_compra()
+  for _, no in ipairs(A.NOS) do if J.pode_comprar_no(no) then return true end end
+  return false
+end
+
+function J.avisar(texto, duracao)
+  J.aviso = { texto = texto, vida = 0, duracao = duracao or 3.5 }
+end
+
+function J.flutuar(x, y, z, texto, cor, tam)
+  J.efeitos[#J.efeitos + 1] = { x = x, y = y, z = z, texto = texto, cor = cor or util.cores.ouro, tam = tam or 22, vida = 0 }
+end
+
+function J.ganhar(v, x, y, z)
+  local e = J.estado
+  e.ouro = e.ouro + v
+  e.total = e.total + v
+  J.ganho_segundo = J.ganho_segundo + v
+  if x then J.flutuar(x, y, z, "+" .. util.formatar(v)) end
+end
+
+-- Lugares ---------------------------------------------------------------------------
+
+function J.num_mesas() return math.min(1 + J.ef("mesas"), #POS_MESAS) end
+
+function J.reconstruir_lugares()
+  local velhos = J.lugares or {}
+  local l = {}
+  for i = 1, J.num_mesas() do
+    local m = POS_MESAS[i]
+    l[#l + 1] = { x = m.x - 1.25, z = m.z, giro = math.pi / 2, y = 0.42, mesa = i }
+    l[#l + 1] = { x = m.x + 1.25, z = m.z, giro = -math.pi / 2, y = 0.42, mesa = i }
+  end
+  if J.ef("balcao") > 0 then
+    for _, x in ipairs(J.BANCOS_BALCAO) do
+      l[#l + 1] = { x = x, z = -1.42, giro = math.pi, y = 0.42, balcao = true }
+    end
+  end
+  -- quem está sentado continua no mesmo lugar
+  for i, v in ipairs(velhos) do
+    if l[i] and v.dono then
+      l[i].dono = v.dono
+      v.dono.lugar = l[i]
+    end
+  end
+  J.lugares = l
+end
+
+local function lugar_livre()
+  local livres = {}
+  for _, l in ipairs(J.lugares) do if not l.dono then livres[#livres + 1] = l end end
+  if #livres == 0 then return nil end
+  return util.escolher(livres)
+end
+
+function J.ajustar_equipe()
+  local n = J.ef("garcons")
+  for i = #J.garcons + 1, n do
+    J.garcons[i] = { x = 1.5 + i * 0.9, z = -1.0, casa = 1.5 + i * 0.9, giro = 0, fase = 0, estado = "parada", recarga = 1 + i * 0.5, rota = {} }
+  end
+  if #J.lugares < J.num_mesas() * 2 + (J.ef("balcao") > 0 and 4 or 0) then J.reconstruir_lugares() end
+end
+
+function J.ocupados()
+  local n = 0
+  for _, l in ipairs(J.lugares) do if l.dono then n = n + 1 end end
+  return n, #J.lugares
+end
+
+-- Valor dos pedidos -----------------------------------------------------------------
+
+function J.valor_pedido() return C.pedido_base * J.ef("x_pedido") end
+
+function J.intervalo_chegada() return C.intervalo_chegada * J.ef("x_chegada") end
+
+function J.paciencia() return C.paciencia + J.ef("paciencia") end
+
+function J.intervalo_garcom() return C.garcom_intervalo * J.ef("x_garcom") end
+
+-- Pessoas ---------------------------------------------------------------------------
+
+local function nova_pessoa(tipo)
+  return {
+    x = J.PORTA.x, y = 0, z = J.PORTA.z, giro = math.pi / 2, fase = math.random() * 6, t = 0,
+    tipo = tipo, pele = util.escolher(PELES),
+    chapeu = tipo.nome == "comum" and util.escolher(CHAPEUS) or nil,
+    pedido = math.random() < 0.5 and "bebida" or "comida",
+    rota = {}, andando = true, estado = "entrando",
+  }
+end
+
+local function rota_ate(p, x, z)
+  p.rota = { { x = p.x, z = J.RUA_Z }, { x = x, z = J.RUA_Z }, { x = x, z = z } }
+  p.andando = true
+end
+
+local function rota_saida(p)
+  p.rota = { { x = p.x, z = J.RUA_Z }, { x = J.PORTA.x + 1.2, z = J.RUA_Z }, { x = J.PORTA.x, z = J.PORTA.z } }
+  p.andando = true
+  p.estado = "saindo"
+end
+
+local function sentar_cliente(p, lugar)
+  p.lugar = lugar
+  lugar.dono = p
+  rota_ate(p, lugar.x, lugar.z)
+  p.estado = "entrando"
+end
+
+function J.novo_cliente()
+  local lugar = lugar_livre()
+  if not lugar then return nil end
+  -- no começo só gente comum e alguns aventureiros; depois mais aventureiros
+  local aventura = J.ef("prateleira") > 0 and 0.6 or 0.3
+  local nome = math.random() < aventura and util.escolher({ "guerreiro", "mago", "arqueiro", "clerigo" }) or "comum"
+  local p = nova_pessoa(tipo_de(nome))
+  sentar_cliente(p, lugar)
+  J.pessoas[#J.pessoas + 1] = p
+  return p
+end
+
+local function liberar(p)
+  if p.lugar then
+    p.lugar.dono = nil
+    p.lugar = nil
+  end
+  p.sentado, p.bebendo, p.y = false, false, 0
+end
+
+local function companheiro(p)
+  if not (p.lugar and p.lugar.mesa) then return nil end
+  for _, l in ipairs(J.lugares) do
+    if l.mesa == p.lugar.mesa and l.dono and l.dono ~= p and l.dono.sentado then return l.dono end
+  end
+  return nil
+end
+
+-- guerreiro e arqueiro não se bicam; mago e clérigo se dão muito bem
+local function combina(a, b)
+  local x, y = a.tipo.temperamento, b.tipo.temperamento
+  if (x == "bravo" and y == "orgulhoso") or (x == "orgulhoso" and y == "bravo") then return "briga" end
+  if a.tipo.nome ~= b.tipo.nome and x == "sabio" and y == "sabio" then return "combo" end
+  return nil
+end
+
+function J.servir(p, por_garcom)
+  if p.estado ~= "esperando" then return false end
+  local e = J.estado
+  local v = J.valor_pedido()
+  if p.tipo.nome ~= "comum" then v = v * C.bonus_aventureiro end
+  if not por_garcom and p.t <= C.tempo_rapido then
+    v = v * C.bonus_rapido
+    J.flutuar(p.x, 2.7, p.z, "Rápido!", util.cores.verde, 18)
+  end
+  -- comida e bebida feitas em casa usam o que foi colhido
+  if p.pedido == "comida" and J.ef("cozinheiro") > 0 and e.estoque >= 1 then
+    e.estoque = e.estoque - 1
+    v = v * (C.bonus_cozinheiro + C.bonus_cozinheiro_nivel * (J.ef("cozinheiro") - 1))
+  elseif p.pedido == "bebida" and J.ef("bebida_casa") > 0 and e.estoque >= 1 then
+    e.estoque = e.estoque - 1
+    v = v * (C.bonus_bebida_casa + C.bonus_bebida_nivel * (J.ef("bebida_casa") - 1))
+  end
+  local par = companheiro(p)
+  if par and combina(p, par) == "combo" then
+    v = v * C.combo_mesa
+    J.flutuar(p.x, 2.95, p.z, "Combo!", "#c9a7ff", 18)
+  end
+  if p.festa then
+    v = v * (2 + J.ef("festa"))
+    J.flutuar(p.x, 2.95, p.z, "Festa!", util.cores.verde, 18)
+  end
+  J.ganhar(v, p.x, 2.3, p.z)
+  e.servidos = e.servidos + 1
+  p.estado, p.t, p.reservado, p.festa = "comendo", 0, false, false
+  J.som("moeda")
+  return true
+end
+
+function J.som(nome) if J.tocar_som then J.tocar_som(nome) end end
+
+function J.separar_briga(p)
+  if p.estado ~= "brigando" then return false end
+  local par = p.oponente
+  local v = J.valor_pedido() * C.briga_recompensa
+  J.ganhar(v, p.x, 2.3, p.z)
+  J.flutuar(p.x, 2.95, p.z, "Briga separada!", util.cores.verde, 18)
+  J.estado.brigas = J.estado.brigas + 1
+  for _, q in ipairs({ p, par }) do
+    if q and q.estado == "brigando" then
+      q.estado, q.t, q.oponente, q.sem_briga = "esperando", 0, nil, true
+      q.andando = false
+    end
+  end
+  J.som("moeda")
+  return true
+end
+
+local function andar(o, dx, dz, vel, dt)
+  local ax, az = dx - o.x, dz - o.z
+  local d = math.sqrt(ax * ax + az * az)
+  if d < 0.04 then return true end
+  local passo = math.min(vel * dt, d)
+  o.x, o.z = o.x + ax / d * passo, o.z + az / d * passo
+  local alvo = math.atan(ax, az)
+  local dif = (alvo - o.giro + math.pi) % (2 * math.pi) - math.pi
+  o.giro = o.giro + dif * math.min(1, dt * 12)
+  o.fase = o.fase + dt
+  return false
+end
+
+local function seguir_rota(p, dt, vel)
+  local alvo = p.rota[1]
+  if not alvo then return true end
+  if andar(p, alvo.x, alvo.z, vel, dt) then table.remove(p.rota, 1) end
+  return #p.rota == 0
+end
+
+local function iniciar_missao_visual(p, dados)
+  p.estado = "indo_quadro"
+  p.dados_missao = dados
+  rota_ate(p, J.QUADRO.x, J.QUADRO.z)
+end
+
+local function atualizar_pessoa(p, dt)
+  p.t = p.t + dt
+  if p.estado == "entrando" then
+    if seguir_rota(p, dt, C.velocidade_pessoa) then
+      p.estado, p.t, p.andando, p.sentado = "esperando", 0, false, true
+      if p.lugar then p.y, p.giro = p.lugar.y, p.lugar.giro end
+    end
+  elseif p.estado == "esperando" then
+    -- temperamentos incompatíveis na mesma mesa acabam em briga
+    if not p.sem_briga and p.t >= C.briga_inicio then
+      local par = companheiro(p)
+      if par and par.estado == "esperando" and not par.sem_briga and combina(p, par) == "briga" then
+        p.estado, p.oponente, p.t = "brigando", par, 0
+        par.estado, par.oponente, par.t = "brigando", p, 0
+        J.flutuar(p.x, 2.8, p.z, "Briga!", util.cores.vermelho, 20)
+        J.som("briga")
+        return
+      end
+    end
+    if p.t >= J.paciencia() then
+      J.flutuar(p.x, 2.5, p.z, "Desistiu...", util.cores.vermelho, 16)
+      liberar(p)
+      rota_saida(p)
+    end
+  elseif p.estado == "brigando" then
+    p.fase = p.fase + dt
+    if p.t >= C.briga_espera then
+      J.flutuar(p.x, 2.5, p.z, "Foram embora!", util.cores.vermelho, 16)
+      p.oponente = nil
+      liberar(p)
+      rota_saida(p)
+    end
+  elseif p.estado == "comendo" then
+    p.bebendo = (p.t % 2) < 1.2
+    if p.t > C.tempo_comendo then
+      liberar(p)
+      rota_saida(p)
+    end
+  elseif p.estado == "indo_quadro" then
+    if seguir_rota(p, dt, C.velocidade_pessoa) then
+      p.estado, p.t, p.andando = "pegando", 0, false
+      p.giro = math.pi
+    end
+  elseif p.estado == "pegando" then
+    if p.t > 0.9 then rota_saida(p) end
+  elseif p.estado == "indo_barraca" then
+    if seguir_rota(p, dt, C.velocidade_pessoa) then
+      J.vender_espolio(p)
+      p.estado, p.t, p.andando = "vendendo", 0, false
+      p.giro = math.pi
+    end
+  elseif p.estado == "vendendo" then
+    if p.t > 1.0 then
+      local lugar = lugar_livre()
+      if lugar and p.festa then sentar_cliente(p, lugar) else rota_saida(p) end
+    end
+  elseif p.estado == "saindo" then
+    if seguir_rota(p, dt, C.velocidade_pessoa) then p.removido = true end
+  end
+end
+
+-- Garçons ---------------------------------------------------------------------------
+
+local function atualizar_garcom(g, dt)
+  g.recarga = g.recarga - dt
+  g.andando = false
+  if g.estado == "parada" then
+    if g.recarga <= 0 then
+      local melhor
+      for _, p in ipairs(J.pessoas) do
+        if p.estado == "esperando" and not p.reservado and (not melhor or p.t > melhor.t) then melhor = p end
+      end
+      if melhor then
+        melhor.reservado = true
+        g.alvo, g.estado, g.levando = melhor, "indo", true
+        local dz = melhor.z < J.RUA_Z and 0.7 or -0.7
+        g.rota = { { x = g.x, z = J.RUA_Z }, { x = melhor.x, z = J.RUA_Z }, { x = melhor.x, z = melhor.z + dz } }
+      end
+    end
+  else
+    g.andando = true
+    if seguir_rota(g, dt, C.garcom_velocidade) then
+      if g.estado == "indo" then
+        local p = g.alvo
+        if p and p.estado == "esperando" then J.servir(p, true) end
+        if p then p.reservado = false end
+        g.alvo, g.levando, g.estado = nil, false, "voltando"
+        g.recarga = J.intervalo_garcom()
+        g.rota = { { x = g.x, z = J.RUA_Z }, { x = g.casa, z = J.RUA_Z }, { x = g.casa, z = -1.0 } }
+      else
+        g.estado = "parada"
+      end
+    end
+  end
+end
+
+-- Missões ---------------------------------------------------------------------------
+
+function J.prateleira_aberta() return J.ef("prateleira") > 0 end
+
+function J.vagas_missao() return C.vagas_missao + J.ef("vagas") end
+
+function J.missoes_comuns_ativas()
+  local n = 0
+  for _, m in ipairs(J.estado.missoes) do if not m.contratado then n = n + 1 end end
+  return n
+end
+
+function J.duracao_rank(r) return C.ranks[r].duracao * J.ef("x_duracao") end
+
+function J.nivel_reputacao()
+  local f = J.estado.fama
+  local n, limite = 0, C.reputacao_base
+  while f >= limite and n < 60 do
+    n = n + 1
+    limite = limite * C.reputacao_mult
+  end
+  return n, limite
+end
+
+function J.multiplicador_missao()
+  local m = J.ef("x_missao") * (1 + C.bonus_reputacao * J.nivel_reputacao())
+  if J.buff and J.buff > 0 then m = m * C.fofoca_bonus end
+  return m
+end
+
+function J.pagamento_rank(r) return C.ranks[r].pagamento * J.multiplicador_missao() end
+
+-- reputação atrai aventureiros de rank mais alto: S e SS dependem dela
+function J.rank_aventureiro()
+  local r = J.ef("rank_max")
+  local teto = 6
+  local nv = J.nivel_reputacao()
+  if nv >= 2 then teto = 7 end
+  if nv >= 4 then teto = 8 end
+  return math.min(r, teto)
+end
+
+local function pagamento_contratado(c, r)
+  local v = J.pagamento_rank(r) * C.ganho_contratado
+  if c.party then v = v * C.bonus_party end
+  if c.heroi then v = v * C.ganho_heroi end
+  if c.invocado then v = v * C.ganho_invocado end
+  return v
+end
+
+local function concluir_missao(m)
+  local e = J.estado
+  local r = m.rank
+  e.feitas = e.feitas + 1
+  e.feitas_rank[r] = (e.feitas_rank[r] or 0) + 1
+  J.fofoca_conta = (J.fofoca_conta or 0) + 1
+  if J.fofoca_conta >= C.fofoca_a_cada then
+    J.fofoca_conta = 0
+    J.indice_fofoca = (J.indice_fofoca or 0) % #FOFOCAS + 1
+    J.avisar(FOFOCAS[J.indice_fofoca], 5)
+    J.buff = C.fofoca_duracao
+  end
+
+  local c = m.contratado and J.contratado_por_id(m.contratado) or nil
+  local v
+  if c then
+    c.em_missao = false
+    c.missoes = (c.missoes or 0) + 1
+    v = pagamento_contratado(c, r)
+    if c.heroi or c.invocado then
+      if J.ef("propaganda") > 0 then
+        local f = C.fama_por_missao * r * J.ef("x_fama")
+        c.fama = (c.fama or 0) + f
+        e.fama = e.fama + f
+      end
+    end
+  else
+    v = J.pagamento_rank(r)
+  end
+
+  -- a pessoa volta pela porta e paga; se a taverna estiver lotada de gente, só o ouro entra
+  if #J.pessoas < J.MAX_PESSOAS then
+    local tipo = c and J.TIPOS_POR_NOME(c.tipo) or tipo_de(util.escolher({ "guerreiro", "mago", "arqueiro", "clerigo" }))
+    local p = nova_pessoa(tipo)
+    p.contratado = c
+    if c then p.pele = c.pele end
+    p.rank_volta = r
+    p.festa = true
+    J.pessoas[#J.pessoas + 1] = p
+    J.ganhar(v, J.PORTA.x + 0.8, 2.3, J.PORTA.z)
+    if J.mercadinho_aberto() and r <= J.ef("mercadinho") then
+      p.estado = "indo_barraca"
+      rota_ate(p, J.BARRACA.x + (math.random() - 0.5) * 2.5, J.BARRACA.z)
+      p.leva_espolio = r
+    else
+      local lugar = lugar_livre()
+      if lugar then sentar_cliente(p, lugar) else rota_saida(p) end
+    end
+  else
+    J.ganhar(v)
+    if J.mercadinho_aberto() and r <= J.ef("mercadinho") then J.vender_espolio({ leva_espolio = r }) end
+  end
+  J.som("missao")
+end
+
+local function partir_visual(tipo, c)
+  if #J.pessoas >= J.MAX_PESSOAS then return end
+  local p = nova_pessoa(tipo)
+  if c then p.pele = c.pele; p.contratado = c end
+  iniciar_missao_visual(p, true)
+  J.pessoas[#J.pessoas + 1] = p
+end
+
+function J.iniciar_missao_comum(r)
+  local e = J.estado
+  e.missoes[#e.missoes + 1] = { rank = r, resta = J.duracao_rank(r) }
+  partir_visual(tipo_de(util.escolher({ "guerreiro", "mago", "arqueiro", "clerigo" })))
+end
+
+local function atualizar_missoes(dt)
+  local e = J.estado
+  for i = #e.missoes, 1, -1 do
+    local m = e.missoes[i]
+    m.resta = m.resta - dt
+    if m.resta <= 0 then
+      table.remove(e.missoes, i)
+      concluir_missao(m)
+    end
+  end
+
+  if J.prateleira_aberta() then
+    J.relogio_aventureiro = J.relogio_aventureiro + dt
+    if J.relogio_aventureiro >= C.intervalo_aventureiro and J.missoes_comuns_ativas() < J.vagas_missao() then
+      J.relogio_aventureiro = 0
+      J.iniciar_missao_comum(J.rank_aventureiro())
+    end
+  end
+  J.mandar_contratados()
+end
+
+-- Mercadinho ---------------------------------------------------------------------------
+
+function J.mercadinho_aberto() return J.ef("mercadinho") > 0 end
+function J.venda_aberta() return J.ef("venda") > 0 end
+
+function J.lucro_espolio(r)
+  local m = C.margem_espolio * J.ef("x_espolio")
+  if J.venda_aberta() then m = m * C.margem_com_venda end
+  return C.ranks[r].espolio * m
+end
+
+function J.vender_espolio(p)
+  local r = p.leva_espolio
+  if not r then return end
+  p.leva_espolio = nil
+  local v = J.lucro_espolio(r)
+  J.estado.espolios = J.estado.espolios + 1
+  J.estado.lucro_espolios = J.estado.lucro_espolios + v
+  if p.x then J.ganhar(v, p.x, 2.4, p.z) else J.ganhar(v) end
+end
+
+function J.renda_venda()
+  local t = 0
+  for id, d in pairs(C.venda) do t = t + J.ef(id) * d.renda end
+  return t
+end
+
+function J.renda_passiva() return J.ef("renda_quartos") + J.renda_venda() end
+
+-- Jardim ---------------------------------------------------------------------------------
+
+function J.jardim_aberto() return J.ef("a_jardim") > 0 end
+function J.ciclo_jardim() return C.ciclo_jardim * J.ef("x_ciclo") end
+function J.por_colheita() return J.ef("canteiros") * C.colheita * J.ef("x_colheita") end
+
+local function atualizar_jardim(dt)
+  if not J.jardim_aberto() then return end
+  local e = J.estado
+  e.ciclo = e.ciclo + dt
+  if e.ciclo >= J.ciclo_jardim() then
+    e.ciclo = 0
+    local q = J.por_colheita()
+    e.estoque = math.min(C.estoque_maximo * (1 + J.ef("canteiros") * 0.25), e.estoque + q)
+    e.colhido = e.colhido + q
+  end
+end
+
+-- Contratados e heróis ----------------------------------------------------------------------
+
+function J.TIPOS_POR_NOME(nome) return tipo_de(nome) end
+
+function J.contratado_por_id(id)
+  for _, c in ipairs(J.estado.contratados) do if c.id == id then return c end end
+  return nil
+end
+
+function J.pode_contratar_aberto() return J.ef("contratar") > 0 end
+function J.vagas_contrato() return J.ef("vagas_contrato") end
+
+function J.num_contratos_normais()
+  local n = 0
+  for _, c in ipairs(J.estado.contratados) do if not c.invocado then n = n + 1 end end
+  return n
+end
+
+function J.custo_contratar()
+  return math.floor(C.contratar_custo * C.contratar_mult ^ J.num_contratos_normais())
+end
+
+function J.contratar()
+  local e = J.estado
+  if not J.pode_contratar_aberto() or J.num_contratos_normais() >= J.vagas_contrato() then return nil end
+  local custo = J.custo_contratar()
+  if e.ouro < custo then return nil end
+  e.ouro = e.ouro - custo
+  local i = e.prox_id
+  e.prox_id = i + 1
+  local tipos = { "guerreiro", "mago", "arqueiro", "clerigo" }
+  local c = {
+    id = i, nome = NOMES[(i - 1) % #NOMES + 1], tipo = tipos[(i - 1) % 4 + 1],
+    pele = PELES[(i - 1) % #PELES + 1],
+    armadura = 0, arma = 0, magia = 0, fama = 0, missoes = 0,
+  }
+  e.contratados[#e.contratados + 1] = c
+  return c
+end
+
+function J.poder(c)
+  local p = c.invocado and C.poder_invocado * J.ef("x_invocado") or C.poder_inicial
+  for id, d in pairs(C.investir) do p = p + (c[id] or 0) * d.poder * (c.invocado and 4 or 1) end
+  if c.party then p = p * C.bonus_party end
+  if c.heroi then p = p * 1.5 end
+  return p
+end
+
+function J.rank_contratado(c)
+  local p, r = J.poder(c), 1
+  for i, d in ipairs(C.ranks) do if p >= d.poder then r = i end end
+  return r
+end
+
+function J.custo_investir(c, id)
+  local d = C.investir[id]
+  return math.floor(d.custo * d.mult ^ (c[id] or 0) * (c.invocado and 100 or 1))
+end
+
+function J.investir(c, id)
+  local custo = J.custo_investir(c, id)
+  if J.estado.ouro < custo then return false end
+  J.estado.ouro = J.estado.ouro - custo
+  c[id] = (c[id] or 0) + 1
+  return true
+end
+
+function J.custo_promover(c) return math.floor(C.ranks[J.rank_contratado(c)].pagamento * C.promover_custo_mult) end
+
+function J.pode_promover(c)
+  return J.ef("heroi") > 0 and not c.heroi and not c.invocado and J.rank_contratado(c) >= C.rank_para_heroi
+end
+
+function J.promover(c)
+  if not J.pode_promover(c) or J.estado.ouro < J.custo_promover(c) then return false end
+  J.estado.ouro = J.estado.ouro - J.custo_promover(c)
+  c.heroi = true
+  J.avisar(c.nome .. " agora é um herói!")
+  return true
+end
+
+-- Parties ---------------------------------------------------------------------------------------
+
+function J.criar_party(ids)
+  if J.ef("party") <= 0 or #ids ~= 4 then return false end
+  local e = J.estado
+  local num = e.prox_id
+  e.prox_id = num + 1
+  for _, id in ipairs(ids) do
+    local c = J.contratado_por_id(id)
+    if not c or c.party then return false end
+  end
+  for _, id in ipairs(ids) do J.contratado_por_id(id).party = num end
+  e.parties[#e.parties + 1] = { id = num, membros = ids }
+  return true
+end
+
+function J.desfazer_party(num)
+  local e = J.estado
+  for i, p in ipairs(e.parties) do
+    if p.id == num then
+      for _, id in ipairs(p.membros) do
+        local c = J.contratado_por_id(id)
+        if c then c.party = nil end
+      end
+      table.remove(e.parties, i)
+      return true
+    end
+  end
+  return false
+end
+
+-- monta uma party com os 4 mais fortes disponíveis (invocados primeiro, se houver 4)
+function J.melhores_sem_party()
+  local l = {}
+  for _, c in ipairs(J.estado.contratados) do if not c.party then l[#l + 1] = c end end
+  table.sort(l, function(a, b)
+    if (a.invocado or false) ~= (b.invocado or false) then return a.invocado or false end
+    return J.poder(a) > J.poder(b)
+  end)
+  local ids = {}
+  for i = 1, math.min(4, #l) do ids[i] = l[i].id end
+  return ids
+end
+
+local function livre_para_missao(c) return not c.em_missao and not c.na_final end
+
+function J.mandar_contratados()
+  local e = J.estado
+  if e.final_resta then return end
+  -- parties vão juntas
+  for _, pt in ipairs(e.parties) do
+    local todos = true
+    local rank = 99
+    for _, id in ipairs(pt.membros) do
+      local c = J.contratado_por_id(id)
+      if not c or not livre_para_missao(c) then todos = false break end
+      rank = math.min(rank, J.rank_contratado(c))
+    end
+    if todos then
+      rank = math.min(rank, math.max(1, J.ef("rank_max")))
+      for _, id in ipairs(pt.membros) do
+        local c = J.contratado_por_id(id)
+        c.em_missao = true
+        e.missoes[#e.missoes + 1] = { rank = rank, resta = J.duracao_rank(rank), contratado = c.id }
+        partir_visual(J.TIPOS_POR_NOME(c.tipo), c)
+      end
+    end
+  end
+  if J.ef("rank_max") < 1 then return end
+  for _, c in ipairs(e.contratados) do
+    if not c.party and livre_para_missao(c) then
+      local rank = math.min(J.rank_contratado(c), J.ef("rank_max"))
+      c.em_missao = true
+      e.missoes[#e.missoes + 1] = { rank = rank, resta = J.duracao_rank(rank), contratado = c.id }
+      partir_visual(J.TIPOS_POR_NOME(c.tipo), c)
+    end
+  end
+end
+
+-- Invocação e final --------------------------------------------------------------------------------
+
+function J.invocacao_aberta() return J.ef("invocar") > 0 end
+
+function J.custo_invocar() return C.invocar_custo * C.invocar_mult ^ J.estado.invocados_feitos end
+
+function J.invocar()
+  local e = J.estado
+  if not J.invocacao_aberta() or e.invocados_feitos >= #C.invocados then return nil end
+  local custo = J.custo_invocar()
+  if e.ouro < custo then return nil end
+  e.ouro = e.ouro - custo
+  e.invocados_feitos = e.invocados_feitos + 1
+  local d = C.invocados[e.invocados_feitos]
+  local i = e.prox_id
+  e.prox_id = i + 1
+  local c = {
+    id = i, nome = d.nome, titulo = d.titulo, tipo = d.tipo, pele = "#f1c9a5", invocado = true,
+    armadura = 0, arma = 0, magia = 0, fama = 0, missoes = 0,
+  }
+  e.contratados[#e.contratados + 1] = c
+  J.avisar(d.nome .. " atravessou o portal!", 4)
+  J.som("invocar")
+  return c
+end
+
+-- a missão SSS exige uma party de 4 invocados, todos com poder suficiente
+function J.party_final()
+  for _, pt in ipairs(J.estado.parties) do
+    local ok = #pt.membros == 4
+    for _, id in ipairs(pt.membros) do
+      local c = J.contratado_por_id(id)
+      if not (c and c.invocado) then ok = false end
+    end
+    if ok then return pt end
+  end
+  return nil
+end
+
+function J.pode_final()
+  local pt = J.party_final()
+  if not pt or J.estado.final_resta or J.estado.fim then return false end
+  for _, id in ipairs(pt.membros) do
+    local c = J.contratado_por_id(id)
+    if J.poder(c) < C.sss.poder then return false end
+  end
+  return true
+end
+
+function J.iniciar_final()
+  if not J.pode_final() then return false end
+  local e = J.estado
+  e.final_resta = C.sss.duracao
+  for _, id in ipairs(J.party_final().membros) do
+    local c = J.contratado_por_id(id)
+    c.na_final = true
+    -- quem estava em missão abandona o trabalho e parte para a batalha final
+    for i = #e.missoes, 1, -1 do
+      if e.missoes[i].contratado == c.id then table.remove(e.missoes, i) end
+    end
+    c.em_missao = nil
+    partir_visual(J.TIPOS_POR_NOME(c.tipo), c)
+  end
+  J.avisar("A party partiu para enfrentar o Lorde Demônio!", 5)
+  return true
+end
+
+-- Objetivo atual, para o jogador sempre saber o que buscar ---------------------------------------------
+
+local OBJETIVOS = {
+  { "servidos", "Toque nos balões para servir os clientes" },
+  { "mesa", "Abra a Árvore e compre uma Nova mesa" },
+  { "garcom", "Contrate um Garçom na Árvore" },
+  { "prateleira", "Construa a Prateleira de missões" },
+  { "mercadinho", "Abra o Mercadinho" },
+  { "jardim", "Plante o Jardim" },
+  { "cozinheiro", "Contrate o Cozinheiro" },
+  { "venda", "Libere a Aba de venda" },
+  { "recrutador", "Traga o Recrutador" },
+  { "party", "Libere as Parties" },
+  { "heroi", "Libere o Caminho do herói" },
+  { "propaganda", "Abra a Propaganda" },
+  { "invocacao", "Construa o Círculo de invocação" },
+}
+
+function J.objetivo()
+  local e = J.estado
+  if e.fim then return "O mundo está em paz!" end
+  if e.final_resta then return "A party enfrenta o Lorde Demônio..." end
+  for _, o in ipairs(OBJETIVOS) do
+    if o[1] == "servidos" then
+      if e.servidos < 5 then return o[2] end
+    elseif J.nivel(o[1]) < 1 then
+      return o[2]
+    end
+  end
+  if e.invocados_feitos < #C.invocados then return "Invoque os 4 heróis de outro mundo" end
+  if not J.party_final() then return "Forme uma party com os 4 invocados" end
+  if not J.pode_final() then return "Fortaleça os invocados até " .. util.formatar(C.sss.poder) .. " de poder" end
+  return "Envie a party para a missão SSS!"
+end
+
+-- Ciclo ----------------------------------------------------------------------------------------------
+
+function J.iniciar()
+  J.estado = estado_inicial()
+  J.pessoas = {}
+  J.garcons = {}
+  J.lugares = {}
+  J.efeitos = {}
+  J.aviso = nil
+  J.offline = nil
+  J.buff = 0
+  J.MAX_PESSOAS = 60
+  J.relogio_chegada = 2
+  J.relogio_aventureiro = 5
+  J.relogio_segundo = 0
+  J.ganho_segundo = 0
+  J.relogio_salvar = 0
+  J.carregar()
+  recalcular()
+  J.reconstruir_lugares()
+  J.ajustar_equipe()
+  J.calcular_offline()
+end
+
+function J.atualizar(dt)
+  local e = J.estado
+  if J.offline then return end
+  e.tempo = e.tempo + dt
+
+  if not e.fim then
+    J.relogio_chegada = math.min(J.relogio_chegada + dt, J.intervalo_chegada())
+    if J.relogio_chegada >= J.intervalo_chegada() and J.novo_cliente() then J.relogio_chegada = 0 end
+  end
+
+  for _, p in ipairs(J.pessoas) do atualizar_pessoa(p, dt) end
+  for i = #J.pessoas, 1, -1 do
+    if J.pessoas[i].removido then table.remove(J.pessoas, i) end
+  end
+  for _, g in ipairs(J.garcons) do atualizar_garcom(g, dt) end
+  atualizar_missoes(dt)
+  atualizar_jardim(dt)
+
+  local passiva = J.renda_passiva()
+  if passiva > 0 then J.ganhar(passiva * dt) end
+  if J.buff > 0 then J.buff = J.buff - dt end
+
+  if e.final_resta then
+    e.final_resta = e.final_resta - dt
+    if e.final_resta <= 0 then
+      e.final_resta = nil
+      e.fim = true
+      for _, c in ipairs(e.contratados) do c.na_final = nil end
+      J.som("invocar")
+      J.salvar()
+    end
+  end
+
+  for i = #J.efeitos, 1, -1 do
+    local f = J.efeitos[i]
+    f.vida = f.vida + dt
+    if f.vida >= 1.1 then table.remove(J.efeitos, i) end
+  end
+  if J.aviso then
+    J.aviso.vida = J.aviso.vida + dt
+    if J.aviso.vida >= J.aviso.duracao then J.aviso = nil end
+  end
+
+  J.relogio_segundo = J.relogio_segundo + dt
+  if J.relogio_segundo >= 1 then
+    e.rps = e.rps * 0.85 + J.ganho_segundo * 0.15
+    J.ganho_segundo = 0
+    J.relogio_segundo = J.relogio_segundo - 1
+  end
+
+  J.relogio_salvar = J.relogio_salvar + dt
+  if J.relogio_salvar >= C.salvar_a_cada then
+    J.relogio_salvar = 0
+    J.salvar()
+  end
+end
+
+-- Salvar e carregar ------------------------------------------------------------------------------------
+
+function J.salvar()
+  local e = J.estado
+  e.salvo_em = os.time()
+  motor.salvar(util.serializar(e))
+end
+
+local function copiar_sobre(destino, origem)
+  for k, v in pairs(origem) do
+    if type(v) == "table" and type(destino[k]) == "table" then copiar_sobre(destino[k], v)
+    else destino[k] = v end
+  end
+end
+
+-- números inválidos em um save danificado não podem travar o jogo
+local function saneado(v, padrao)
+  if type(v) ~= "number" or v ~= v or v == math.huge or v == -math.huge then return padrao end
+  return v
+end
+
+function J.carregar()
+  local dados = util.desserializar(motor.carregar())
+  if type(dados) ~= "table" or dados.versao ~= 2 then return end
+  local e = estado_inicial()
+  copiar_sobre(e, dados)
+  e.ouro = math.max(0, saneado(e.ouro, 0))
+  e.total = math.max(0, saneado(e.total, 0))
+  e.rps = math.max(0, saneado(e.rps, 0))
+  e.fama = math.max(0, saneado(e.fama, 0))
+  e.estoque = math.max(0, saneado(e.estoque, 0))
+  -- ignora nós que não existem mais e níveis acima do máximo
+  for id, nv in pairs(e.nos) do
+    local no = A.POR_ID[id]
+    if not no or type(nv) ~= "number" then e.nos[id] = nil
+    elseif nv > no.max then e.nos[id] = no.max end
+  end
+  -- ninguém fica preso em uma missão que sumiu do save
+  local em = {}
+  for i = #e.missoes, 1, -1 do
+    local m = e.missoes[i]
+    if type(m) ~= "table" or not (C.ranks[m.rank]) then table.remove(e.missoes, i)
+    else
+      m.resta = saneado(m.resta, 1)
+      if m.contratado then em[m.contratado] = true end
+    end
+  end
+  for _, c in ipairs(e.contratados) do
+    c.em_missao = em[c.id] or nil
+    if not e.final_resta then c.na_final = nil end
+  end
+  J.estado = e
+end
+
+function J.calcular_offline()
+  local e = J.estado
+  if not e.salvo_em or J.ef("garcons") < 1 or e.fim then return end
+  local fora = os.time() - e.salvo_em
+  if fora < C.offline_minimo then return end
+  local s = math.min(fora, C.offline_maximo)
+  local ganho = math.floor(e.rps * s * C.offline_eficiencia)
+  -- as missões em andamento também avançam
+  for _, m in ipairs(e.missoes) do m.resta = m.resta - s end
+  if e.final_resta then e.final_resta = math.max(1, e.final_resta - s) end
+  if ganho >= 1 then J.offline = { ganho = ganho, segundos = fora } end
+end
+
+function J.coletar_offline()
+  if not J.offline then return end
+  J.ganhar(J.offline.ganho)
+  J.offline = nil
+end
+
+function J.apagar_progresso()
+  motor.salvar("")
+  J.estado = nil
+  J.pessoas, J.lugares = {}, nil
+  J.iniciar()
+end
+
+return J

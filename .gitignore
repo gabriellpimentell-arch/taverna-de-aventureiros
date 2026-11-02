@@ -4,3 +4,4 @@ dist/
 *.sav.tmp
 .vscode/
 .vs/
+build/
