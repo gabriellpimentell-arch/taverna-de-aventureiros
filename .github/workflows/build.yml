@@ -3,6 +3,13 @@ name: Gerar executável
 on:
   push:
     branches: [main]
+    paths:
+      - "src/**"
+      - "scripts/**"
+      - "assets/**"
+      - "tools/**"
+      - "CMakeLists.txt"
+      - ".github/workflows/**"
   workflow_dispatch:
 
 permissions:
@@ -20,15 +27,13 @@ jobs:
       - name: Compilar
         run: cmake --build build --config Release --parallel
 
-      - name: Empacotar
-        shell: pwsh
+      - name: Embutir scripts e fontes no .exe
+        shell: bash
         run: |
-          $pasta = "dist/TavernaDeAventureiros"
-          New-Item -ItemType Directory -Force $pasta | Out-Null
-          Copy-Item build/Release/TavernaDeAventureiros.exe $pasta
-          Copy-Item -Recurse scripts $pasta
-          Copy-Item -Recurse assets $pasta
-          Compress-Archive -Path $pasta -DestinationPath TavernaDeAventureiros-windows.zip
+          mkdir -p dist
+          VERSAO="${GITHUB_SHA::7}"
+          python tools/empacotar.py build/Release/TavernaDeAventureiros.exe dist/TavernaDeAventureiros.exe "$VERSAO"
+          printf "%s" "$VERSAO" > dist/versao.txt
 
       - name: Guardar como artefato
         uses: actions/upload-artifact@v4
@@ -42,8 +47,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release delete teste --yes --cleanup-tag || true
-          gh release create teste TavernaDeAventureiros-windows.zip \
+          gh release create teste dist/TavernaDeAventureiros.exe dist/versao.txt \
             --prerelease \
             --title "Versão de teste" \
-            --notes "Gerada automaticamente a partir do commit ${GITHUB_SHA::7}." \
+            --notes "Gerada automaticamente a partir do commit ${GITHUB_SHA::7}. Baixe só o TavernaDeAventureiros.exe: ele se atualiza sozinho ao abrir." \
             --target "$GITHUB_SHA"

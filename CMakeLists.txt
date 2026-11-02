@@ -34,8 +34,11 @@ if(UNIX)
 endif()
 
 # --- O jogo ------------------------------------------------------------------
-add_executable(TavernaDeAventureiros src/main.cpp)
+add_executable(TavernaDeAventureiros src/main.cpp src/atualizador.cpp)
 target_link_libraries(TavernaDeAventureiros PRIVATE raylib lua_estatica)
+if(WIN32)
+  target_link_libraries(TavernaDeAventureiros PRIVATE wininet)  # downloads da atualização
+endif()
 
 if(MSVC)
   # abre só a janela do jogo, sem a janela preta do console

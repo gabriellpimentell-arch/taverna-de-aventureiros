@@ -15,11 +15,16 @@
 //  motor escala para caber na tela. No computador ele abre em tela cheia
 //  (F11 ou Alt+Enter alternam com o modo janela).
 //
-//  Durante o desenvolvimento, salvar qualquer arquivo .lua recarrega o jogo
-//  na hora. F5 também recarrega.
+//  Na versão distribuída, os scripts e as fontes vão embutidos no final do
+//  próprio .exe (um "pacote"). Ao abrir, o jogo confere no GitHub se existe
+//  versão nova; se existir, baixa o .exe novo, troca e reinicia sozinho.
+//
+//  Durante o desenvolvimento (sem pacote embutido), o jogo usa as pastas
+//  scripts/ e assets/, e salvar qualquer .lua recarrega na hora. F5 também.
 // =============================================================================
 
 #include "raylib.h"
+#include "atualizador.h"
 
 extern "C" {
 #include "lua.h"
@@ -29,6 +34,7 @@ extern "C" {
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
@@ -57,6 +63,7 @@ struct Motor {
     std::map<std::string, long long> datasScripts;
     float relogioVigia = 0.0f;
     std::string arquivoTeste;
+    std::string versao = "dev";
 };
 
 static Motor M;
@@ -298,6 +305,8 @@ static void registrarApi(lua_State* L) {
     lua_pushstring(L, "desktop");
 #endif
     lua_setfield(L, -2, "plataforma");
+    lua_pushstring(L, M.versao.c_str());
+    lua_setfield(L, -2, "versao");
     lua_setglobal(L, "motor");
 }
 
@@ -477,6 +486,127 @@ static Font carregarFonte(const fs::path& arquivo) {
 //  Programa principal
 // -----------------------------------------------------------------------------
 
+// -----------------------------------------------------------------------------
+//  Pacote embutido e atualização automática
+//
+//  Formato (gerado por tools/empacotar.py no final do .exe):
+//    "TAVPAK01", quantidade (u32), e para cada arquivo:
+//    tamanho do nome (u32), nome, tamanho dos dados (u32), dados
+//  seguido de: tamanho do pacote (u64) e "TAVPAKFT"
+// -----------------------------------------------------------------------------
+
+static const char* URL_ATUALIZACAO =
+    "https://github.com/gabriellpimentell-arch/taverna-de-aventureiros/releases/download/teste/";
+
+struct Pacote {
+    std::string versao;
+    std::vector<std::pair<std::string, std::string>> arquivos;
+};
+
+static bool lerPacote(const std::string& b, Pacote& p) {
+    if (b.size() < 16 || memcmp(b.data() + b.size() - 8, "TAVPAKFT", 8) != 0) return false;
+    uint64_t tam = 0;
+    memcpy(&tam, b.data() + b.size() - 16, 8);
+    if (tam + 16 > b.size() || tam < 12) return false;
+    size_t fim = b.size() - 16, pos = fim - (size_t)tam;
+    if (memcmp(b.data() + pos, "TAVPAK01", 8) != 0) return false;
+    pos += 8;
+    auto u32 = [&](uint32_t& v) {
+        if (pos + 4 > fim) return false;
+        memcpy(&v, b.data() + pos, 4);
+        pos += 4;
+        return true;
+    };
+    auto bloco = [&](std::string& s) {
+        uint32_t n = 0;
+        if (!u32(n) || pos + n > fim) return false;
+        s.assign(b.data() + pos, n);
+        pos += n;
+        return true;
+    };
+    uint32_t qtd = 0;
+    if (!u32(qtd)) return false;
+    p.arquivos.clear();
+    for (uint32_t i = 0; i < qtd; i++) {
+        std::string nome, dados;
+        if (!bloco(nome) || !bloco(dados)) return false;
+        if (nome == "versao.txt") p.versao = dados;
+        else p.arquivos.emplace_back(nome, dados);
+    }
+    while (!p.versao.empty() && isspace((unsigned char)p.versao.back())) p.versao.pop_back();
+    return !p.versao.empty();
+}
+
+// Extrai o pacote para a pasta de dados (só quando a versão muda).
+static bool extrairPacote(const Pacote& p, const fs::path& pasta) {
+    std::string atual;
+    if (lerArquivo(pasta / "versao.txt", atual) && atual == p.versao) return true;
+    std::error_code ec;
+    fs::remove_all(pasta, ec);
+    for (const auto& [nome, dados] : p.arquivos) {
+        if (nome.find("..") != std::string::npos) continue;
+        fs::path destino = pasta / fs::u8path(nome);
+        fs::create_directories(destino.parent_path(), ec);
+        std::ofstream f(destino, std::ios::binary | std::ios::trunc);
+        if (!f) return false;
+        f.write(dados.data(), (std::streamsize)dados.size());
+    }
+    std::ofstream v(pasta / "versao.txt", std::ios::binary | std::ios::trunc);
+    v << p.versao;
+    return (bool)v;
+}
+
+static void atualizarCamera();
+
+// Desenha uma tela simples de aviso (usada antes de o jogo carregar).
+static void mostrarMensagem(const char* titulo, const char* detalhe) {
+    for (int i = 0; i < 2; i++) {  // dois quadros: garante que aparece na tela
+        atualizarCamera();
+        BeginDrawing();
+        ClearBackground(Color{18, 12, 8, 255});
+        BeginMode2D(M.camera);
+        DrawRectangle(0, 0, (int)LARGURA, (int)ALTURA, Color{33, 21, 14, 255});
+        float t1 = 30, t2 = 16;
+        Vector2 m1 = MeasureTextEx(M.fonteNegrito, titulo, t1, espacamento(t1));
+        Vector2 m2 = MeasureTextEx(M.fonteNormal, detalhe, t2, espacamento(t2));
+        DrawTextEx(M.fonteNegrito, titulo, Vector2{(LARGURA - m1.x) / 2, ALTURA / 2 - 34}, t1, espacamento(t1),
+                   Color{246, 234, 216, 255});
+        DrawTextEx(M.fonteNormal, detalhe, Vector2{(LARGURA - m2.x) / 2, ALTURA / 2 + 10}, t2, espacamento(t2),
+                   Color{191, 165, 138, 255});
+        EndMode2D();
+        EndDrawing();
+    }
+}
+
+// Devolve true se a versão nova foi aberta (aí esta deve fechar).
+static bool verificarAtualizacao(const std::string& versaoLocal, const fs::path& exe) {
+    mostrarMensagem("Taverna de Aventureiros", "Procurando atualizações...");
+    std::string remota;
+    if (!atualizador::baixar(std::string(URL_ATUALIZACAO) + "versao.txt", remota, 4000)) return false;
+    while (!remota.empty() && isspace((unsigned char)remota.back())) remota.pop_back();
+    if (remota.empty() || remota.size() > 64 || remota == versaoLocal) return false;
+
+    mostrarMensagem("Atualizando...", "Baixando a versão nova do jogo.");
+    std::string novo;
+    if (!atualizador::baixar(std::string(URL_ATUALIZACAO) + "TavernaDeAventureiros.exe", novo, 20000)) return false;
+    Pacote conferir;
+    if (!lerPacote(novo, conferir) || conferir.versao != remota) return false;  // download incompleto
+
+    fs::path temp = exe;
+    temp += ".novo";
+    {
+        std::ofstream f(temp, std::ios::binary | std::ios::trunc);
+        if (!f) return false;
+        f.write(novo.data(), (std::streamsize)novo.size());
+        if (!f) return false;
+    }
+    mostrarMensagem("Atualizado!", "Abrindo a versão nova...");
+    if (atualizador::trocarExecutavelEReiniciar(exe, temp)) return true;
+    std::error_code ec;
+    fs::remove(temp, ec);
+    return false;
+}
+
 static void atualizarCamera() {
     float lw = (float)GetScreenWidth(), lh = (float)GetScreenHeight();
     float escala = std::min(lw / LARGURA, lh / ALTURA);
@@ -510,8 +640,29 @@ int main() {
         ToggleBorderlessWindowed();  // começa em tela cheia
     }
 
-    M.pastaScripts = procurarPasta("scripts", "main.lua");
-    M.pastaAssets = procurarPasta("assets", "fontes");
+    // Versão distribuída: scripts e fontes embutidos no próprio .exe
+    fs::path exe = atualizador::caminhoExecutavel();
+    atualizador::limparVersaoAntiga(exe);
+    Pacote pacote;
+    bool temPacote = false;
+    {
+        std::string bytes;
+        temPacote = !exe.empty() && lerArquivo(exe, bytes) && lerPacote(bytes, pacote);
+    }
+    if (temPacote) {
+        fs::path pasta = pastaDeDados() / "jogo";
+        if (extrairPacote(pacote, pasta)) {
+            M.versao = pacote.versao;
+            M.pastaScripts = pasta / "scripts";
+            M.pastaAssets = pasta / "assets";
+        } else {
+            temPacote = false;
+        }
+    }
+    if (!temPacote) {  // desenvolvimento: usa as pastas ao lado do executável
+        M.pastaScripts = procurarPasta("scripts", "main.lua");
+        M.pastaAssets = procurarPasta("assets", "fontes");
+    }
     M.arquivoSave = pastaDeDados() / "progresso.sav";
     if (const char* teste = getenv("TAVERNA_TESTE")) M.arquivoTeste = teste;
     if (const char* save = getenv("TAVERNA_SAVE")) M.arquivoSave = save;
@@ -523,6 +674,15 @@ int main() {
     if (!M.fontesProprias) {
         M.fonteNormal = GetFontDefault();
         M.fonteNegrito = GetFontDefault();
+    }
+
+    if (temPacote && !getenv("TAVERNA_SEM_ATUALIZAR") && verificarAtualizacao(M.versao, exe)) {
+        if (M.fontesProprias) {
+            UnloadFont(M.fonteNormal);
+            UnloadFont(M.fonteNegrito);
+        }
+        CloseWindow();
+        return 0;  // a versão nova já está abrindo
     }
 
     if (M.pastaScripts.empty()) {
