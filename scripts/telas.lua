@@ -758,11 +758,7 @@ local function janela_config()
   U.botao("minimizar2", bx, y + 60, 200, 44, "Minimizar", { cor = "#4a3627", cor_texto = cor.texto }, function() motor.minimizar() end)
   U.botao("estatisticas", bx, y + 112, 200, 44, "Estatísticas", { cor = "#4a3627", cor_texto = cor.texto }, function() T.modal = "stats" end)
   U.botao("creditos", bx, y + 164, 200, 44, "Créditos", { cor = "#4a3627", cor_texto = cor.texto }, function() T.modal = "creditos" end)
-  U.botao("editar", bx, y + 268, 200, 44, "Modo de edição (F2)", { cor = "#57b0c2", cor_texto = "#0d1f24" }, function()
-    T.modal = nil
-    T.aba = "taverna"
-    Ed.abrir()
-  end)
+  U.botao("editar", bx, y + 268, 200, 44, "Modo de edição (F2)", { cor = "#57b0c2", cor_texto = "#0d1f24" }, function() T.f2() end)
   U.botao("salvar", bx, y + 216, 200, 44, "Salvar agora", { cor = "#4a3627", cor_texto = cor.texto }, function()
     J.salvar()
     J.avisar("Progresso salvo!", 2)

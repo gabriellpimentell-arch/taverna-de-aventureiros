@@ -36,6 +36,8 @@ function E.fechar()
   L.salvar()
   J.aplicar_layout()
   M.iniciar()
+  local sem = J.lugares_sem_rota()
+  if sem > 0 then J.avisar(sem .. " lugar(es) sem caminho livre: a pessoa atravessa os móveis para chegar.", 5) end
 end
 
 local function guardar()
@@ -54,6 +56,7 @@ local function acao(fn)
   if not E.sel then return end
   guardar()
   fn(L.de(E.sel))
+  L.limitar(E.sel)
   mudou()
 end
 
@@ -64,6 +67,7 @@ function E.mover_para(id, x, z)
     z = math.floor(z * 4 + 0.5) / 4
   end
   d.x, d.z = x - o.x, z - o.z
+  L.limitar(id)
   J.aplicar_visual()
 end
 
@@ -88,7 +92,7 @@ function E.tocar(x, y)
     local d = L.de(id)
     local o = L.POR_ID[id]
     local gx, gz = motor.chao(x, y)
-    E.arrasto = { id = id, ox = (gx or 0) - (o.x + d.x), oz = (gz or 0) - (o.z + d.z), moveu = false }
+    E.arrasto = { id = id, ox = (gx or 0) - (o.x + d.x), oz = (gz or 0) - (o.z + d.z), moveu = false, sx = x, sy = y }
   else
     E.sel = nil
     E.arrasto = nil
@@ -110,11 +114,16 @@ function E.atualizar(dt)
   if E.arrasto and motor.mouse_baixo() then
     local mx, my = motor.mouse()
     local gx, gz = motor.chao(mx, my)
-    if gx then
-      local a = E.arrasto
+    local a = E.arrasto
+    -- só um clique, sem arrastar, seleciona: não pode encaixar o objeto na grade
+    if math.abs(mx - a.sx) + math.abs(my - a.sy) > 4 then a.saiu = true end
+    if gx and a.saiu then
       E.mover_para(a.id, gx - a.ox, gz - a.oz)
       a.moveu = true
     end
+  elseif E.arrasto then
+    -- soltou com o mouse fora da janela
+    E.soltar()
   end
   local r = motor.roda()
   if r ~= 0 then

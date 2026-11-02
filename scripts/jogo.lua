@@ -249,22 +249,33 @@ function J.montar_mapa()
   if J.nivel("quartos") > 0 then caixa("quartos", -4.65, -3.9, 1.4, 0.8) end
   local xmax = 6.3
   if J.ef("a_leste") > 0 then
-    xmax = 11.8
+    xmax = 12.1   -- o banco direito da mesa 8 fica em x = 11,95: precisa dar para chegar nele
     caixa("carga_leste", 11.2, -0.4, 1.4, 0.8)
     if J.mercadinho_aberto() then caixa("barraca", 9.3, -2.15, 4.5, 1.7) end
   end
   Cam.montar({ -6.3, xmax, -4.25, 4.5 }, obs)
 end
 
+-- bancos que a pessoa só alcança atravessando móveis (usado para avisar no editor)
+function J.lugares_sem_rota()
+  local n = 0
+  for _, l in ipairs(J.lugares) do
+    if not Cam.rota(J.PORTA.x, J.PORTA.z, l.x, l.z) then n = n + 1 end
+  end
+  return n
+end
+
 -- Monta os caminhos desviando dos objetos; se não houver saída, a pessoa atravessa
 function J.caminho(p, x, z)
   local r = Cam.rota(p.x, p.z, x, z)
+  p.sem_rota = not r
+  p.fantasma = not r or nil
   if not r then
     r = { { x = x, z = z } }
-    p.fantasma = true
     J.sem_caminho = (J.sem_caminho or 0) + 1
   end
   p.rota, p.andando, p.preso, p.destino_x, p.destino_z = r, true, 0, x, z
+  p.origem_x, p.origem_z = p.x, p.z
 end
 
 -- Só atualiza onde as coisas estão, para o editor mostrar o resultado na hora
@@ -284,6 +295,7 @@ function J.aplicar_layout()
   J.montar_mapa()
   for _, g in ipairs(J.garcons or {}) do
     g.x, g.z, g.estado, g.rota, g.alvo, g.levando, g.andando = g.casa, g.casa_z, "parada", {}, nil, false, false
+    g.fantasma, g.sem_rota, g.preso = nil, nil, 0
   end
 end
 
@@ -430,9 +442,29 @@ local function andar(o, dx, dz, vel, dt)
   return false
 end
 
+-- Empurrado por alguém, o caminho reto até o próximo ponto pode cruzar uma mesa: calcula de novo
+local function refazer_se_for_bater(p, alvo, vel, dt)
+  p.espera_rota = (p.espera_rota or 0) - dt
+  if p.fantasma or not p.destino_x or p.espera_rota > 0 then return alvo end
+  local ax, az = alvo.x - p.x, alvo.z - p.z
+  local d = math.sqrt(ax * ax + az * az)
+  if d < 0.01 then return alvo end
+  local passo = math.min(d, math.max(vel * dt, 0.2))
+  local nx, nz = p.x + ax / d * passo, p.z + az / d * passo
+  if not Cam.bloqueado(nx, nz) then return alvo end
+  -- em volta do banco e de onde saiu o caminho é liberado de propósito
+  if util.distancia(nx, nz, p.destino_x, p.destino_z) < 0.45 or util.distancia(nx, nz, p.origem_x, p.origem_z) < 0.45 then return alvo end
+  p.espera_rota = 0.3
+  local preso = p.preso
+  J.caminho(p, p.destino_x, p.destino_z)
+  p.preso = preso
+  return p.rota[1]
+end
+
 local function seguir_rota(p, dt, vel)
   local alvo = p.rota[1]
   if not alvo then return true end
+  alvo = refazer_se_for_bater(p, alvo, vel, dt)
   -- empurrado por outros, ninguém acerta um ponto exato: chegar perto já basta
   local dx, dz = alvo.x - p.x, alvo.z - p.z
   local tol = #p.rota > 1 and 0.3 or 0.15
@@ -523,6 +555,16 @@ end
 
 -- Garçons ---------------------------------------------------------------------------
 
+-- Onde parar para atender: com a mesa ou o balcão girados, o lado de sempre pode estar dentro do móvel
+local function ponto_de_servir(g, p)
+  local dz = p.z < J.RUA_Z and 0.72 or -0.72
+  for _, o in ipairs({ { 0, dz }, { 0, -dz }, { 0.72, 0 }, { -0.72, 0 } }) do
+    local x, z = p.x + o[1], p.z + o[2]
+    if not Cam.bloqueado(x, z) and Cam.rota(g.x, g.z, x, z) then return x, z end
+  end
+  return p.x, p.z + dz
+end
+
 local function atualizar_garcom(g, dt)
   g.recarga = g.recarga - dt
   g.andando = false
@@ -535,8 +577,7 @@ local function atualizar_garcom(g, dt)
       if melhor then
         melhor.reservado = true
         g.alvo, g.estado, g.levando = melhor, "indo", true
-        local dz = melhor.z < J.RUA_Z and 0.72 or -0.72
-        J.caminho(g, melhor.x, melhor.z + dz)
+        J.caminho(g, ponto_de_servir(g, melhor))
       end
     end
   else
@@ -1066,8 +1107,9 @@ local function atualizar_colisoes(dt)
   J.relogio_preso = 0
   for _, p in ipairs(lista) do
     if p.andando and p.rota and #p.rota > 0 and not p.sentado then
+      -- mede a partir de um ponto fixo: quem só treme no lugar, empurrado pelos outros, também está preso
       local dx, dz = p.x - (p.ult_x or 1e9), p.z - (p.ult_z or 1e9)
-      if dx * dx + dz * dz < 0.04 then
+      if dx * dx + dz * dz < 0.36 then
         p.preso = (p.preso or 0) + 1
         if p.preso == 3 and p.destino_x then
           J.caminho(p, p.destino_x, p.destino_z)
@@ -1078,10 +1120,10 @@ local function atualizar_colisoes(dt)
         end
       else
         p.preso = 0
-        p.fantasma = nil
+        p.ult_x, p.ult_z = p.x, p.z
+        if not p.sem_rota then p.fantasma = nil end
       end
     end
-    p.ult_x, p.ult_z = p.x, p.z
   end
 end
 

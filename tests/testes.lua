@@ -771,6 +771,235 @@ do
     ok("layout estragado não quebra: " .. nome, bom)
     ok("mesa continua em número válido", J.POS_MESAS[1].x == J.POS_MESAS[1].x)
   end
+
+  -- Bugs achados na revisão de caminhos e editor -----------------------------------------------------
+  local Ed = require("editor")
+  local function tudo_comprado()
+    novo()
+    J.estado.ouro = 1e60
+    for _ = 1, 40 do for _, no in ipairs(A.NOS) do J.estado.ouro = 1e60; J.comprar_no(no.id) end end
+  end
+  local function mover(id, x, z, g)
+    local b, d = L.POR_ID[id], L.de(id)
+    d.x, d.z, d.g = x - b.x, z - b.z, g or 0
+  end
+  local function jogar_contando(n)
+    J.sem_caminho = 0
+    local dentro, perdido = 0, 0
+    for _ = 1, n do
+      J.atualizar(0.1)
+      for _, g in ipairs(J.garcons) do
+        if g.estado == "indo" and g.sem_rota and g.alvo and Cam.rota(J.PORTA.x, J.PORTA.z, g.alvo.x, g.alvo.z) then perdido = perdido + 1 end
+        if g.andando and not g.fantasma then
+          for k = 1, J.num_mesas() do
+            local m = J.POS_MESAS[k]
+            if util.distancia(g.x, g.z, m.x, m.z) < 0.72 then dentro = dentro + 1 end
+          end
+        end
+      end
+    end
+    return dentro, perdido
+  end
+
+  -- banco direito da mesa 8 ficava fora do mapa: todos atravessavam as mesas 7 e 8 para chegar nele
+  motor._layout = false
+  tudo_comprado()
+  for _, l in ipairs(J.lugares) do
+    ok("dá para chegar em todo banco", Cam.rota(J.PORTA.x, J.PORTA.z, l.x, l.z) ~= nil, l.x .. " " .. l.z)
+  end
+  jogar_contando(1500)
+  ok("taverna cheia sem atalho pelas mesas", J.sem_caminho == 0, J.sem_caminho)
+
+  -- empurrado para fora da rota, ninguém segue reto por dentro da mesa
+  novo()
+  libera("mesa")
+  local g = { x = 2.0, z = 0.2, giro = 0, fase = 0, t = 0, estado = "saindo" }
+  g.rota, g.andando, g.destino_x, g.destino_z, g.origem_x, g.origem_z = { { x = -1.6, z = 0.2 } }, true, -1.6, 0.2, 9, 9
+  J.pessoas[#J.pessoas + 1] = g
+  for _ = 1, 40 do
+    J.atualizar(0.1)
+    ok("rota refeita ao ser empurrado", util.distancia(g.x, g.z, J.POS_MESAS[2].x, J.POS_MESAS[2].z) > 0.9, g.x .. " " .. g.z)
+    if g.removido then break end
+  end
+
+  -- com a mesa ou o balcão girados, o garçom parava dentro do móvel
+  for _, caso in ipairs({ { "mesas a 90", function() for i = 1, 8 do L.de("mesa" .. i).g = math.pi / 2 end end, sem_rota = true },
+                          { "balcão a 180", function() L.de("balcao").g = math.pi end, sem_rota = true },
+                          { "mesa 1 a 90", function() L.de("mesa1").g = math.pi / 2 end },
+                          { "mesas a 45", function() for i = 1, 8 do L.de("mesa" .. i).g = math.pi / 4 end end } }) do
+    motor._layout = false
+    tudo_comprado()
+    caso[2]()
+    J.aplicar_layout()
+    local dentro, perdido = jogar_contando(1200)
+    -- sem nenhum caminho livre o atalho é permitido: ao sair dele sobra no máximo um passo de borda
+    ok("garçom não entra no móvel: " .. caso[1], dentro <= (caso.sem_rota and 5 or 0), dentro)
+    if caso.sem_rota then
+      ok("aviso de lugar sem caminho: " .. caso[1], J.lugares_sem_rota() > 0)
+    else
+      ok("garçom acha onde servir: " .. caso[1], perdido == 0, perdido)
+    end
+      ok("girar não derruba o serviço: " .. caso[1], J.estado.servidos > 50, J.estado.servidos)
+  end
+
+  -- quem não tem rota continua atravessando até chegar, mesmo tendo andado
+  motor._layout = false
+  novo()
+  libera("mesa")
+  mover("mesa1", -5.6, 1.6)
+  J.aplicar_layout()
+  -- o banco colado na porta tem caminho; o que importa é quem precisa atravessar a mesa
+  local p
+  for _ = 1, 4 do
+    local c = J.novo_cliente()
+    if c and c.lugar.x > -5.5 then p = c end
+  end
+  ok("mesa na porta: sem rota vira atalho", p and p.fantasma == true)
+  for _ = 1, 25 do J.atualizar(0.1) end
+  if p and p.estado == "entrando" then ok("atalho dura até chegar", p.fantasma == true) end
+
+  -- garçons empurrando uns aos outros no mesmo ponto tremiam para sempre, sem pedir socorro
+  motor._layout = false
+  tudo_comprado()
+  for i = 1, 8 do mover("mesa" .. i, 0, 0) end
+  J.aplicar_layout()
+  local parado = {}
+  local pior = 0
+  for _ = 1, 1500 do
+    J.atualizar(0.1)
+    for _, g in ipairs(J.garcons) do
+      local k = parado[g] or { x = g.x, z = g.z, t = 0 }
+      parado[g] = k
+      if g.estado ~= "parada" and util.distancia(g.x, g.z, k.x, k.z) < 0.5 then
+        k.t = k.t + 0.1
+        pior = math.max(pior, k.t)
+      else
+        k.x, k.z, k.t = g.x, g.z, 0
+      end
+    end
+  end
+  ok("garçom amontoado é socorrido", pior < 20, pior)
+
+  -- garçom que volta do editor não fica atravessando tudo
+  novo()
+  libera("garcom")
+  J.garcons[1].fantasma = true
+  J.aplicar_layout()
+  ok("editor limpa o atalho do garçom", not J.garcons[1].fantasma)
+
+  -- um clique sem arrastar só seleciona: o encaixe na grade movia o objeto
+  motor._layout = false
+  novo()
+  Ed.abrir()
+  local bm = L.POR_ID.mesa1
+  local sx, sy = motor.projetar(bm.x, 0.3, bm.z)
+  motor._mouse = { sx, sy }
+  motor._baixo = true
+  Ed.tocar(sx, sy)
+  for _ = 1, 5 do Ed.atualizar(0.1) end
+  motor._baixo = false
+  Ed.soltar()
+  ok("clique seleciona", Ed.sel == "mesa1")
+  ok("clique não move", L.de("mesa1").x == 0 and L.de("mesa1").z == 0, L.de("mesa1").x)
+  ok("clique não enche o desfazer", #Ed.desfazer == 0, #Ed.desfazer)
+  -- arrastar de verdade move; soltar fora da janela não deixa o arrasto preso
+  motor._baixo = true
+  Ed.tocar(sx, sy)
+  motor._mouse = { sx + 60, sy + 26 }
+  Ed.atualizar(0.1)
+  ok("arrastar move", L.de("mesa1").x ~= 0)
+  motor._baixo = false
+  Ed.atualizar(0.1)
+  ok("soltar fora da janela encerra o arrasto", Ed.arrasto == nil)
+  ok("arrasto vira um desfazer", #Ed.desfazer == 1, #Ed.desfazer)
+  motor._mouse = { 480, 270 }
+  -- soltar longe de tudo não joga o objeto para fora do mundo
+  Ed.mover_para("mesa1", 500, -500)
+  ok("arraste para fora fica na área", J.POS_MESAS[1].x <= 13.01 and J.POS_MESAS[1].z >= -5, J.POS_MESAS[1].x)
+  Ed.mover_para("jardim", 3, 9)
+  ok("jardim pode continuar lá fora", L.de("jardim").z + L.POR_ID.jardim.z == 9)
+  Ed.fechar()
+  motor._layout = false
+
+  -- abrir e fechar o editor não congela as posições oficiais neste computador
+  novo()
+  T.f2(); T.f2()
+  ok("editor sem edição não fixa o padrão", not tostring(motor._layout):find("balcao"), motor._layout)
+  T.f2()
+  Ed.sel = "mesa2"
+  Ed.mover_para("mesa2", 1.5, -0.5)
+  Ed.fechar()
+  ok("edição continua salva", tostring(motor._layout):find("mesa2") ~= nil)
+  T.f2()
+  Ed.sel = "mesa2"
+  L.restaurar("mesa2")
+  Ed.fechar()
+  ok("restaurar tira do arquivo", not tostring(motor._layout):find("mesa2"), motor._layout)
+  motor._layout = false
+
+  -- layout salvo com números válidos porém absurdos: a porta longe deixava todos andando por minutos
+  motor._layout = '{ ["porta"] = { ["x"] = 900, ["z"] = 900 }, ["mesa1"] = { ["x"] = -900, ["z"] = 900, ["y"] = 900 } }'
+  novo()
+  ok("layout absurdo volta para a área", J.PORTA.x <= 13 and J.PORTA.z <= 5.25, J.PORTA.x)
+  ok("mesa absurda volta para a área", J.POS_MESAS[1].x >= -7 and L.de("mesa1").y <= 6, J.POS_MESAS[1].x)
+  motor._layout = false
+
+  -- botão das Configurações passava por cima da regra do F2 na tela final
+  novo()
+  J.estado.fim = true
+  T.modal = "config"
+  desenhar()
+  ok("final: Configurações tem o botão", U.apertar("editar") ~= nil)
+  ok("final: botão não abre o editor", not Ed.ativo and not J.previa)
+  T.f2()
+  ok("final: F2 não abre o editor", not Ed.ativo)
+  J.estado.fim = false
+  T.modal = nil
+  J.offline = { ganho = 10, segundos = 100 }
+  T.f2()
+  ok("tempo fora: F2 não abre o editor", not Ed.ativo)
+  J.offline = nil
+  T.modal = "stats"
+  T.f2()
+  ok("F2 com janela aberta fecha a janela", Ed.ativo and T.modal == nil)
+  Ed.fechar()
+
+  -- a prévia mostra tudo aberto, mas nada disso vaza para as regras ou para o save
+  novo()
+  libera("garcom")
+  local antes = util.serializar(J.estado)
+  local lugares, mesas = #J.lugares, J.num_mesas()
+  T.f2()
+  ok("prévia mostra tudo", J.num_mesas() == 8 and J.mercadinho_aberto())
+  for _ = 1, 20 do atualizar(0.1); desenhar() end
+  ao_sair()
+  ok("sair na prévia não muda o save", util.desserializar(motor._save).nos.mercadinho == nil and util.desserializar(motor._save).nos.quartos == nil)
+  T.f2()
+  ok("prévia acabou", not J.previa and not J.editando and J.num_mesas() == mesas and not J.mercadinho_aberto())
+  ok("lugares voltam ao real", #J.lugares == lugares, #J.lugares)
+  ok("ala fechada continua bloqueada", Cam.bloqueado(8, 0))
+  local depois = util.desserializar(util.serializar(J.estado))
+  depois.salvo_em = nil
+  local ref = util.desserializar(antes)
+  ref.salvo_em = nil
+  ok("estado igual depois da prévia", util.serializar(depois) == util.serializar(ref))
+
+  -- o nome do rank aparece para contratados e na batalha final
+  novo()
+  J.estado.ouro = 1e60
+  for _ = 1, 40 do for _, no in ipairs(A.NOS) do J.estado.ouro = 1e60; J.comprar_no(no.id) end end
+  J.pessoas = {}
+  J.contratar()
+  J.mandar_contratados()
+  local viu = nil
+  for _, q in ipairs(J.pessoas) do if q.contratado then viu = q end end
+  ok("contratado leva rank da missão", viu and type(viu.rank_missao) == "string", viu and viu.rank_missao)
+  for _ = 1, 150 do
+    J.atualizar(0.1)
+    desenhar()
+    if viu and viu.com_papel then break end
+  end
+  ok("contratado pega o papel", viu and viu.com_papel)
   motor._layout = false
   novo()
 end

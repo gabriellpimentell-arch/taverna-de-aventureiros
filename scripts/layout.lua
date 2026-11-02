@@ -47,11 +47,23 @@ local function numero(v)
   return type(v) == "number" and v == v and v > -1000 and v < 1000 and v or 0
 end
 
+-- nada sai da área do jogo; fora dela ninguém consegue chegar e o objeto some da tela
+local AREA_EXTERNA = { jardim = true, cervejaria = true, circulo = true }
+
+function L.limitar(id)
+  local o, d = L.POR_ID[id], L.dados[id]
+  if not d then return end
+  d.x = util.limitar(d.x, -7 - o.x, 13 - o.x)
+  d.z = util.limitar(d.z, -5 - o.z, (AREA_EXTERNA[id] and 10 or 5.25) - o.z)
+  d.y = util.limitar(d.y, -1, 6)
+end
+
 local function aplicar_tabela(t)
   if type(t) ~= "table" then return end
   for id, d in pairs(t) do
     if L.POR_ID[id] and type(d) == "table" then
       L.dados[id] = { x = numero(d.x), z = numero(d.z), y = numero(d.y), g = numero(d.g) }
+      L.limitar(id)
     end
   end
 end
@@ -75,7 +87,16 @@ function L.restaurar(id)
 end
 
 function L.texto() return util.serializar(L.dados) end
-function L.salvar() motor.layout_salvar(L.texto()) end
+
+-- só guarda o que difere das posições oficiais: senão abrir o editor congelaria as de hoje para sempre
+function L.salvar()
+  local padrao, editado = require("layout_padrao"), {}
+  for id, d in pairs(L.dados) do
+    local p = padrao[id] or {}
+    if d.x ~= (p.x or 0) or d.z ~= (p.z or 0) or d.y ~= (p.y or 0) or d.g ~= (p.g or 0) then editado[id] = d end
+  end
+  motor.layout_salvar(util.serializar(editado))
+end
 
 function L.de(id)
   local d = L.dados[id]
