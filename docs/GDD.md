@@ -85,11 +85,11 @@ Todas as melhorias ficam na árvore: comprar uma habilidade abre as próximas. O
 | --- | --- |
 | Salão | Mesas, cadeiras e novas áreas da taverna |
 | Clientes | Frequência e quantidade de clientes |
-| Serviço | Garçons, cozinheiro e velocidade de atendimento |
+| Serviço | Garçons, cozinheiro, bardo e velocidade de atendimento |
 | Bebidas e comida | Rentabilidade, jardim, comida do cozinheiro e bebidas próprias |
 | Guilda | Prateleira de missões, ranks e quantidade de aventureiros |
 | Mercadinho | Espólios e vendas |
-| Heróis | Contratação, parties, propaganda e invocação |
+| Heróis | Recrutador, contratação, parties, propaganda e invocação |
 
 As imagens de referência do visual da árvore ainda serão enviadas.
 
@@ -119,9 +119,11 @@ O ritmo exato (quanto ouro para cada etapa) fica para o balanceamento, já nos s
 | Contratados | O jogador contrata | Evoluem com investimento em armadura, arma e magia, formam parties e podem virar heróis |
 | Invocados | Invocação isekai, no fim do jogo | Têm os maiores atributos e continuam evoluindo; 4 deles são exigidos na missão final |
 
+**Funcionários ligados aos aventureiros**: o recrutador ajuda na contratação de aventureiros, e o bardo espalha a fama dos heróis, reforçando a propaganda.
+
 **Propaganda e reputação**: a propaganda abre quando o primeiro contratado vira herói. Ela dá fama aos heróis, a fama traz reputação para a taverna, e a reputação atrai aventureiros de rank mais alto, que geram mais lucro.
 
-**Brigas entre clientes**: combinam com o clima de aventureiros e fazem parte do jogo. Clientes de temperamentos incompatíveis na mesma mesa podem brigar; como isso funciona e o que causa ainda será definido.
+**Brigas entre clientes**: combinam com o clima de aventureiros e fazem parte do jogo. Clientes de temperamentos incompatíveis na mesma mesa podem brigar. A briga atrapalha um pouco a taverna, mas o jogador pode separá-la com um toque e ganha uma recompensa por isso, para ser um momento divertido e não uma punição.
 
 **Ideias a avaliar** (vieram da versão anterior, sem decisão nova):
 
