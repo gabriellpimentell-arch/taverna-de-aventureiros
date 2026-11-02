@@ -20,6 +20,7 @@ Tudo no jogo se faz com um toque (celular) ou um clique (desktop): não há pers
 
 - **Uma ação, um toque**: servir, contratar, comprar habilidade, coletar ouro.
 - **Sistema**: configurações (música, efeitos, tela cheia, sombras, FPS), minimizar, estatísticas, créditos, salvar, apagar progresso com confirmação e sair. Esc abre e fecha o menu.
+- **Modo de edição**: F2 ou Configurações. Move, gira e sobe objetos; as posições valem para as regras e as colisões e continuam após as atualizações.
 - **Mesmo comportamento nas duas plataformas**: o motor traduz toque e clique para a mesma ação genérica, e o Lua nunca sabe qual foi.
 - **Botões grandes**: alvos de toque com pelo menos 48 px, pensando no polegar.
 - **Sem gestos difíceis**: nada de arrastar com precisão, pinça ou toque duplo como única forma de fazer algo. Rolagem de listas é o único arraste.
@@ -121,6 +122,8 @@ O ritmo exato (quanto ouro para cada etapa) fica para o balanceamento, já nos s
 | Invocados | Invocação isekai, no fim do jogo | Têm os maiores atributos e continuam evoluindo; 4 deles são exigidos na missão final |
 
 **Funcionários ligados aos aventureiros**: o recrutador ajuda na contratação de aventureiros, e o bardo espalha a fama dos heróis, reforçando a propaganda.
+
+**Colisões**: pessoas calculam o caminho desviando dos móveis e não se atravessam.
 
 **Propaganda e reputação**: a propaganda abre quando o primeiro contratado vira herói. Ela dá fama aos heróis, a fama traz reputação para a taverna, e a reputação atrai aventureiros de rank mais alto, que geram mais lucro.
 

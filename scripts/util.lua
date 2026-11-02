@@ -84,7 +84,10 @@ function util.desserializar(texto)
   if not texto then return nil end
   local f = load("return " .. texto, "save", "t", {})   -- ambiente vazio: só dados
   if not f then return nil end
+  -- um arquivo adulterado com laço infinito não pode travar o jogo
+  debug.sethook(function() error("arquivo inválido") end, "", 5000000)
   local ok, dados = pcall(f)
+  debug.sethook()
   if ok and type(dados) == "table" then return dados end
   return nil
 end

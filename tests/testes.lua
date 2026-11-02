@@ -48,6 +48,8 @@ ok("12.340 fica curto", util.formatar(12340) == "12,3 mil", util.formatar(12340)
 ok("999.999 não vira 1000 mil", util.formatar(999999) == "1 mi", util.formatar(999999))
 ok("9.999", util.formatar(9999) == "9.999", util.formatar(9999))
 
+ok("arquivo com laço infinito não trava", util.desserializar("(function() while true do end end)()") == nil)
+
 -- Árvore -------------------------------------------------------------------------
 novo()
 local ids = {}
