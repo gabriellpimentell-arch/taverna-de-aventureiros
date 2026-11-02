@@ -769,16 +769,16 @@ local function janela_config()
     T.modal = nil
   end)
 
-  motor.retangulo(cx, y + 312, w - 56, 2, "#00000050")
+  motor.retangulo(cx, y + 322, w - 56, 2, "#00000050")
   if T.confirmar then
-    motor.texto("Apagar todo o progresso? Não dá para desfazer.", cx, y + 330, 15, "#ff9a8a", "esquerda", true)
-    U.botao("apagar_nao", cx, y + 360, 180, 46, "Não, manter", {}, function() T.confirmar = false end)
-    U.botao("apagar_sim", cx + 192, y + 360, 180, 46, "Sim, apagar", { cor = cor.vermelho, cor_texto = "#ffffff" }, function()
+    motor.texto("Apagar todo o progresso? Não dá para desfazer.", cx, y + 334, 15, "#ff9a8a", "esquerda", true)
+    U.botao("apagar_nao", cx, y + 362, 180, 46, "Não, manter", {}, function() T.confirmar = false end)
+    U.botao("apagar_sim", cx + 192, y + 362, 180, 46, "Sim, apagar", { cor = cor.vermelho, cor_texto = "#ffffff" }, function()
       J.apagar_progresso()
       T.iniciar()
     end)
   else
-    U.botao("apagar", cx, y + 330, 200, 46, "Apagar progresso", { cor = "#5a2a22", cor_texto = "#ffb0a2" }, function() T.confirmar = true end)
+    U.botao("apagar", cx, y + 334, 200, 46, "Apagar progresso", { cor = "#5a2a22", cor_texto = "#ffb0a2" }, function() T.confirmar = true end)
   end
   motor.texto("Versão " .. (motor.versao or "dev"), cx, y + h - 34, 13, cor.texto_fraco)
   U.botao("sair", x + w - 230, y + h - 62, 200, 48, "Salvar e sair", { cor = cor.vermelho, cor_texto = "#ffffff" }, function()
