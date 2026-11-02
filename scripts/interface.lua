@@ -10,7 +10,9 @@ local cor = util.cores
 
 local UI = {}
 
-local TOPO_PAINEL = 620
+-- painel à direita do salão
+local PX = 600          -- onde o painel começa
+local PW = 960 - PX     -- largura do painel
 
 function UI.iniciar()
   UI.brilho = {}     -- id -> tempo restante do brilho de compra
@@ -18,7 +20,7 @@ function UI.iniciar()
 end
 
 local function carta(i)
-  return { x = 16, y = TOPO_PAINEL + 52 + (i - 1) * 72, w = 508, h = 64 }
+  return { x = PX + 12, y = 150 + (i - 1) * 96, w = PW - 24, h = 88 }
 end
 
 -- Ícones das melhorias ------------------------------------------------------------
@@ -50,15 +52,13 @@ local cores_icone = {
 
 local function topo()
   local e = taverna.estado
-  motor.retangulo(0, 0, 540, 112, cor.painel)
-  motor.retangulo(0, 108, 540, 4, "#00000040")
   desenho.moeda(taverna.MOEDA_TOPO.x, taverna.MOEDA_TOPO.y, 24)
-  motor.texto(util.formatar(e.ouro), 80, 18, 42, cor.texto, "esquerda", true)
+  motor.texto(util.formatar(e.ouro), PX + 76, 14, 40, cor.texto, "esquerda", true)
   local rps = e.rps < 10 and string.format("%.1f", e.rps):gsub("%.", ",") or util.formatar(e.rps)
-  motor.texto("+" .. rps .. " por segundo", 82, 68, 16, cor.texto_fraco)
-
-  motor.texto("Heróis servidos", 520, 26, 14, cor.texto_fraco, "direita")
-  motor.texto(util.formatar(e.servidos), 520, 44, 26, cor.texto, "direita", true)
+  motor.texto("+" .. rps .. " por segundo", PX + 78, 64, 15, cor.texto_fraco)
+  local servidos = e.servidos == 1 and "1 herói servido" or (util.formatar(e.servidos) .. " heróis servidos")
+  motor.texto(servidos, 960 - 16, 66, 13, cor.texto_fraco, "direita")
+  motor.retangulo(PX + 16, 102, PW - 32, 2, "#00000040")
 end
 
 -- Painel de melhorias ---------------------------------------------------------------
@@ -80,37 +80,39 @@ local function desenhar_carta(i, id)
   motor.retangulo(x, r.y, r.w, r.h, pode and "#47301f" or cor.carta, 12)
   motor.contorno(x, r.y, r.w, r.h, pode and cor.ouro_escuro or cor.carta_borda, 2, 12)
 
-  motor.circulo(x + 38, r.y + 32, 24, cores_icone[id])
-  icones[id](x + 38, r.y + 32)
+  motor.circulo(x + 36, r.y + 44, 24, cores_icone[id])
+  icones[id](x + 36, r.y + 44)
 
-  -- nome e nível
-  motor.texto(m.nome, x + 74, r.y + 9, 20, cor.texto, "esquerda", true)
-  if nivel > 0 then
-    local w = motor.largura_texto(m.nome, 20, true)
-    local etiqueta = id == "mesa" and (taverna.num_mesas() .. " mesas") or ("Nv " .. nivel)
-    motor.texto(etiqueta, x + 82 + w, r.y + 14, 14, cor.texto_fraco)
-  end
+  -- nome, situação e descrição
+  motor.texto(m.nome, x + 72, r.y + 9, 18, cor.texto, "esquerda", true)
+  local situacao
+  if not liberada then situacao = "Bloqueado"
+  elseif id == "mesa" then
+    local n = taverna.num_mesas()
+    situacao = n == 1 and "1 mesa" or (n .. " mesas")
+  elseif nivel == 0 then situacao = "Ainda não comprado"
+  else situacao = "Nível " .. nivel end
+  motor.texto(situacao, x + 72, r.y + 33, 13, cor.ouro_escuro)
 
-  -- descrição
   local descricao = m.descricao
   if not liberada then
     descricao = "Desbloqueia com " .. m.desbloqueio_mesas .. " mesas"
   elseif nivel > 0 and m.descricao_nivel then
     descricao = m.descricao_nivel
   end
-  motor.texto(descricao, x + 74, r.y + 37, 14, cor.texto_fraco)
+  motor.texto(descricao, x + 72, r.y + 55, 14, cor.texto_fraco)
 
   -- preço
   if liberada then
     if maximo then
-      motor.texto("Máximo", x + r.w - 18, r.y + 24, 16, cor.texto_fraco, "direita", true)
+      motor.texto("Máximo", x + r.w - 14, r.y + 14, 15, cor.texto_fraco, "direita", true)
     else
       local txt = util.formatar(custo)
-      local w = motor.largura_texto(txt, 18, true) + 46
-      local px, py = x + r.w - 14 - w, r.y + 14
-      motor.retangulo(px, py, w, 36, pode and cor.ouro or "#4d3a2c", 18)
-      desenho.moeda(px + 19, py + 18, 10)
-      motor.texto(txt, px + 34, py + 9, 18, pode and "#3a2410" or cor.texto_fraco, "esquerda", true)
+      local w = motor.largura_texto(txt, 16, true) + 40
+      local px, py = x + r.w - 12 - w, r.y + 10
+      motor.retangulo(px, py, w, 30, pode and cor.ouro or "#4d3a2c", 15)
+      desenho.moeda(px + 16, py + 15, 9)
+      motor.texto(txt, px + 29, py + 7, 16, pode and "#3a2410" or cor.texto_fraco, "esquerda", true)
 
       -- barrinha mostrando quanto falta para comprar
       if not pode then
@@ -128,10 +130,10 @@ local function desenhar_carta(i, id)
 end
 
 local function painel()
-  motor.retangulo(0, TOPO_PAINEL, 540, 960 - TOPO_PAINEL, cor.painel)
-  motor.retangulo(0, TOPO_PAINEL, 540, 4, "#00000050")
-  motor.texto("Melhorias", 20, TOPO_PAINEL + 14, 20, cor.texto, "esquerda", true)
-  motor.texto("Toque para comprar", 520, TOPO_PAINEL + 18, 14, cor.texto_fraco, "direita")
+  motor.retangulo(PX, 0, PW, 540, cor.painel)
+  motor.retangulo(PX, 0, 4, 540, "#00000050")
+  motor.texto("Melhorias", PX + 16, 114, 18, cor.texto, "esquerda", true)
+  motor.texto("Toque para comprar", 960 - 16, 118, 12, cor.texto_fraco, "direita")
   for i, id in ipairs(taverna.ORDEM_MELHORIAS) do desenhar_carta(i, id) end
 end
 
@@ -162,11 +164,12 @@ local function aviso()
   local entrada = util.limitar(a.vida / 0.3, 0, 1)
   local saida = util.limitar((a.duracao - a.vida) / 0.4, 0, 1)
   motor.opacidade(math.min(entrada, saida))
-  local y = 128 - (1 - util.suave(entrada)) * 20
+  local cx = taverna.LARGURA_SALAO / 2
+  local y = 112 - (1 - util.suave(entrada)) * 20
   local w = motor.largura_texto(a.texto, 18, true) + 40
-  motor.retangulo(270 - w / 2, y + 3, w, 44, "#00000055", 22)
-  motor.retangulo(270 - w / 2, y, w, 44, cor.ouro, 22)
-  motor.texto(a.texto, 270, y + 13, 18, "#3a2410", "centro", true)
+  motor.retangulo(cx - w / 2, y + 3, w, 44, "#00000055", 22)
+  motor.retangulo(cx - w / 2, y, w, 44, cor.ouro, 22)
+  motor.texto(a.texto, cx, y + 13, 18, "#3a2410", "centro", true)
   motor.opacidade(1)
 end
 
@@ -180,19 +183,19 @@ end
 local function boas_vindas()
   local o = taverna.offline
   if not o then return end
-  motor.retangulo(0, 0, 540, 960, "#000000b0")
-  local x, y, w, h = 50, 300, 440, 320
+  motor.retangulo(0, 0, 960, 540, "#000000b0")
+  local x, y, w, h = 260, 110, 440, 320
   motor.retangulo(x, y, w, h, cor.carta, 20)
   motor.contorno(x, y, w, h, cor.ouro_escuro, 3, 20)
-  motor.texto("Bem-vindo de volta!", 270, y + 32, 28, cor.texto, "centro", true)
-  motor.texto("Você ficou fora por " .. duracao(o.segundos) .. ".", 270, y + 82, 16, cor.texto_fraco, "centro")
-  motor.texto("A garçonete cuidou da taverna:", 270, y + 106, 16, cor.texto_fraco, "centro")
+  motor.texto("Bem-vindo de volta!", 480, y + 32, 28, cor.texto, "centro", true)
+  motor.texto("Você ficou fora por " .. duracao(o.segundos) .. ".", 480, y + 82, 16, cor.texto_fraco, "centro")
+  motor.texto("A garçonete cuidou da taverna:", 480, y + 106, 16, cor.texto_fraco, "centro")
   local txt = "+" .. util.formatar(o.ganho)
   local tw = motor.largura_texto(txt, 44, true)
-  desenho.moeda(270 - tw / 2 - 12, y + 175, 20)
-  motor.texto(txt, 270 - tw / 2 + 18, y + 146, 44, cor.ouro, "esquerda", true)
-  motor.retangulo(170, y + 236, 200, 52, cor.ouro, 26)
-  motor.texto("Coletar", 270, y + 251, 22, "#3a2410", "centro", true)
+  desenho.moeda(480 - tw / 2 - 12, y + 175, 20)
+  motor.texto(txt, 480 - tw / 2 + 18, y + 146, 44, cor.ouro, "esquerda", true)
+  motor.retangulo(380, y + 236, 200, 52, cor.ouro, 26)
+  motor.texto("Coletar", 480, y + 251, 22, "#3a2410", "centro", true)
 end
 
 -- Ciclo ---------------------------------------------------------------------------------
@@ -207,8 +210,8 @@ function UI.atualizar(dt)
 end
 
 function UI.desenhar()
-  topo()
   painel()
+  topo()
   efeitos()
   aviso()
   boas_vindas()
@@ -216,7 +219,7 @@ end
 
 -- devolve true se o toque foi usado pela interface
 function UI.tocar(x, y)
-  if y < TOPO_PAINEL then return false end
+  if x < PX then return false end
   for i, id in ipairs(taverna.ORDEM_MELHORIAS) do
     if util.dentro(x, y, carta(i)) then
       if taverna.comprar(id) then

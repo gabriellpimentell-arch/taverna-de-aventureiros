@@ -10,8 +10,9 @@ local cor = util.cores
 
 local D = {}
 
-local TOPO_SALAO, FIM_SALAO = 112, 620
-local FIM_PAREDE = 210
+local TOPO_SALAO, FIM_SALAO = 0, 540
+local FIM_PAREDE = 98
+local L = taverna.LARGURA_SALAO
 
 -- Ícones pequenos (usados nos balões e nas cartas de melhoria) -----------------
 
@@ -41,75 +42,75 @@ end
 -- Cenário --------------------------------------------------------------------------
 
 local function parede()
-  motor.retangulo(0, TOPO_SALAO, 540, FIM_PAREDE - TOPO_SALAO, cor.parede)
-  for x = 30, 540, 60 do
+  motor.retangulo(0, TOPO_SALAO, L, FIM_PAREDE - TOPO_SALAO, cor.parede)
+  for x = 30, L, 60 do
     motor.linha(x, TOPO_SALAO, x, FIM_PAREDE, 2, "#00000022")
   end
 
   -- barris à esquerda
   for _, bx in ipairs({ 22, 70 }) do
-    motor.retangulo(bx, 150, 40, 54, "#7b4a26", 10)
-    motor.retangulo(bx, 162, 40, 4, "#3b2414")
-    motor.retangulo(bx, 188, 40, 4, "#3b2414")
+    motor.retangulo(bx, 40, 40, 54, "#7b4a26", 10)
+    motor.retangulo(bx, 52, 40, 4, "#3b2414")
+    motor.retangulo(bx, 78, 40, 4, "#3b2414")
   end
 
   -- quadro de missões (ainda fechado: próxima etapa do jogo)
-  motor.retangulo(176, 126, 124, 70, "#5b3a22", 6)
-  motor.retangulo(182, 132, 112, 58, "#9c7448", 4)
+  local qx = 238
+  motor.retangulo(qx, 14, 124, 70, "#5b3a22", 6)
+  motor.retangulo(qx + 6, 20, 112, 58, "#9c7448", 4)
   motor.opacidade(0.55)
-  motor.retangulo(192, 140, 26, 30, "#efe2c4", 2)
-  motor.retangulo(226, 146, 26, 30, "#efe2c4", 2)
-  motor.retangulo(260, 138, 26, 30, "#efe2c4", 2)
+  motor.retangulo(qx + 16, 28, 26, 30, "#efe2c4", 2)
+  motor.retangulo(qx + 50, 34, 26, 30, "#efe2c4", 2)
+  motor.retangulo(qx + 84, 26, 26, 30, "#efe2c4", 2)
   motor.opacidade(1)
-  motor.retangulo(188, 172, 100, 16, "#2c1d13cc", 4)
-  motor.texto("em breve", 238, 172, 12, cor.texto_fraco, "centro")
+  motor.retangulo(qx + 12, 60, 100, 16, "#2c1d13cc", 4)
+  motor.texto("em breve", qx + 62, 60, 12, cor.texto_fraco, "centro")
 
   -- prateleira com garrafas
-  motor.retangulo(330, 136, 190, 6, "#5b3a22", 2)
-  local garrafas = { "#4f8a3c", "#8a3c3c", "#3c5f8a", "#c9a24a", "#4f8a3c", "#7a4a8a" }
+  motor.retangulo(400, 24, 180, 6, "#5b3a22", 2)
+  local garrafas = { "#4f8a3c", "#8a3c3c", "#3c5f8a", "#c9a24a", "#7a4a8a", "#4f8a3c" }
   for i, c in ipairs(garrafas) do
-    local gx = 340 + (i - 1) * 30
-    motor.retangulo(gx, 112 + 8, 12, 16, c, 3)
-    motor.retangulo(gx + 3, 112 + 2, 6, 8, c, 2)
+    local gx = 410 + (i - 1) * 28
+    motor.retangulo(gx, 8, 12, 16, c, 3)
+    motor.retangulo(gx + 3, 2, 6, 8, c, 2)
   end
 
   -- balcão
-  motor.retangulo(320, 170, 220, 40, cor.balcao)
-  motor.retangulo(320, 166, 220, 8, "#a8713f", 3)
+  motor.retangulo(390, 58, L - 390, 40, cor.balcao)
+  motor.retangulo(390, 54, L - 390, 8, "#a8713f", 3)
 end
 
 local function piso()
   local i = 0
   for y = FIM_PAREDE, FIM_SALAO, 34 do
-    motor.retangulo(0, y, 540, 34, (i % 2 == 0) and cor.piso_a or cor.piso_b)
+    motor.retangulo(0, y, L, 34, (i % 2 == 0) and cor.piso_a or cor.piso_b)
     local desloc = (i % 2 == 0) and 0 or 45
-    for x = desloc, 540, 90 do
+    for x = desloc, L, 90 do
       motor.linha(x, y, x, y + 34, 1.5, "#00000020")
     end
     i = i + 1
   end
-  motor.retangulo(0, FIM_PAREDE, 540, 6, "#00000030")
+  motor.retangulo(0, FIM_PAREDE, L, 6, "#00000030")
 
   -- porta
   local p = taverna.PORTA
-  motor.retangulo(p.x - 38, FIM_SALAO - 52, 76, 52, "#3b2414", 10)
-  motor.retangulo(p.x - 32, FIM_SALAO - 46, 64, 46, "#1a0f08", 8)
-  motor.retangulo(p.x - 38, FIM_SALAO - 4, 76, 4, "#3b2414")
+  motor.retangulo(p.x - 38, FIM_SALAO - 46, 76, 46, "#3b2414", 10)
+  motor.retangulo(p.x - 32, FIM_SALAO - 40, 64, 40, "#1a0f08", 8)
 end
 
 local function mesa(x, y, fantasma)
   if fantasma then
     motor.opacidade(0.22)
-    motor.elipse(x, y, 60, 30, cor.madeira_esc)
+    motor.elipse(x, y, 44, 24, cor.madeira_esc)
     motor.opacidade(0.45)
-    motor.texto("+", x, y - 18, 28, cor.texto_fraco, "centro", true)
+    motor.texto("+", x, y - 14, 28, cor.texto_fraco, "centro", true)
     motor.opacidade(1)
     return
   end
-  motor.elipse(x, y + 7, 62, 30, "#00000040")
-  motor.elipse(x, y + 4, 60, 30, cor.madeira_esc)
-  motor.elipse(x, y, 60, 28, cor.madeira)
-  motor.elipse(x - 10, y - 6, 34, 12, "#ffffff10")
+  motor.elipse(x, y + 7, 46, 25, "#00000040")
+  motor.elipse(x, y + 4, 44, 25, cor.madeira_esc)
+  motor.elipse(x, y, 44, 23, cor.madeira)
+  motor.elipse(x - 8, y - 5, 24, 9, "#ffffff10")
 end
 
 local function banquinho(x, y)
@@ -182,7 +183,7 @@ local function heroi(h)
 
   -- o que está consumindo
   if h.estado == "comendo" then
-    local lado = h.x < 270 and 1 or -1
+    local lado = -h.lado   -- segura o pedido do lado da mesa
     if h.pedido == "bebida" then D.caneca(x + lado * 22, y + 2, 0.55)
     else D.coxa(x + lado * 22, y + 2, 0.55) end
   end
@@ -208,7 +209,7 @@ end
 -- Tudo junto -----------------------------------------------------------------------------
 
 function D.salao()
-  motor.retangulo(0, 0, 540, 960, cor.fundo)
+  motor.retangulo(0, 0, L, FIM_SALAO, cor.fundo)
   parede()
   piso()
 

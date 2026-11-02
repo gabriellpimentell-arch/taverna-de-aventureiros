@@ -11,8 +11,9 @@
 //      tocar(x, y)        quando o jogador toca na tela ou clica
 //      ao_sair()          antes de fechar ou recarregar (hora de salvar)
 //
-//  O jogo é desenhado numa tela virtual em pé de 540 x 960, que o motor
-//  escala para caber na janela (ou na tela do celular, no futuro).
+//  O jogo é desenhado numa tela virtual deitada (16:9) de 960 x 540, que o
+//  motor escala para caber na tela. No computador ele abre em tela cheia
+//  (F11 ou Alt+Enter alternam com o modo janela).
 //
 //  Durante o desenvolvimento, salvar qualquer arquivo .lua recarrega o jogo
 //  na hora. F5 também recarrega.
@@ -39,8 +40,8 @@ extern "C" {
 
 namespace fs = std::filesystem;
 
-static const float LARGURA = 540.0f;
-static const float ALTURA = 960.0f;
+static const float LARGURA = 960.0f;
+static const float ALTURA = 540.0f;
 
 struct Motor {
     lua_State* L = nullptr;
@@ -489,20 +490,25 @@ int main() {
     unsigned int flags = FLAG_WINDOW_RESIZABLE | FLAG_VSYNC_HINT;
     if (!getenv("TAVERNA_TESTE")) flags |= FLAG_MSAA_4X_HINT;  // bordas mais suaves
     SetConfigFlags(flags);
-    InitWindow(450, 800, "Taverna de Aventureiros");
+    InitWindow(1280, 720, "Taverna de Aventureiros");
     SetExitKey(KEY_NULL);  // ESC não fecha o jogo
-    SetWindowMinSize(270, 480);
+    SetWindowMinSize(480, 270);
     SetTargetFPS(60);
 
-    // janela em pé ocupando boa parte da altura do monitor
+    // modo janela (F11): 80% da largura do monitor, centralizada
     int monitor = GetCurrentMonitor();
     int mh = GetMonitorHeight(monitor), mw = GetMonitorWidth(monitor);
-    if (mh > 0 && mw > 0 && !getenv("TAVERNA_TESTE")) {
-        int h = (int)(mh * 0.85f), w = (int)(h * LARGURA / ALTURA);
-        SetWindowSize(w, h);
-        SetWindowPosition((mw - w) / 2, (mh - h) / 2);
+    if (getenv("TAVERNA_TESTE")) {
+        SetWindowSize((int)LARGURA, (int)ALTURA);
+    } else {
+        if (mh > 0 && mw > 0) {
+            int w = (int)(mw * 0.8f), h = (int)(w * ALTURA / LARGURA);
+            if (h > mh * 0.85f) { h = (int)(mh * 0.85f); w = (int)(h * LARGURA / ALTURA); }
+            SetWindowSize(w, h);
+            SetWindowPosition((mw - w) / 2, (mh - h) / 2);
+        }
+        ToggleBorderlessWindowed();  // começa em tela cheia
     }
-    if (getenv("TAVERNA_TESTE")) SetWindowSize((int)LARGURA, (int)ALTURA);
 
     M.pastaScripts = procurarPasta("scripts", "main.lua");
     M.pastaAssets = procurarPasta("assets", "fontes");
@@ -535,6 +541,10 @@ int main() {
             if (lerDatasScripts() != M.datasScripts) carregarScripts();
         }
         if (IsKeyPressed(KEY_F5) && !M.pastaScripts.empty()) carregarScripts();
+
+        // F11 ou Alt+Enter: alterna entre tela cheia e janela
+        bool alt = IsKeyDown(KEY_LEFT_ALT) || IsKeyDown(KEY_RIGHT_ALT);
+        if (IsKeyPressed(KEY_F11) || (alt && IsKeyPressed(KEY_ENTER))) ToggleBorderlessWindowed();
 
         atualizarCamera();
 

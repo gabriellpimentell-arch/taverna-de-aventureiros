@@ -7,16 +7,18 @@ local util = require("util")
 
 local T = {}
 
--- Posições fixas na tela (tela virtual de 540 x 960) ---------------------------
-T.PORTA = { x = 270, y = 600 }
-T.CASA_GARCONETE = { x = 470, y = 186 }
-T.MOEDA_TOPO = { x = 44, y = 56 }
+-- Posições fixas na tela (tela virtual deitada de 960 x 540) -------------------
+-- O salão ocupa a parte esquerda (0 a 600); o painel fica à direita.
+T.LARGURA_SALAO = 600
+T.PORTA = { x = 300, y = 525 }
+T.CASA_GARCONETE = { x = 545, y = 76 }
+T.MOEDA_TOPO = { x = 640, y = 52 }
 T.MAX_MESAS = 6
 
+-- ordem em que as mesas novas aparecem
 local POS_MESAS = {
-  { x = 150, y = 282 }, { x = 390, y = 282 },
-  { x = 150, y = 400 }, { x = 390, y = 400 },
-  { x = 150, y = 518 }, { x = 390, y = 518 },
+  { x = 300, y = 235 }, { x = 100, y = 235 }, { x = 500, y = 235 },
+  { x = 300, y = 405 }, { x = 100, y = 405 }, { x = 500, y = 405 },
 }
 
 T.CLASSES = {
@@ -64,10 +66,11 @@ function T.num_mesas() return 1 + T.estado.niveis.mesa end
 function T.posicao_mesa(i) return POS_MESAS[i] end
 
 -- cada mesa tem 2 assentos: esquerdo e direito
+-- devolve x, y e o lado (-1 = esquerda da mesa, 1 = direita)
 function T.assento(i)
   local m = POS_MESAS[math.ceil(i / 2)]
   local lado = (i % 2 == 1) and -1 or 1
-  return m.x + lado * 80, m.y + 6
+  return m.x + lado * 62, m.y + 6, lado
 end
 
 local function assentos_livres()
@@ -105,8 +108,9 @@ end
 -- Heróis -----------------------------------------------------------------------------
 
 local function novo_heroi(assento)
-  local ax, ay = T.assento(assento)
+  local ax, ay, lado = T.assento(assento)
   local h = {
+    lado = lado,
     x = T.PORTA.x, y = T.PORTA.y,
     alvo_x = ax, alvo_y = ay,
     assento = assento,
@@ -230,8 +234,8 @@ local function atualizar_garconete(dt)
       g.estado = "voltando"
       g.alvo = nil
     else
-      local lado = h.x < 270 and 1 or -1
-      if andar(g, h.x + lado * 42, h.y, vel, dt) then
+      -- para na frente do herói
+      if andar(g, h.x, h.y + 34, vel, dt) then
         T.servir(h, true)
         g.alvo = nil
         g.estado = "voltando"
@@ -383,7 +387,7 @@ end
 
 function T.coletar_offline()
   if not T.offline then return end
-  T.ganhar(T.offline.ganho, 270, 480)
+  T.ganhar(T.offline.ganho, 480, 300)
   T.offline = nil
 end
 
