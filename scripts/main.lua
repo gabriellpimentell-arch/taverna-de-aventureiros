@@ -1,46 +1,17 @@
 -- =============================================================================
---  TAVERNA DE AVENTUREIROS
+--  TAVERNA DE AVENTUREIROS — branch do protótipo 3D
 --
---  Este é o ponto de entrada do jogo. O motor (C++) chama estas funções:
---    iniciar(), atualizar(dt), desenhar(), tocar(x, y) e ao_sair()
---
---  Organização dos scripts:
---    config.lua     números do balanceamento (preços, tempos, bônus)
---    taverna.lua    regras: heróis, mesas, ouro, melhorias, garçonete
---    desenho.lua    desenho do salão e dos personagens
---    interface.lua  placar, cartas de melhoria, avisos
---    util.lua       funções de apoio (formatar números, salvar...)
+--  Aqui o jogo abre direto na cena low poly de scripts/prototipo3d.lua.
+--  Esta versão não lê nem grava o progresso salvo.
 -- =============================================================================
 
-local taverna = require("taverna")
-local desenho = require("desenho")
-local interface = require("interface")
+local prototipo = require("prototipo3d")
 
 function iniciar()
   math.randomseed(os.time())
-  taverna.iniciar()
-  interface.iniciar()
+  prototipo.iniciar()
 end
 
-function atualizar(dt)
-  taverna.atualizar(dt)
-  interface.atualizar(dt)
-end
-
-function desenhar()
-  desenho.salao()
-  interface.desenhar()
-end
-
-function tocar(x, y)
-  if taverna.offline then
-    taverna.coletar_offline()
-    return
-  end
-  if interface.tocar(x, y) then return end
-  taverna.tocar_salao(x, y)
-end
-
-function ao_sair()
-  taverna.salvar()
-end
+function atualizar(dt) prototipo.atualizar(dt) end
+function desenhar() prototipo.desenhar() end
+function tocar(x, y) prototipo.tocar(x, y) end

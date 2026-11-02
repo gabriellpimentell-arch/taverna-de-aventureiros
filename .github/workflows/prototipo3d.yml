@@ -1,0 +1,26 @@
+name: Protótipo 3D
+
+# Só gera um pacote para baixar: não publica versão de teste nem atualiza o jogo de ninguém.
+on:
+  push:
+    branches: [prototipo-3d]
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configurar
+        run: cmake -S . -B build -A x64
+      - name: Compilar
+        run: cmake --build build --config Release
+      - name: Montar pasta
+        shell: bash
+        run: |
+          mkdir -p dist
+          cp build/Release/TavernaDeAventureiros.exe dist/
+          cp -r scripts assets dist/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TavernaPrototipo3D
+          path: dist

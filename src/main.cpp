@@ -25,6 +25,7 @@
 
 #include "raylib.h"
 #include "atualizador.h"
+#include "cena3d.h"
 
 extern "C" {
 #include "lua.h"
@@ -282,6 +283,80 @@ static int l_captura(lua_State* L) {
     return 0;
 }
 
+// --- Cena 3D low poly (ver cena3d.h) ------------------------------------------
+
+static int l_cena_camera(lua_State* L) {
+    cena3d::E.camPos = Vector3{num(L, 1), num(L, 2), num(L, 3)};
+    cena3d::E.camAlvo = Vector3{num(L, 4), num(L, 5), num(L, 6)};
+    cena3d::E.fov = numOpc(L, 7, 28);
+    return 0;
+}
+
+static int l_cena_luz(lua_State* L) {
+    int i = (int)luaL_checkinteger(L, 1) - 1;
+    if (i < 0 || i >= cena3d::MAX_LUZES) return 0;
+    cena3d::Luz& l = cena3d::E.luzes[i];
+    l.pos[0] = num(L, 2); l.pos[1] = num(L, 3); l.pos[2] = num(L, 4);
+    l.cor[0] = num(L, 5); l.cor[1] = num(L, 6); l.cor[2] = num(L, 7);
+    l.alcance = num(L, 8);
+    return 0;
+}
+
+// motor.peca(forma, x, y, z, ex, ey, ez, giro, cor, inclina_x, inclina_z, brilho)
+static int l_peca(lua_State* L) {
+    const char* f = luaL_checkstring(L, 1);
+    cena3d::Peca p;
+    p.forma = f[0] == 'c' ? (f[1] == 'a' ? cena3d::CAIXA : (f[1] == 'i' ? cena3d::CILINDRO : cena3d::CONE))
+                          : cena3d::ESFERA;
+    Vector3 pos{num(L, 2), num(L, 3), num(L, 4)};
+    Vector3 esc{num(L, 5), num(L, 6), num(L, 7)};
+    float giro = numOpc(L, 8, 0);
+    float sal = M.opacidade;
+    M.opacidade = 1.0f;
+    p.cor = corDeLua(L, 9, WHITE);
+    M.opacidade = sal;
+    float rx = numOpc(L, 10, 0), rz = numOpc(L, 11, 0);
+    p.brilho = numOpc(L, 12, 0);
+    Matrix m = MatrixScale(esc.x, esc.y, esc.z);
+    if (rx != 0) m = MatrixMultiply(m, MatrixRotateX(rx));
+    if (rz != 0) m = MatrixMultiply(m, MatrixRotateZ(rz));
+    if (giro != 0) m = MatrixMultiply(m, MatrixRotateY(giro));
+    p.m = MatrixMultiply(m, MatrixTranslate(pos.x, pos.y, pos.z));
+    cena3d::E.pecas.push_back(p);
+    return 0;
+}
+
+static void reiniciarModo2D();
+
+static int l_cena_desenhar(lua_State*) {
+    int x = (int)M.camera.offset.x, y = (int)M.camera.offset.y;
+    int w = (int)std::ceil(LARGURA * M.camera.zoom), h = (int)std::ceil(ALTURA * M.camera.zoom);
+    EndScissorMode();
+    EndMode2D();
+    Matrix proj = rlGetMatrixProjection();
+    Matrix vista = rlGetMatrixModelview();
+    cena3d::desenhar(x, y, w, h, GetScreenHeight());
+    rlSetMatrixProjection(proj);
+    rlSetMatrixModelview(vista);
+    rlViewport(0, 0, GetScreenWidth(), GetScreenHeight());
+    reiniciarModo2D();
+    return 0;
+}
+
+static int l_projetar(lua_State* L) {
+    float sx = 0, sy = 0;
+    bool ok = cena3d::projetar(Vector3{num(L, 1), num(L, 2), num(L, 3)}, LARGURA, ALTURA, sx, sy);
+    if (!ok) return 0;
+    lua_pushnumber(L, sx);
+    lua_pushnumber(L, sy);
+    return 2;
+}
+
+static int l_fps(lua_State* L) {
+    lua_pushinteger(L, GetFPS());
+    return 1;
+}
+
 static void registrarApi(lua_State* L) {
     static const luaL_Reg funcoes[] = {
         {"retangulo", l_retangulo}, {"contorno", l_contorno},
@@ -292,7 +367,11 @@ static void registrarApi(lua_State* L) {
         {"opacidade", l_opacidade}, {"mouse", l_mouse},
         {"tempo", l_tempo},         {"salvar", l_salvar},
         {"carregar", l_carregar},   {"log", l_log},
-        {"captura", l_captura},     {nullptr, nullptr},
+        {"captura", l_captura},
+        {"cena_camera", l_cena_camera}, {"cena_luz", l_cena_luz},
+        {"peca", l_peca},           {"cena_desenhar", l_cena_desenhar},
+        {"projetar", l_projetar},   {"fps", l_fps},
+        {nullptr, nullptr},
     };
     luaL_newlib(L, funcoes);
     lua_pushnumber(L, LARGURA);
@@ -557,6 +636,12 @@ static bool extrairPacote(const Pacote& p, const fs::path& pasta) {
 }
 
 static void atualizarCamera();
+
+static void reiniciarModo2D() {
+    BeginMode2D(M.camera);
+    BeginScissorMode((int)M.camera.offset.x, (int)M.camera.offset.y, (int)std::ceil(LARGURA * M.camera.zoom),
+                     (int)std::ceil(ALTURA * M.camera.zoom));
+}
 
 // Desenha uma tela simples de aviso (usada antes de o jogo carregar).
 static void mostrarMensagem(const char* titulo, const char* detalhe) {
