@@ -18,6 +18,19 @@ local function cilindro(x, y, z, d, a, c) peca("cilindro", x, y, z, d, a, d, 0, 
 local function cone(x, y, z, d, a, c) peca("cone", x, y, z, d, a, d, 0, c) end
 local function brilho(f, x, y, z, ex, ey, ez, c, b) peca(f, x, y, z, ex, ey, ez, 0, c, 0, 0, b or 1.5) end
 
+-- Paleta (docs/estilo-visual.md): poucos tons por família, cor forte só no destaque da área
+local PISO_A, PISO_B, CORREDOR = "#6b4a30", "#62442b", "#7d5a3a"
+local PAREDE, VIGA = "#4f3522", "#2d1c11"
+local MAD_ESC, MAD_MED, TAMPO = "#4a2c17", "#7b4a26", "#b07a47"
+local PEDRA_ESC, PEDRA, PEDRA_CLARA = "#4e4a48", "#6e6a64", "#a8a294"
+local PERGAMINHO, FERRO = "#f0e4c8", "#2f2c2c"
+local VELA, ALARANJADO, FOGO = "#ffd26a", "#ffc04a", "#ff7a24"
+local TAPETE, TAPETE_ESC, AMBAR, ESPUMA = "#8f3a32", "#5e2622", "#e8a33d", "#fff4dd"
+local COBRE, COBRE_CLARO = "#b8693a", "#d98f55"
+local VIOLETA, CIANO, FUNDO_MAGIA = "#a06aff", "#6fe6ff", "#2a2244"
+local AZUL_GUILDA, OURO = "#2b4a8c", "#d4a83e"
+local RANKS = { "#9aa0a6", "#5abf7c", "#6d8fe0", "#a06ad8", "#f2c14e" }
+
 function M.iniciar()
   M.tempo = 0
   M.zoom, M.zoom_alvo = 1, 1
@@ -83,78 +96,158 @@ end
 
 -- Cenário ------------------------------------------------------------------------------
 
-local function piso(x0, x1, z0, z1, a, b, e)
+local function piso(x0, x1, z0, z1, a, b, e, gasto)
   e = e or 1
   local i, z = 0, z0
   while z < z1 - 0.01 do
     local l = math.min(0.8, z1 - z)
-    caixa((x0 + x1) / 2, -0.3, z + l / 2, x1 - x0, 0.3 * e, l - 0.03, i % 2 == 0 and a or b)
+    local c = i % 2 == 0 and a or b
+    -- as tábuas por onde todos andam ficam mais gastas
+    if gasto and z + l / 2 > 0.2 and z + l / 2 < 2 then c = gasto end
+    caixa((x0 + x1) / 2, -0.3, z + l / 2, x1 - x0, 0.3 * e, l - 0.03, c)
     z = z + 0.8
     i = i + 1
   end
 end
 
+local function vela(x, y, z, a)
+  a = a or 0.18
+  cilindro(x, y, z, 0.1, a, "#efe2c4")
+  brilho("esfera", x, y + a + 0.06, z, 0.11, 0.15, 0.11, VELA, 1.6)
+end
+
 local function mesa(x, z)
-  cilindro(x, 0, z, 0.26, 0.72, "#4a2c17")
-  cilindro(x, 0, z, 0.8, 0.07, "#3f2614")
-  peca("cilindro", x, 0.70, z, 1.75, 0.12, 1.75, 0, "#9a6235")
+  cilindro(x, 0, z, 0.26, 0.72, MAD_ESC)
+  cilindro(x, 0, z, 0.8, 0.07, VIGA)
+  peca("cilindro", x, 0.70, z, 1.75, 0.12, 1.75, 0, TAMPO)
+  vela(x, 0.82, z)
 end
 
 local function banquinho(x, z)
-  cilindro(x, 0, z, 0.16, 0.38, "#3f2614")
-  cilindro(x, 0.36, z, 0.54, 0.09, "#7c4d29")
+  cilindro(x, 0, z, 0.16, 0.38, MAD_ESC)
+  cilindro(x, 0.36, z, 0.54, 0.09, "#96643a")
 end
 
 local function barril(x, z, a)
   a = a or 1
-  cilindro(x, 0, z, 0.82, 1.05 * a, "#7b4a26")
-  cilindro(x, 0.2 * a, z, 0.86, 0.08, "#2f2319")
-  cilindro(x, 0.78 * a, z, 0.86, 0.08, "#2f2319")
+  cilindro(x, 0, z, 0.82, 1.05 * a, MAD_MED)
+  cilindro(x, 0.2 * a, z, 0.86, 0.08, FERRO)
+  cilindro(x, 0.78 * a, z, 0.86, 0.08, FERRO)
+end
+
+local function tapete(x, z, ex, ez)
+  caixa(x, 0, z, ex, 0.03, ez, TAPETE_ESC)
+  caixa(x, 0.02, z, ex - 0.24, 0.03, ez - 0.24, OURO)
+  caixa(x, 0.04, z, ex - 0.4, 0.03, ez - 0.4, TAPETE)
+end
+
+-- janela acesa na parede esquerda
+local function janela(z)
+  local x = -6.46
+  caixa(x, 1.5, z, 0.08, 1.5, 1.2, VIGA)
+  brilho("caixa", x + 0.05, 2.25, z, 0.04, 1.26, 0.96, "#ffc96b", 1.3)
+  caixa(x + 0.08, 1.62, z, 0.03, 1.26, 0.08, VIGA)
+  caixa(x + 0.08, 2.2, z, 0.03, 0.08, 0.96, VIGA)
+  caixa(x + 0.12, 1.42, z, 0.24, 0.1, 1.4, MAD_MED)
+end
+
+-- caixote com saco ao lado, para encher os cantos
+local function carga(x, z)
+  caixa(x, 0, z, 0.7, 0.6, 0.7, MAD_MED)
+  caixa(x, 0.6, z, 0.74, 0.06, 0.74, TAMPO)
+  peca("esfera", x - 0.72, 0.26, z + 0.1, 0.6, 0.52, 0.6, 0, "#c9b58b")
+  peca("esfera", x - 0.72, 0.54, z + 0.1, 0.18, 0.18, 0.18, 0, "#a8946c")
 end
 
 local function salao()
   local tempo = M.tempo
-  piso(-6.5, 6.5, -4.5, 4.7, "#7a5433", "#6f4b2c")
+  piso(-6.5, 6.5, -4.5, 4.7, PISO_A, PISO_B, 1, CORREDOR)
   caixa(0, -0.95, 0.1, 13.6, 0.65, 9.9, "#2a1b12")
-  caixa(0, 0, -4.7, 13.4, 4.2, 0.4, "#4f3522")
+  caixa(0, 0, -4.7, 13.4, 4.2, 0.4, PAREDE)
   caixa(-6.7, 0, 0.05, 0.4, 4.2, 9.9, "#47301f")
-  caixa(0, 0, -4.48, 13, 0.75, 0.08, "#2f1e13")
+  -- o rodapé vira pedra clara quando a taverna chega à fase de guilda
+  local guilda = M.anim.circulo > 0
+  local rodape = guilda and PEDRA_CLARA or "#2f1e13"
+  caixa(0, 0, -4.48, 13, 0.75, 0.08, rodape)
+  caixa(-6.48, 0, 0.05, 0.08, 0.75, 9.7, rodape)
 
-  for x = -6, 6, 3 do caixa(x, 0, -4.45, 0.26, 4.2, 0.2, "#2d1c11") end
-  for z = -3, 4.5, 2.5 do caixa(-6.45, 0, z, 0.2, 4.2, 0.26, "#2d1c11") end
-  caixa(0, 3.75, -4.42, 13, 0.26, 0.2, "#2d1c11")
+  for x = -6, 6, 3 do caixa(x, 0, -4.45, 0.26, 4.2, 0.2, VIGA) end
+  for z = -3, 4.5, 2.5 do caixa(-6.45, 0, z, 0.2, 4.2, 0.26, VIGA) end
+  caixa(0, 3.75, -4.42, 13, 0.26, 0.2, VIGA)
 
-  caixa(-6.47, 0, J.PORTA.z, 0.12, 2.5, 1.5, "#20140c")
-  caixa(-6.42, 2.5, J.PORTA.z, 0.24, 0.2, 1.8, "#2d1c11")
+  -- porta (o corredor termina nela) com lampião, porque a parede esquerda fica na sombra
+  local pz = J.PORTA.z
+  caixa(-6.47, 0, pz, 0.12, 2.5, 1.5, "#20140c")
+  caixa(-6.42, 2.5, pz, 0.24, 0.2, 1.8, VIGA)
+  caixa(-6.4, 0, pz - 0.37, 0.06, 2.42, 0.66, MAD_ESC)
+  caixa(-6.4, 0, pz + 0.37, 0.06, 2.42, 0.66, MAD_MED)
+  caixa(-6.35, 1.0, pz + 0.55, 0.06, 0.14, 0.14, OURO)
+  caixa(-6.34, 2.6, 2.0, 0.3, 0.08, 0.08, FERRO)
+  brilho("esfera", -6.18, 2.48, 2.0, 0.24, 0.32, 0.24, VELA, 1.6)
+  janela(-1.27)
+  janela(3.25)
+  -- vassoura encostada ao lado da porta
+  peca("cilindro", -6.25, 0.1, 2.45, 0.07, 1.5, 0.07, 0, MAD_MED, -0.12)
+  cone(-6.25, 0, 2.42, 0.3, 0.42, "#c9a24a")
 
   -- lareira
   local lx, lz = -6.1, -3.2
-  caixa(lx, 0, lz, 0.9, 2.5, 2.2, "#62605c")
+  caixa(lx + 0.68, 0, lz, 0.5, 0.04, 2.5, PEDRA_ESC)
+  caixa(lx, 0, lz, 0.9, 2.5, 2.2, PEDRA)
+  caixa(lx - 0.1, 2.5, lz, 0.7, 1.7, 1.4, PEDRA_ESC)
+  for _, d in ipairs({ { 0.5, -0.82 }, { 1.75, 0.8 }, { 2.05, -0.72 }, { 0.9, 0.86 }, { 2.25, 0.2 } }) do
+    caixa(lx + 0.44, d[1], lz + d[2], 0.06, 0.25, 0.4, PEDRA_CLARA)
+  end
   caixa(lx + 0.34, 0, lz, 0.3, 1.2, 1.3, "#201a18")
-  caixa(lx + 0.5, 2.45, lz, 0.9, 0.18, 2.5, "#3d2616")
+  caixa(lx + 0.2, 1.45, lz, 1.0, 0.16, 2.5, MAD_ESC)
+  vela(lx + 0.5, 1.61, lz - 0.9, 0.22)
+  vela(lx + 0.5, 1.61, lz + 0.9, 0.16)
+  peca("cilindro", lx + 0.56, 0.12, lz - 0.4, 0.16, 0.8, 0.16, 0, "#5b3a22", math.pi / 2)
+  peca("cilindro", lx + 0.7, 0.12, lz - 0.4, 0.16, 0.8, 0.16, 0, MAD_ESC, math.pi / 2)
   local f = 1 + math.sin(tempo * 9) * 0.1 + math.sin(tempo * 23) * 0.06
-  brilho("cone", lx + 0.52, 0.05, lz - 0.28, 0.5, 0.62 * f, 0.5, "#ff7a24", 1.2)
+  brilho("cone", lx + 0.52, 0.05, lz - 0.28, 0.5, 0.62 * f, 0.5, FOGO, 1.2)
   brilho("cone", lx + 0.52, 0.05, lz + 0.28, 0.46, 0.5 / f, 0.46, "#ff9a30", 1.2)
-  brilho("cone", lx + 0.56, 0.05, lz, 0.42, 0.8 * f, 0.42, "#ffc04a", 1.3)
+  brilho("cone", lx + 0.56, 0.05, lz, 0.42, 0.8 * f, 0.42, ALARANJADO, 1.3)
+  -- lenha empilhada contra a parede, entre a lareira e a janela
+  for i, d in ipairs({ { -0.22, 0.09 }, { 0.22, 0.09 }, { 0, 0.3 } }) do
+    peca("cilindro", -6.05 + d[1], d[2], -1.95, 0.22, 0.9, 0.22, 0, i == 3 and "#6b4427" or "#5b3a22", math.pi / 2)
+  end
+
+  -- tapetes do salão (ficam fora das tábuas gastas do corredor)
+  tapete(-3.6, -0.75, 4.6, 2.5)
+  if J.num_mesas() >= 5 then tapete(0.3, 3.0, 4.4, 1.9) end
 
   -- quadro de missões: os papéis aparecem quando a prateleira abre
   local qx = J.QUADRO.x
-  caixa(qx, 1.45, -4.42, 2.6, 1.7, 0.1, "#5a3a20")
+  caixa(qx, 1.45, -4.42, 2.6, 1.7, 0.1, MAD_ESC)
   caixa(qx, 1.55, -4.36, 2.3, 1.5, 0.05, "#a87e4f")
+  caixa(qx, 3.15, -4.3, 2.9, 0.12, 0.34, MAD_ESC)
   if J.prateleira_aberta() then
     local n = math.min(8, J.vagas_missao())
+    local tortos = { 0.07, -0.05, 0.09, -0.07, -0.06, 0.05, -0.09, 0.06 }
     for i = 1, n do
       local coluna, linha = (i - 1) % 4, math.floor((i - 1) / 4)
-      caixa(qx - 0.84 + coluna * 0.56, 2.25 - linha * 0.68, -4.32, 0.44, 0.56, 0.02, "#f0e4c8")
+      local x, y = qx - 0.84 + coluna * 0.56, 2.53 - linha * 0.68 + (i % 2) * 0.04
+      peca("caixa", x, y, -4.32, 0.44, 0.56, 0.02, 0, PERGAMINHO, 0, tortos[i])
+      peca("caixa", x, y + 0.2, -4.305, 0.44, 0.1, 0.02, 0, RANKS[(i - 1) % #RANKS + 1], 0, tortos[i])
     end
   end
 
   -- balcão, prateleira e fogão do cozinheiro
   local bx, bz = 3.05, -2.2
-  caixa(bx, 0, bz, 5.2, 1.05, 0.72, "#6f4326")
-  caixa(bx, 1.05, bz, 5.5, 0.12, 0.95, "#a5703f")
-  caixa(bx, 2.1, -4.32, 5.4, 0.1, 0.5, "#4a2c17")
-  caixa(bx, 1.25, -4.32, 5.4, 0.1, 0.5, "#4a2c17")
+  caixa(bx, 0, bz, 5.2, 1.05, 0.72, MAD_MED)
+  caixa(bx, 0, bz + 0.02, 5.3, 0.14, 0.76, MAD_ESC)
+  for k = -2, 2 do caixa(bx + k, 0.24, bz + 0.37, 0.72, 0.62, 0.04, MAD_ESC) end
+  caixa(bx, 1.05, bz + 0.05, 5.5, 0.12, 0.95, TAMPO)
+  -- barrilete com torneira e canecas: a cor do balcão é o âmbar
+  cilindro(bx + 1.9, 1.17, bz - 0.1, 0.5, 0.6, MAD_MED)
+  caixa(bx + 1.9, 1.4, bz + 0.17, 0.08, 0.08, 0.16, FERRO)
+  for _, x in ipairs({ bx - 2.0, bx + 1.1 }) do
+    cilindro(x, 1.17, bz + 0.22, 0.16, 0.2, AMBAR)
+    cilindro(x, 1.37, bz + 0.22, 0.18, 0.05, ESPUMA)
+  end
+  caixa(bx, 2.1, -4.32, 5.4, 0.1, 0.5, MAD_ESC)
+  caixa(bx, 1.25, -4.32, 5.4, 0.1, 0.5, MAD_ESC)
   local garrafas = { "#3f8d4f", "#a13b3b", "#3c68a8", "#d0a23e", "#7a4a9c", "#3f8d4f", "#a13b3b", "#d0a23e" }
   for i, c in ipairs(garrafas) do
     local gx = bx - 2.4 + (i - 1) * 0.68
@@ -170,6 +263,7 @@ local function salao()
 
   barril(5.6, -3.7); barril(4.75, -3.8); barril(5.75, -2.9, 0.9)
   barril(-5.6, 3.9, 0.9); barril(-4.8, 4.1, 0.8)
+  carga(5.85, 4.1)
 
   -- quartos: escada e porta no fundo
   if J.nivel("quartos") > 0 then
@@ -180,14 +274,20 @@ local function salao()
   -- decoração: flâmulas na parede
   local d = math.min(J.nivel("decoracao") + (J.nivel("conforto") > 0 and 1 or 0), 5)
   for i = 1, d do
-    local x = -5.5 + (i - 1) * 3
-    caixa(x + 1.5, 2.4, -4.4, 0.7, 1.1, 0.04, i % 2 == 0 and "#3d5a8a" or "#a13b3b")
+    local x = -5.5 + (i - 1) * 3 + 1.5
+    -- a última flâmula fica na ala leste: só aparece quando a parede dela existe
+    if x < 6.5 or M.anim.leste > 0.9 then
+      local pano = guilda and AZUL_GUILDA or (i % 2 == 0 and "#3d5a8a" or TAPETE)
+      caixa(x, 2.4, -4.4, 0.7, 1.1, 0.04, pano)
+      caixa(x, 3.4, -4.37, 0.7, 0.08, 0.04, OURO)
+      peca("caixa", x, 2.4, -4.4, 0.5, 0.5, 0.04, 0, pano, 0, math.pi / 4)
+    end
   end
 
   -- lampiões
   for _, x in ipairs({ -4.5, -0.6 }) do
-    caixa(x, 2.6, -4.4, 0.08, 0.08, 0.3, "#1d130c")
-    brilho("esfera", x, 2.48, -4.2, 0.24, 0.32, 0.24, "#ffd26a", 1.6)
+    caixa(x, 2.6, -4.4, 0.08, 0.08, 0.3, FERRO)
+    brilho("esfera", x, 2.48, -4.2, 0.24, 0.32, 0.24, VELA, 1.6)
   end
 
   for i = 1, math.min(J.num_mesas(), 6) do
@@ -205,20 +305,22 @@ local function ala_leste(e)
   if e <= 0 then return end
   local o = e + math.sin(e * math.pi) * 0.12
   local function c2(x, y, z, ex, ey, ez, c) caixa(x, y * o, z, ex, ey * o, ez, c) end
-  piso(6.5, 12, -4.5, 4.7, "#8a6b43", "#7f613a", o)
+  piso(6.5, 12, -4.5, 4.7, "#7a5a3a", "#715335", o, "#8c6a46")
   caixa(9.25, -0.95, 0.1, 5.7, 0.65, 9.9, "#2a1b12")
-  c2(9.25, 0, -4.7, 5.5, 4.2, 0.4, "#4f3522")
-  for x = 7.5, 12, 3 do c2(x, 0, -4.45, 0.26, 4.2, 0.2, "#2d1c11") end
+  c2(9.25, 0, -4.7, 5.5, 4.2, 0.4, PAREDE)
+  for x = 7.5, 12, 3 do c2(x, 0, -4.45, 0.26, 4.2, 0.2, VIGA) end
 
   if J.mercadinho_aberto() then
     local mx, mz = 9.3, -2.2
-    for _, d in ipairs({ { -2.1, -0.65 }, { 2.1, -0.65 }, { -2.1, 0.7 }, { 2.1, 0.7 } }) do
-      c2(mx + d[1], 0, mz + d[2], 0.18, 2.5, 0.18, "#4a2c17")
+    for _, d in ipairs({ { -2.1, -0.65, 2.7 }, { 2.1, -0.65, 2.7 }, { -2.1, 0.7, 2.3 }, { 2.1, 0.7, 2.3 } }) do
+      c2(mx + d[1], 0, mz + d[2], 0.18, d[3], 0.18, MAD_ESC)
     end
-    c2(mx, 0, mz + 0.4, 4.2, 0.95, 0.8, "#8a5a33")
-    c2(mx, 0.95, mz + 0.4, 4.4, 0.1, 0.95, "#b98a55")
+    c2(mx, 0, mz + 0.4, 4.2, 0.95, 0.8, MAD_MED)
+    c2(mx, 0.95, mz + 0.4, 4.4, 0.1, 0.95, TAMPO)
     for i = 0, 5 do
-      c2(mx - 1.95 + i * 0.78, 2.5, mz, 0.8, 0.14, 1.9, i % 2 == 0 and "#b5403a" or "#efe2c4")
+      local tx, tc = mx - 1.95 + i * 0.78, i % 2 == 0 and "#b5403a" or "#efe2c4"
+      peca("caixa", tx, 2.6 * o, mz, 0.8, 0.1, 2, 0, tc, 0.3)
+      c2(tx, 2.1, mz + 0.95, 0.8, 0.18, 0.05, tc)
     end
     -- quanto mais alto o rank do mercadinho, mais mercadoria à mostra
     local r = J.ef("mercadinho")
@@ -242,6 +344,8 @@ local function ala_leste(e)
     end
   end
 
+  if e > 0.9 then carga(11.5, -0.4) end
+
   for i = 7, math.min(J.num_mesas(), 8) do
     local m = J.POS_MESAS[i]
     mesa(m.x, m.z)
@@ -254,20 +358,29 @@ local function jardim(e)
   if e <= 0 then return end
   local o = e + math.sin(e * math.pi) * 0.12
   caixa(-3, -0.95, 6.75, 7.2, 0.65, 4.1, "#2a1b12")
-  caixa(-3, -0.3, 6.75, 7, 0.3 * o, 3.9, "#5d7a3e")
+  caixa(-3, -0.3, 6.75, 7, 0.3 * o, 3.9, "#4f7a3a")
   -- cerca
-  for x = -6.3, 0.5, 1.1 do caixa(x, 0, 8.55, 0.1, 0.65 * o, 0.1, "#7a5433") end
-  caixa(-3, 0.4 * o, 8.55, 7, 0.07, 0.05, "#7a5433")
+  for x = -6.3, 0.5, 1.1 do caixa(x, 0, 8.55, 0.12, 0.7 * o, 0.12, MAD_MED) end
+  caixa(-3, 0.5 * o, 8.55, 7, 0.08, 0.05, TAMPO)
+  caixa(-3, 0.2 * o, 8.55, 7, 0.08, 0.05, TAMPO)
+  -- moitas e abóboras na faixa livre diante da cerca
+  if e > 0.9 then
+    peca("esfera", -5.9, 0.22, 8.05, 0.62, 0.48, 0.62, 0, "#3f6b34")
+    peca("esfera", -5.3, 0.18, 8.1, 0.46, 0.36, 0.46, 0, "#86b552")
+    peca("esfera", -0.3, 0.22, 8.05, 0.62, 0.48, 0.62, 0, "#3f6b34")
+    peca("esfera", -3.6, 0.15, 8.1, 0.36, 0.3, 0.36, 0, "#e08a3c")
+    peca("esfera", -3.1, 0.15, 8.0, 0.42, 0.32, 0.42, 0, "#e08a3c")
+  end
   -- canteiros
   local n = J.ef("canteiros")
   local cresce = J.estado.ciclo / J.ciclo_jardim()
   for i = 1, n do
     local col, lin = (i - 1) % 5, math.floor((i - 1) / 5)
     local x, z = -5.7 + col * 1.25, 5.6 + lin * 1.45
-    caixa(x, 0, z, 1.0, 0.14, 1.1, "#4a3020")
+    caixa(x, 0, z, 1.0, 0.14, 1.1, "#5a3d26")
     for k = -1, 1, 1 do
       local a = 0.2 + cresce * 0.6
-      peca("cone", x + k * 0.3, 0.12, z, 0.26, a, 0.26, 0, i % 3 == 0 and "#c9a24a" or "#5fae4a")
+      peca("cone", x + k * 0.3, 0.12, z, 0.26, a, 0.26, 0, i % 3 == 0 and "#c9a24a" or "#5a8f42")
       if cresce > 0.7 then peca("esfera", x + k * 0.3, 0.12 + a * 0.6, z + 0.1, 0.12, 0.12, 0.12, 0, i % 3 == 0 and "#e8c04a" or "#d9534a") end
     end
   end
@@ -277,34 +390,54 @@ local function cervejaria(e)
   if e <= 0 then return end
   local o = e + math.sin(e * math.pi) * 0.12
   caixa(3.5, -0.95, 6.75, 6.2, 0.65, 4.1, "#2a1b12")
-  caixa(3.5, -0.3, 6.75, 6, 0.3 * o, 3.9, "#6b5842")
-  cilindro(1.9, 0, 6.2, 1.3 * o, 1.5 * o, "#b5763a")
-  peca("cone", 1.9, 1.5 * o, 6.2, 1.34, 0.6 * o, 1.34, 0, "#c98a4e")
-  cilindro(3.5, 0, 6.2, 1.1 * o, 1.2 * o, "#7b4a26")
-  cilindro(3.5, 0.2, 6.2, 1.14, 0.08, "#2f2319")
-  cilindro(3.5, 0.9, 6.2, 1.14, 0.08, "#2f2319")
-  brilho("caixa", 1.9, 0.08, 6.95, 0.6, 0.14, 0.2, "#ff7a24", 1.0)
+  caixa(3.5, -0.3, 6.75, 6, 0.3 * o, 3.9, PEDRA)
+  -- tina de cobre com domo, cano e fogo embaixo
+  local tx, tz = 1.9, 6.2
+  cilindro(tx, 0, tz, 1.5, 0.16 * o, FERRO)
+  cilindro(tx, 0.16 * o, tz, 1.3, 1.1 * o, COBRE)
+  cilindro(tx, 0.35 * o, tz, 1.34, 0.07, FERRO)
+  cilindro(tx, 0.95 * o, tz, 1.34, 0.07, FERRO)
+  peca("esfera", tx, 1.26 * o, tz, 1.3, 0.7 * o, 1.3, 0, COBRE_CLARO)
+  cilindro(tx, 1.5 * o, tz, 0.22, 0.6 * o, COBRE)
+  caixa(tx + 0.6, 2.05 * o, tz, 1.3, 0.14, 0.14, COBRE)
+  cilindro(tx + 1.25, 0.9 * o, tz, 0.14, 1.25 * o, COBRE)
+  brilho("caixa", tx, 0.12, tz + 0.72, 0.5, 0.2, 0.12, "#ffb347", 1.3)
+  -- barril que recebe o cano
+  cilindro(3.5, 0, tz, 1.1 * o, 1.2 * o, MAD_MED)
+  cilindro(3.5, 0.2, tz, 1.14, 0.08, FERRO)
+  cilindro(3.5, 0.9, tz, 1.14, 0.08, FERRO)
   for i = 0, 2 do barril(4.8 + i * 0.75, 7.6, 0.9 * o) end
-  caixa(2.7, 0, 7.8, 2.0, 0.85 * o, 0.7, "#6f4326")
+  caixa(2.7, 0, 7.8, 2.0, 0.85 * o, 0.7, MAD_MED)
+  caixa(2.7, 0.85 * o, 7.8, 2.1, 0.08, 0.78, TAMPO)
+  -- sacos de malte
+  peca("esfera", 5.5, 0.26, 5.6, 0.6, 0.52, 0.6, 0, "#c9b58b")
+  peca("esfera", 6.05, 0.22, 5.75, 0.5, 0.44, 0.5, 0, "#a8946c")
 end
 
 local function circulo(e)
   if e <= 0 then return end
   local t = M.tempo
   caixa(9.25, -0.95, 6.75, 5.7, 0.65, 4.1, "#2a1b12")
-  caixa(9.25, -0.3, 6.75, 5.5, 0.3 * e, 3.9, "#3b3650")
+  caixa(9.25, -0.3, 6.75, 5.5, 0.3 * e, 3.9, "#39344e")
   local cx, cz = 9.25, 6.75
-  peca("cilindro", cx, 0, cz, 3.0, 0.05, 3.0, 0, "#6d4bb3", 0, 0, 0.6)
-  peca("cilindro", cx, 0.03, cz, 2.3, 0.05, 2.3, 0, "#2c2340")
-  peca("cilindro", cx, 0.06, cz, 1.6, 0.05, 1.6, 0, "#9c78ff", 0, 0, 0.9)
-  peca("cilindro", cx, 0.09, cz, 1.2, 0.05, 1.2, 0, "#2c2340")
+  cilindro(cx, 0, cz, 3.7, 0.08, PEDRA_ESC)
+  peca("cilindro", cx, 0.07, cz, 3.3, 0.03, 3.3, 0, VIOLETA, 0, 0, 1.2)
+  cilindro(cx, 0.09, cz, 3.0, 0.03, FUNDO_MAGIA)
+  -- hexagrama girando devagar
+  for k = 0, 5 do
+    local a = k * math.pi / 3 + t * 0.3
+    peca("caixa", cx + 0.65 * math.cos(a), 0.13, cz + 0.65 * math.sin(a), 0.08, 0.02, 2.25, -a, CIANO, 0, 0, 1.3)
+  end
   for i = 0, 3 do
     local a = t * 0.6 + i * math.pi / 2
-    brilho("esfera", cx + math.cos(a) * 1.3, 0.5 + math.sin(t * 2 + i) * 0.1, cz + math.sin(a) * 1.3, 0.2, 0.2, 0.2, "#c9a7ff", 1.6)
+    brilho("esfera", cx + math.cos(a) * 1.55, 0.5 + math.sin(t * 2 + i) * 0.1, cz + math.sin(a) * 1.55, 0.2, 0.2, 0.2, "#c9a7ff", 1.6)
   end
   for i = 0, 3 do
     local a = i * math.pi / 2 + math.pi / 4
-    cone(cx + math.cos(a) * 2.2, 0, cz + math.sin(a) * 1.7, 0.45, 1.3 * e, "#5a5668")
+    -- pilares de pedra com cristal aceso
+    local px, pz = cx + math.cos(a) * 2.35, cz + math.sin(a) * 1.75
+    caixa(px, 0, pz, 0.36, 0.3 * e, 0.36, PEDRA)
+    peca("cone", px, 0.3 * e, pz, 0.3, 0.5 * e, 0.3, 0, CIANO, 0, 0, 1.3)
   end
 end
 
