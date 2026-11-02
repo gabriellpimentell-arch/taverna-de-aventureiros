@@ -7,19 +7,21 @@
 local C = require("config")
 local A = require("arvore")
 local util = require("util")
+local L = require("layout")
+local Cam = require("caminhos")
 
 local J = {}
 
-J.PORTA = { x = -6.4, z = 1.1 }
-J.RUA_Z = 1.1
+J.PORTA = { x = -6.4, z = 1.6 }
+J.RUA_Z = 1.6
 J.QUADRO = { x = -2.6, z = -3.7 }
 J.BARRACA = { x = 9.3, z = -1.0 }
 
-local POS_MESAS = {
-  { x = -3.6, z = -0.3 }, { x = 0.3, z = -0.3 }, { x = 4.2, z = -0.3 },
-  { x = -3.6, z = 2.9 }, { x = 0.3, z = 2.9 }, { x = 4.2, z = 2.9 },
-  { x = 8.0, z = 2.9 }, { x = 10.7, z = 2.9 },
-}
+local POS_MESAS = {}
+for i = 1, 8 do
+  local o = L.POR_ID["mesa" .. i]
+  POS_MESAS[i] = { x = o.x, z = o.z, id = o.id, bx = o.x, bz = o.z }
+end
 J.POS_MESAS = POS_MESAS
 J.BANCOS_BALCAO = { 1.4, 2.5, 3.6, 4.7 }
 
@@ -90,8 +92,18 @@ local function recalcular()
   end
 end
 
-function J.ef(k) return ef[k] or (k:sub(1, 2) == "x_" and 1 or 0) end
-function J.nivel(id) return J.estado.nos[id] or 0 end
+-- no modo de edição tudo aparece, para dar para mover até o que ainda não foi comprado
+local PREVIA = { a_leste = 1, a_jardim = 1, a_cerveja = 1, a_circulo = 1, mesas = 7, balcao = 1, cozinheiro = 1, bardo = 1,
+  prateleira = 1, mercadinho = 8, canteiros = 10, venda = 1, pocoes = 1, armaduras = 1, armas = 1 }
+
+function J.ef(k)
+  if J.previa and PREVIA[k] then return PREVIA[k] end
+  return ef[k] or (k:sub(1, 2) == "x_" and 1 or 0)
+end
+function J.nivel(id)
+  if J.previa and id == "quartos" then return 1 end
+  return J.estado.nos[id] or 0
+end
 
 function J.custo_no(no) return math.floor(no.custo * no.mult ^ J.nivel(no.id)) end
 
@@ -159,12 +171,16 @@ function J.reconstruir_lugares()
   local l = {}
   for i = 1, J.num_mesas() do
     local m = POS_MESAS[i]
-    l[#l + 1] = { x = m.x - 1.25, z = m.z, giro = math.pi / 2, y = 0.42, mesa = i }
-    l[#l + 1] = { x = m.x + 1.25, z = m.z, giro = -math.pi / 2, y = 0.42, mesa = i }
+    local g = L.giro(m.id)
+    local ax, az = L.t(m.id, m.bx - 1.25, m.bz)
+    local bx, bz = L.t(m.id, m.bx + 1.25, m.bz)
+    l[#l + 1] = { x = ax, z = az, giro = math.pi / 2 + g, y = 0.42, mesa = i }
+    l[#l + 1] = { x = bx, z = bz, giro = -math.pi / 2 + g, y = 0.42, mesa = i }
   end
   if J.ef("balcao") > 0 then
     for _, x in ipairs(J.BANCOS_BALCAO) do
-      l[#l + 1] = { x = x, z = -1.42, giro = math.pi, y = 0.42, balcao = true }
+      local bx, bz = L.t("balcao", x, -1.42)
+      l[#l + 1] = { x = bx, z = bz, giro = math.pi + L.giro("balcao"), y = 0.42, balcao = true }
     end
   end
   -- quem está sentado continua no mesmo lugar: a ordem da lista muda, a posição não
@@ -189,12 +205,86 @@ local function lugar_livre()
   return util.escolher(livres)
 end
 
+local CASAS_GARCOM = { { -0.35, -1.6 }, { -0.35, -2.4 }, { -0.35, -3.2 }, { -1.1, -2.4 }, { -1.1, -3.2 }, { -1.1, -1.6 } }
+
 function J.ajustar_equipe()
   local n = J.ef("garcons")
   for i = #J.garcons + 1, n do
-    J.garcons[i] = { x = 1.5 + i * 0.9, z = -1.0, casa = 1.5 + i * 0.9, giro = 0, fase = 0, estado = "parada", recarga = 1 + i * 0.5, rota = {} }
+    -- ficam ao lado do balcão, longe de quem está sentado
+    local c = CASAS_GARCOM[(i - 1) % #CASAS_GARCOM + 1]
+    J.garcons[i] = { x = c[1], z = c[2], casa = c[1], casa_z = c[2], giro = 0, fase = 0, estado = "parada", recarga = 1 + i * 0.5, rota = {} }
   end
   if #J.lugares < J.num_mesas() * 2 + (J.ef("balcao") > 0 and 4 or 0) then J.reconstruir_lugares() end
+  J.montar_mapa()
+end
+
+-- Mapa de colisão: tudo que ocupa o chão, já nas posições editadas
+function J.montar_mapa()
+  local obs = {}
+  local function circulo(id, x, z, r)
+    local wx, wz = L.t(id, x, z)
+    obs[#obs + 1] = { x = wx, z = wz, r = r }
+  end
+  local function caixa(id, x, z, ex, ez)
+    obs[#obs + 1] = { id = id, x = x, z = z, ex = ex, ez = ez, base = L.base }
+  end
+  for i = 1, J.num_mesas() do
+    local m = POS_MESAS[i]
+    circulo(m.id, m.bx, m.bz, 0.88)
+    circulo(m.id, m.bx - 1.25, m.bz, 0.03)
+    circulo(m.id, m.bx + 1.25, m.bz, 0.03)
+  end
+  caixa("balcao", 3.05, -2.15, 5.5, 0.95)
+  if J.ef("balcao") > 0 then
+    for _, x in ipairs(J.BANCOS_BALCAO) do circulo("balcao", x, -1.42, 0.03) end
+  end
+  caixa("lareira", -5.9, -3.2, 1.3, 2.6)
+  caixa("lenha", -6.05, -1.95, 0.7, 0.95)
+  caixa("garrafas", 3.05, -4.3, 5.4, 0.5)
+  for _, b in ipairs({ { 5.6, -3.7 }, { 4.75, -3.8 }, { 5.75, -2.9 } }) do circulo("barris_fundo", b[1], b[2], 0.43) end
+  for _, b in ipairs({ { -5.6, 3.9 }, { -4.8, 4.1 } }) do circulo("barris_frente", b[1], b[2], 0.43) end
+  caixa("carga", 5.5, 4.1, 1.4, 0.8)
+  if J.ef("cozinheiro") > 0 then caixa("fogao", 0.95, -3.55, 1.1, 0.9) end
+  if J.ef("bardo") > 0 then circulo("bardo", -5.1, -1.25, 0.32) end
+  if J.nivel("quartos") > 0 then caixa("quartos", -4.65, -3.9, 1.4, 0.8) end
+  local xmax = 6.3
+  if J.ef("a_leste") > 0 then
+    xmax = 11.8
+    caixa("carga_leste", 11.2, -0.4, 1.4, 0.8)
+    if J.mercadinho_aberto() then caixa("barraca", 9.3, -2.15, 4.5, 1.7) end
+  end
+  Cam.montar({ -6.3, xmax, -4.25, 4.5 }, obs)
+end
+
+-- Monta os caminhos desviando dos objetos; se não houver saída, a pessoa atravessa
+function J.caminho(p, x, z)
+  local r = Cam.rota(p.x, p.z, x, z)
+  if not r then
+    r = { { x = x, z = z } }
+    p.fantasma = true
+    J.sem_caminho = (J.sem_caminho or 0) + 1
+  end
+  p.rota, p.andando, p.preso, p.destino_x, p.destino_z = r, true, 0, x, z
+end
+
+-- Só atualiza onde as coisas estão, para o editor mostrar o resultado na hora
+function J.aplicar_visual()
+  for _, m in ipairs(POS_MESAS) do m.x, m.z = L.t(m.id, m.bx, m.bz) end
+end
+
+-- Coloca em uso as posições editadas: quem estava na taverna sai, o resto continua
+function J.aplicar_layout()
+  for _, m in ipairs(POS_MESAS) do m.x, m.z = L.t(m.id, m.bx, m.bz) end
+  J.PORTA.x, J.PORTA.z = L.t("porta", -6.4, 1.6)
+  J.QUADRO.x, J.QUADRO.z = L.t("quadro", -2.6, -3.7)
+  J.BARRACA.x, J.BARRACA.z = L.t("barraca", 9.3, -1.0)
+  for _, l in ipairs(J.lugares or {}) do l.dono = nil end
+  J.pessoas = {}
+  J.reconstruir_lugares()
+  J.montar_mapa()
+  for _, g in ipairs(J.garcons or {}) do
+    g.x, g.z, g.estado, g.rota, g.alvo, g.levando, g.andando = g.casa, g.casa_z, "parada", {}, nil, false, false
+  end
 end
 
 function J.ocupados()
@@ -225,32 +315,17 @@ local function nova_pessoa(tipo)
   }
 end
 
-local function rota_ate(p, x, z)
-  p.rota = { { x = p.x, z = J.RUA_Z }, { x = x, z = J.RUA_Z }, { x = x, z = z } }
-  p.andando = true
-end
+local function rota_ate(p, x, z) J.caminho(p, x, z) end
 
 local function rota_saida(p)
-  local balcao = p.z < -1.2
-  p.rota = { { x = p.x, z = J.RUA_Z }, { x = J.PORTA.x + 1.2, z = J.RUA_Z }, { x = J.PORTA.x, z = J.PORTA.z } }
-  if balcao then
-    table.insert(p.rota, 1, { x = 2.25, z = -1.1 })
-    p.rota[2] = { x = 2.25, z = J.RUA_Z }
-  end
-  p.andando = true
+  J.caminho(p, J.PORTA.x, J.PORTA.z)
   p.estado = "saindo"
 end
 
 local function sentar_cliente(p, lugar)
   p.lugar = lugar
   lugar.dono = p
-  if lugar.balcao then
-    -- passa pelo vão entre as mesas para não atravessar nenhuma
-    p.rota = { { x = p.x, z = J.RUA_Z }, { x = 2.25, z = J.RUA_Z }, { x = 2.25, z = -1.1 }, { x = lugar.x, z = -1.1 }, { x = lugar.x, z = lugar.z } }
-    p.andando = true
-  else
-    rota_ate(p, lugar.x, lugar.z)
-  end
+  rota_ate(p, lugar.x, lugar.z)
   p.estado = "entrando"
 end
 
@@ -358,14 +433,22 @@ end
 local function seguir_rota(p, dt, vel)
   local alvo = p.rota[1]
   if not alvo then return true end
-  if andar(p, alvo.x, alvo.z, vel, dt) then table.remove(p.rota, 1) end
+  -- empurrado por outros, ninguém acerta um ponto exato: chegar perto já basta
+  local dx, dz = alvo.x - p.x, alvo.z - p.z
+  local tol = #p.rota > 1 and 0.3 or 0.15
+  if p.estado == "saindo" and #p.rota == 1 then tol = 0.8 end
+  if dx * dx + dz * dz < tol * tol or andar(p, alvo.x, alvo.z, vel, dt) then table.remove(p.rota, 1) end
   return #p.rota == 0
 end
 
 local function iniciar_missao_visual(p, dados)
   p.estado = "indo_quadro"
   p.dados_missao = dados
-  rota_ate(p, J.QUADRO.x, J.QUADRO.z)
+  -- cada um vai a um ponto do quadro e pega o papel com a mão
+  local ox = util.escolher({ -0.9, -0.3, 0.3, 0.9 })
+  local x, z = L.t("quadro", -2.6 + ox, -3.7)
+  p.papel_x = ox
+  rota_ate(p, x, z)
 end
 
 local function atualizar_pessoa(p, dt)
@@ -373,7 +456,8 @@ local function atualizar_pessoa(p, dt)
   if p.estado == "entrando" then
     if seguir_rota(p, dt, C.velocidade_pessoa) then
       p.estado, p.t, p.andando, p.sentado = "esperando", 0, false, true
-      if p.lugar then p.y, p.giro = p.lugar.y, p.lugar.giro end
+      p.fantasma = nil
+      if p.lugar then p.x, p.z, p.y, p.giro = p.lugar.x, p.lugar.z, p.lugar.y, p.lugar.giro end
     end
   elseif p.estado == "esperando" then
     -- temperamentos incompatíveis na mesma mesa acabam em briga
@@ -409,15 +493,23 @@ local function atualizar_pessoa(p, dt)
   elseif p.estado == "indo_quadro" then
     if seguir_rota(p, dt, C.velocidade_pessoa) then
       p.estado, p.t, p.andando = "pegando", 0, false
-      p.giro = math.pi
+      p.fantasma = nil
+      p.giro = math.pi + L.giro("quadro")
     end
   elseif p.estado == "pegando" then
-    if p.t > 0.9 then rota_saida(p) end
+    -- estica o braço, arranca o papel e sai com ele na mão
+    if p.t > 0.55 and not p.com_papel then
+      p.com_papel = true
+      J.flutuar(p.x, 2.5, p.z, "Missão " .. (p.rank_missao or "") .. "!", util.cores.ouro, 18)
+      J.som("clique")
+    end
+    if p.t > 1.3 then rota_saida(p) end
   elseif p.estado == "indo_barraca" then
     if seguir_rota(p, dt, C.velocidade_pessoa) then
       J.vender_espolio(p)
       p.estado, p.t, p.andando = "vendendo", 0, false
-      p.giro = math.pi
+      p.fantasma = nil
+      p.giro = math.pi + L.giro("barraca")
     end
   elseif p.estado == "vendendo" then
     if p.t > 1.0 then
@@ -443,8 +535,8 @@ local function atualizar_garcom(g, dt)
       if melhor then
         melhor.reservado = true
         g.alvo, g.estado, g.levando = melhor, "indo", true
-        local dz = melhor.z < J.RUA_Z and 0.7 or -0.7
-        g.rota = { { x = g.x, z = J.RUA_Z }, { x = melhor.x, z = J.RUA_Z }, { x = melhor.x, z = melhor.z + dz } }
+        local dz = melhor.z < J.RUA_Z and 0.72 or -0.72
+        J.caminho(g, melhor.x, melhor.z + dz)
       end
     end
   else
@@ -456,9 +548,10 @@ local function atualizar_garcom(g, dt)
         if p then p.reservado = false end
         g.alvo, g.levando, g.estado = nil, false, "voltando"
         g.recarga = J.intervalo_garcom()
-        g.rota = { { x = g.x, z = J.RUA_Z }, { x = g.casa, z = J.RUA_Z }, { x = g.casa, z = -1.0 } }
+        J.caminho(g, g.casa, g.casa_z)
       else
         g.estado = "parada"
+        g.fantasma = nil
       end
     end
   end
@@ -569,9 +662,10 @@ local function concluir_missao(m)
   J.som("missao")
 end
 
-local function partir_visual(tipo, c)
+local function partir_visual(tipo, c, rank)
   if #J.pessoas >= J.MAX_PESSOAS then return end
   local p = nova_pessoa(tipo)
+  p.rank_missao = rank
   if c then p.pele = c.pele; p.contratado = c end
   iniciar_missao_visual(p, true)
   J.pessoas[#J.pessoas + 1] = p
@@ -580,7 +674,7 @@ end
 function J.iniciar_missao_comum(r)
   local e = J.estado
   e.missoes[#e.missoes + 1] = { rank = r, resta = J.duracao_rank(r) }
-  partir_visual(tipo_de(util.escolher({ "guerreiro", "mago", "arqueiro", "clerigo" })))
+  partir_visual(tipo_de(util.escolher({ "guerreiro", "mago", "arqueiro", "clerigo" })), nil, C.ranks[r].nome)
 end
 
 local function atualizar_missoes(dt)
@@ -814,7 +908,7 @@ function J.mandar_contratados()
         local c = J.contratado_por_id(id)
         c.em_missao = true
         e.missoes[#e.missoes + 1] = { rank = rank, resta = J.duracao_rank(rank), contratado = c.id }
-        partir_visual(J.TIPOS_POR_NOME(c.tipo), c)
+        partir_visual(J.TIPOS_POR_NOME(c.tipo), c, C.ranks[rank].nome)
       end
     end
   end
@@ -824,7 +918,7 @@ function J.mandar_contratados()
       local rank = math.min(J.rank_contratado(c), J.ef("rank_max"))
       c.em_missao = true
       e.missoes[#e.missoes + 1] = { rank = rank, resta = J.duracao_rank(rank), contratado = c.id }
-      partir_visual(J.TIPOS_POR_NOME(c.tipo), c)
+      partir_visual(J.TIPOS_POR_NOME(c.tipo), c, C.ranks[rank].nome)
     end
   end
 end
@@ -890,7 +984,7 @@ function J.iniciar_final()
       if e.missoes[i].contratado == c.id then table.remove(e.missoes, i) end
     end
     c.em_missao = nil
-    partir_visual(J.TIPOS_POR_NOME(c.tipo), c)
+    partir_visual(J.TIPOS_POR_NOME(c.tipo), c, C.sss.nome)
   end
   J.avisar("A party partiu para enfrentar o Lorde Demônio!", 5)
   return true
@@ -950,17 +1044,50 @@ function J.iniciar()
   J.ganho_segundo = 0
   J.relogio_salvar = 0
   J.fofoca_conta = 0
+  J.sem_caminho, J.socorros, J.relogio_preso = 0, 0, 0
+  L.carregar()
   J.carregar()
   recalcular()
   J.reconstruir_lugares()
   J.ajustar_equipe()
   J.calcular_offline()
+  J.aplicar_layout()
   J.pronto = true
+end
+
+-- Colisão entre bonecos, e socorro para quem ficar preso muito tempo
+local function atualizar_colisoes(dt)
+  local lista = {}
+  for _, p in ipairs(J.pessoas) do lista[#lista + 1] = p end
+  for _, g in ipairs(J.garcons) do lista[#lista + 1] = g end
+  Cam.separar(lista, dt)
+  J.relogio_preso = (J.relogio_preso or 0) + dt
+  if J.relogio_preso < 1 then return end
+  J.relogio_preso = 0
+  for _, p in ipairs(lista) do
+    if p.andando and p.rota and #p.rota > 0 and not p.sentado then
+      local dx, dz = p.x - (p.ult_x or 1e9), p.z - (p.ult_z or 1e9)
+      if dx * dx + dz * dz < 0.04 then
+        p.preso = (p.preso or 0) + 1
+        if p.preso == 3 and p.destino_x then
+          J.caminho(p, p.destino_x, p.destino_z)
+          p.preso = 3
+        elseif p.preso >= 8 then
+          p.fantasma = true
+          J.socorros = (J.socorros or 0) + 1
+        end
+      else
+        p.preso = 0
+        p.fantasma = nil
+      end
+    end
+    p.ult_x, p.ult_z = p.x, p.z
+  end
 end
 
 function J.atualizar(dt)
   local e = J.estado
-  if J.offline then return end
+  if J.offline or J.editando then return end
   -- depois do final o mundo para: nada de ouro, sons ou tempo correndo atrás da tela final
   if e.fim then
     J.aviso, J.efeitos = nil, {}
@@ -978,6 +1105,7 @@ function J.atualizar(dt)
     if J.pessoas[i].removido then table.remove(J.pessoas, i) end
   end
   for _, g in ipairs(J.garcons) do atualizar_garcom(g, dt) end
+  atualizar_colisoes(dt)
   atualizar_missoes(dt)
   atualizar_jardim(dt)
 

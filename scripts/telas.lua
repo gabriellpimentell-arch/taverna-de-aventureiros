@@ -8,6 +8,7 @@ local C = require("config")
 local util = require("util")
 local U = require("ui")
 local M = require("mundo")
+local Ed = require("editor")
 local cor = util.cores
 local fmt = util.formatar
 
@@ -757,6 +758,11 @@ local function janela_config()
   U.botao("minimizar2", bx, y + 60, 200, 44, "Minimizar", { cor = "#4a3627", cor_texto = cor.texto }, function() motor.minimizar() end)
   U.botao("estatisticas", bx, y + 112, 200, 44, "Estatísticas", { cor = "#4a3627", cor_texto = cor.texto }, function() T.modal = "stats" end)
   U.botao("creditos", bx, y + 164, 200, 44, "Créditos", { cor = "#4a3627", cor_texto = cor.texto }, function() T.modal = "creditos" end)
+  U.botao("editar", bx, y + 268, 200, 44, "Modo de edição (F2)", { cor = "#57b0c2", cor_texto = "#0d1f24" }, function()
+    T.modal = nil
+    T.aba = "taverna"
+    Ed.abrir()
+  end)
   U.botao("salvar", bx, y + 216, 200, 44, "Salvar agora", { cor = "#4a3627", cor_texto = cor.texto }, function()
     J.salvar()
     J.avisar("Progresso salvo!", 2)
@@ -866,6 +872,11 @@ end
 -- Ciclo --------------------------------------------------------------------------------
 
 function T.atualizar(dt)
+  if Ed.ativo then
+    M.atualizar(dt)
+    Ed.atualizar(dt)
+    return
+  end
   local e = J.estado
   local d = e.ouro - T.ouro_visivel
   if math.abs(d) < 1 then T.ouro_visivel = e.ouro
@@ -902,6 +913,11 @@ end
 
 function T.desenhar()
   U.limpar()
+  if Ed.ativo then
+    M.desenhar_cena()
+    Ed.desenhar()
+    return
+  end
   local aba_atual = T.aba
   M.desenhar_cena()
   if T.aba == "taverna" then
@@ -927,6 +943,15 @@ function T.desenhar()
 end
 
 function T.tocar(x, y)
+  if Ed.ativo then
+    local z = U.achar(x, y)
+    if z then
+      if z.fn then z.fn() end
+    else
+      Ed.tocar(x, y)
+    end
+    return
+  end
   T.toque = { x = x, y = y, ux = x, uy = y, moveu = false, arrasta = false }
   local z = U.achar(x, y)
   if z then
@@ -943,6 +968,7 @@ function T.tocar(x, y)
 end
 
 function T.soltar(x, y)
+  if Ed.ativo then Ed.soltar() return end
   local t = T.toque
   T.toque = nil
   if t and t.zona and not t.moveu and t.zona.fn then
@@ -951,7 +977,18 @@ function T.soltar(x, y)
   end
 end
 
+function T.f2()
+  if J.offline or J.estado.fim then return end
+  if Ed.ativo then Ed.fechar()
+  else
+    T.modal = nil
+    T.aba = "taverna"
+    Ed.abrir()
+  end
+end
+
 function T.esc()
+  if Ed.ativo then Ed.fechar() return end
   if J.offline then return end
   if T.modal == "config" then T.modal = nil
   elseif T.modal then T.modal = "config"

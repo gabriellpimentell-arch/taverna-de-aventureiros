@@ -16,7 +16,18 @@ permissions:
   contents: write
 
 jobs:
+  # Se algum teste falhar, nada é publicado e ninguém recebe a versão com problema.
+  testes:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Instalar Lua
+        run: sudo apt-get update -q && sudo apt-get install -y -q lua5.4
+      - name: Testes
+        run: LUA_BIN=lua5.4 tests/rodar.sh 3 rapido
+
   windows:
+    needs: testes
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4

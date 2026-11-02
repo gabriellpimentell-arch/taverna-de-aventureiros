@@ -260,4 +260,22 @@ static bool projetar(Vector3 p, float largura, float altura, float& sx, float& s
     return true;
 }
 
+// Tela virtual -> ponto do chão (y = 0)
+static bool chao(float sx, float sy, float largura, float altura, Vector3& saida) {
+    Matrix inv = MatrixInvert(MatrixMultiply(matrizVista(), matrizProjecao(largura, altura)));
+    float nx = sx / largura * 2.0f - 1.0f, ny = 1.0f - sy / altura * 2.0f;
+    auto desfaz = [&](float nz) {
+        float x = inv.m0 * nx + inv.m4 * ny + inv.m8 * nz + inv.m12;
+        float y = inv.m1 * nx + inv.m5 * ny + inv.m9 * nz + inv.m13;
+        float z = inv.m2 * nx + inv.m6 * ny + inv.m10 * nz + inv.m14;
+        float w = inv.m3 * nx + inv.m7 * ny + inv.m11 * nz + inv.m15;
+        return Vector3{x / w, y / w, z / w};
+    };
+    Vector3 a = desfaz(-1.0f), b = desfaz(1.0f);
+    if (std::fabs(b.y - a.y) < 0.0001f) return false;
+    float t = -a.y / (b.y - a.y);
+    saida = Vector3{a.x + (b.x - a.x) * t, 0.0f, a.z + (b.z - a.z) * t};
+    return true;
+}
+
 }  // namespace cena3d

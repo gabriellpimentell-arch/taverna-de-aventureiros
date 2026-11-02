@@ -11,7 +11,29 @@ local cor = util.cores
 
 local M = {}
 
-local peca = motor.peca
+local L = require("layout")
+
+-- Grupo atual: tudo desenhado depois de grupo("id") acompanha o objeto no modo de edição
+local G = nil
+local function grupo(id)
+  if not id then G = nil return end
+  local d = L.dados[id]
+  if not d then G = nil return end
+  local o = L.POR_ID[id]
+  G = { px = o.x, pz = o.z, x = d.x, z = d.z, y = d.y, g = d.g, co = math.cos(d.g), si = math.sin(d.g) }
+end
+M.grupo = grupo
+
+local function peca(f, x, y, z, ex, ey, ez, giro, c, rx, rz, b)
+  if G then
+    local ax, az = x - G.px, z - G.pz
+    x = G.px + G.x + ax * G.co + az * G.si
+    z = G.pz + G.z - ax * G.si + az * G.co
+    y = y + G.y
+    giro = (giro or 0) + G.g
+  end
+  motor.peca(f, x, y, z, ex, ey, ez, giro, c, rx, rz, b)
+end
 
 local function caixa(x, y, z, ex, ey, ez, c, giro) peca("caixa", x, y + ey / 2, z, ex, ey, ez, giro or 0, c) end
 local function cilindro(x, y, z, d, a, c) peca("cilindro", x, y, z, d, a, d, 0, c) end
@@ -103,7 +125,7 @@ local function piso(x0, x1, z0, z1, a, b, e, gasto)
     local l = math.min(0.8, z1 - z)
     local c = i % 2 == 0 and a or b
     -- as tábuas por onde todos andam ficam mais gastas
-    if gasto and z + l / 2 > 0.2 and z + l / 2 < 2 then c = gasto end
+    if gasto and z + l / 2 > 0.8 and z + l / 2 < 2.4 then c = gasto end
     caixa((x0 + x1) / 2, -0.3, z + l / 2, x1 - x0, 0.3 * e, l - 0.03, c)
     z = z + 0.8
     i = i + 1
@@ -175,22 +197,25 @@ local function salao()
   for z = -3, 4.5, 2.5 do caixa(-6.45, 0, z, 0.2, 4.2, 0.26, VIGA) end
   caixa(0, 3.75, -4.42, 13, 0.26, 0.2, VIGA)
 
+  grupo("porta")
   -- porta (o corredor termina nela) com lampião, porque a parede esquerda fica na sombra
-  local pz = J.PORTA.z
+  local pz = 1.6
   caixa(-6.47, 0, pz, 0.12, 2.5, 1.5, "#20140c")
   caixa(-6.42, 2.5, pz, 0.24, 0.2, 1.8, VIGA)
   caixa(-6.4, 0, pz - 0.37, 0.06, 2.42, 0.66, MAD_ESC)
   caixa(-6.4, 0, pz + 0.37, 0.06, 2.42, 0.66, MAD_MED)
   caixa(-6.35, 1.0, pz + 0.55, 0.06, 0.14, 0.14, OURO)
-  caixa(-6.34, 2.6, 2.0, 0.3, 0.08, 0.08, FERRO)
-  brilho("esfera", -6.18, 2.48, 2.0, 0.24, 0.32, 0.24, VELA, 1.6)
+  caixa(-6.34, 2.6, 2.6, 0.3, 0.08, 0.08, FERRO)
+  brilho("esfera", -6.18, 2.48, 2.6, 0.24, 0.32, 0.24, VELA, 1.6)
+  grupo(nil)
   janela(-1.27)
-  janela(3.25)
+  janela(3.7)
   -- vassoura encostada ao lado da porta
-  peca("cilindro", -6.25, 0.1, 2.45, 0.07, 1.5, 0.07, 0, MAD_MED, -0.12)
-  cone(-6.25, 0, 2.42, 0.3, 0.42, "#c9a24a")
+  peca("cilindro", -6.25, 0.1, 2.75, 0.07, 1.5, 0.07, 0, MAD_MED, -0.12)
+  cone(-6.25, 0, 2.72, 0.3, 0.42, "#c9a24a")
 
   -- lareira
+  grupo("lareira")
   local lx, lz = -6.1, -3.2
   caixa(lx + 0.68, 0, lz, 0.5, 0.04, 2.5, PEDRA_ESC)
   caixa(lx, 0, lz, 0.9, 2.5, 2.2, PEDRA)
@@ -208,22 +233,30 @@ local function salao()
   brilho("cone", lx + 0.52, 0.05, lz - 0.28, 0.5, 0.62 * f, 0.5, FOGO, 1.2)
   brilho("cone", lx + 0.52, 0.05, lz + 0.28, 0.46, 0.5 / f, 0.46, "#ff9a30", 1.2)
   brilho("cone", lx + 0.56, 0.05, lz, 0.42, 0.8 * f, 0.42, ALARANJADO, 1.3)
+  grupo("lenha")
   -- lenha empilhada contra a parede, entre a lareira e a janela
   for i, d in ipairs({ { -0.22, 0.09 }, { 0.22, 0.09 }, { 0, 0.3 } }) do
     peca("cilindro", -6.05 + d[1], d[2], -1.95, 0.22, 0.9, 0.22, 0, i == 3 and "#6b4427" or "#5b3a22", math.pi / 2)
   end
 
   -- tapetes do salão (ficam fora das tábuas gastas do corredor)
-  tapete(-3.6, -0.75, 4.6, 2.5)
-  if J.num_mesas() >= 5 then tapete(0.3, 3.0, 4.4, 1.9) end
+  grupo("tapete1")
+  tapete(-3.6, 0.3, 4.6, 1.9)
+  grupo("tapete2")
+  if J.num_mesas() >= 5 then tapete(0.3, 3.4, 4.4, 1.9) end
 
-  -- quadro de missões: os papéis aparecem quando a prateleira abre
-  local qx = J.QUADRO.x
+  -- quadro de missões: cada papel some quando alguém o pega
+  grupo("quadro")
+  local qx = -2.6
   caixa(qx, 1.45, -4.42, 2.6, 1.7, 0.1, MAD_ESC)
   caixa(qx, 1.55, -4.36, 2.3, 1.5, 0.05, "#a87e4f")
   caixa(qx, 3.15, -4.3, 2.9, 0.12, 0.34, MAD_ESC)
   if J.prateleira_aberta() then
-    local n = math.min(8, J.vagas_missao())
+    local indo = 0
+    for _, p in ipairs(J.pessoas) do
+      if p.estado == "indo_quadro" or (p.estado == "pegando" and not p.com_papel) then indo = indo + 1 end
+    end
+    local n = util.limitar(J.vagas_missao() - J.missoes_comuns_ativas() + indo, 2, 8)
     local tortos = { 0.07, -0.05, 0.09, -0.07, -0.06, 0.05, -0.09, 0.06 }
     for i = 1, n do
       local coluna, linha = (i - 1) % 4, math.floor((i - 1) / 4)
@@ -234,6 +267,7 @@ local function salao()
   end
 
   -- balcão, prateleira e fogão do cozinheiro
+  grupo("balcao")
   local bx, bz = 3.05, -2.2
   caixa(bx, 0, bz, 5.2, 1.05, 0.72, MAD_MED)
   caixa(bx, 0, bz + 0.02, 5.3, 0.14, 0.76, MAD_ESC)
@@ -246,6 +280,7 @@ local function salao()
     cilindro(x, 1.17, bz + 0.22, 0.16, 0.2, AMBAR)
     cilindro(x, 1.37, bz + 0.22, 0.18, 0.05, ESPUMA)
   end
+  grupo("garrafas")
   caixa(bx, 2.1, -4.32, 5.4, 0.1, 0.5, MAD_ESC)
   caixa(bx, 1.25, -4.32, 5.4, 0.1, 0.5, MAD_ESC)
   local garrafas = { "#3f8d4f", "#a13b3b", "#3c68a8", "#d0a23e", "#7a4a9c", "#3f8d4f", "#a13b3b", "#d0a23e" }
@@ -255,22 +290,28 @@ local function salao()
     cilindro(gx, y, -4.3, 0.24, 0.42, c)
     cilindro(gx, y + 0.42, -4.3, 0.1, 0.2, c)
   end
+  grupo("fogao")
   if J.ef("cozinheiro") > 0 then
     caixa(0.95, 0, -3.55, 1.1, 0.95, 0.9, "#55504c")
     brilho("caixa", 0.95, 0.96, -3.55, 0.8, 0.03, 0.6, "#ff7a24", 1.0)
     cilindro(0.95, 0.98, -3.55, 0.52, 0.36, "#3a3a40")
   end
 
+  grupo("barris_fundo")
   barril(5.6, -3.7); barril(4.75, -3.8); barril(5.75, -2.9, 0.9)
+  grupo("barris_frente")
   barril(-5.6, 3.9, 0.9); barril(-4.8, 4.1, 0.8)
+  grupo("carga")
   carga(5.85, 4.1)
 
   -- quartos: escada e porta no fundo
+  grupo("quartos")
   if J.nivel("quartos") > 0 then
     for i = 0, 5 do caixa(-5.2 + i * 0.22, 0, -3.9, 0.3, 0.24 + i * 0.24, 0.8, "#6a4426") end
     caixa(-4.0, 1.5, -4.46, 1.0, 1.9, 0.08, "#3a2415")
   end
 
+  grupo(nil)
   -- decoração: flâmulas na parede
   local d = math.min(J.nivel("decoracao") + (J.nivel("conforto") > 0 and 1 or 0), 5)
   for i = 1, d do
@@ -292,13 +333,16 @@ local function salao()
 
   for i = 1, math.min(J.num_mesas(), 6) do
     local m = J.POS_MESAS[i]
-    mesa(m.x, m.z)
-    banquinho(m.x - 1.25, m.z)
-    banquinho(m.x + 1.25, m.z)
+    grupo(m.id)
+    mesa(m.bx, m.bz)
+    banquinho(m.bx - 1.25, m.bz)
+    banquinho(m.bx + 1.25, m.bz)
   end
+  grupo("balcao")
   if J.ef("balcao") > 0 then
     for _, x in ipairs(J.BANCOS_BALCAO) do banquinho(x, -1.42) end
   end
+  grupo(nil)
 end
 
 local function ala_leste(e)
@@ -311,6 +355,7 @@ local function ala_leste(e)
   for x = 7.5, 12, 3 do c2(x, 0, -4.45, 0.26, 4.2, 0.2, VIGA) end
 
   if J.mercadinho_aberto() then
+    grupo("barraca")
     local mx, mz = 9.3, -2.2
     for _, d in ipairs({ { -2.1, -0.65, 2.7 }, { 2.1, -0.65, 2.7 }, { -2.1, 0.7, 2.3 }, { 2.1, 0.7, 2.3 } }) do
       c2(mx + d[1], 0, mz + d[2], 0.18, d[3], 0.18, MAD_ESC)
@@ -344,14 +389,17 @@ local function ala_leste(e)
     end
   end
 
+  grupo("carga_leste")
   if e > 0.9 then carga(11.5, -0.4) end
 
   for i = 7, math.min(J.num_mesas(), 8) do
     local m = J.POS_MESAS[i]
-    mesa(m.x, m.z)
-    banquinho(m.x - 1.25, m.z)
-    banquinho(m.x + 1.25, m.z)
+    grupo(m.id)
+    mesa(m.bx, m.bz)
+    banquinho(m.bx - 1.25, m.bz)
+    banquinho(m.bx + 1.25, m.bz)
   end
+  grupo(nil)
 end
 
 local function jardim(e)
@@ -489,7 +537,25 @@ function M.boneco(b)
   local by = topo - 0.06
   if t.nome == "mago" then by = pernas + 0.45 end
   p("caixa", -0.36, y0 + by - 0.2, -bs * 0.28, 0.14, 0.44, 0.15, t.braco, bs)
-  if b.bebendo then
+  if b.estado == "pegando" then
+    -- estica o braço até o quadro e puxa o papel
+    local alto = util.limitar(b.t / 0.5, 0, 1) * (1 - util.limitar((b.t - 0.75) / 0.4, 0, 0.6))
+    local ay = y0 + by + 0.06 + alto * 0.62
+    p("caixa", 0.3, ay, 0.16, 0.14, 0.15 + alto * 0.42, 0.15, t.braco, 0.5)
+    if b.com_papel then
+      p("caixa", 0.3, ay + 0.16, 0.26, 0.3, 0.38, 0.02, "#f0e4c8", 0, 0.08)
+      p("caixa", 0.3, ay + 0.3, 0.27, 0.3, 0.08, 0.02, "#d9534a", 0, 0.08)
+    end
+  elseif b.com_papel then
+    -- leva o papel erguido à frente, para ler a missão
+    p("caixa", 0.3, y0 + by + 0.02, 0.2, 0.14, 0.15, 0.44, t.braco)
+    p("caixa", 0.3, y0 + by + 0.02, 0.48, 0.3, 0.38, 0.02, "#f0e4c8", -0.2)
+    p("caixa", 0.3, y0 + by + 0.16, 0.5, 0.3, 0.08, 0.02, "#d9534a", -0.2)
+  elseif b.leva_espolio then
+    -- volta com um saco de espólios nas costas
+    p("caixa", 0.36, y0 + by - 0.2, bs * 0.28, 0.14, 0.44, 0.15, t.braco, -bs)
+    p("esfera", 0, y0 + pernas + 0.42, -0.34, 0.5, 0.56, 0.42, "#b59463")
+  elseif b.bebendo then
     p("caixa", 0.3, y0 + by + 0.02, 0.2, 0.14, 0.15, 0.44, t.braco)
     p("cilindro", 0.3, y0 + by, 0.48, 0.22, 0.26, 0.22, "#e8a33d")
     p("cilindro", 0.3, y0 + by + 0.25, 0.48, 0.24, 0.07, 0.24, "#fff4dd")
@@ -541,17 +607,20 @@ local function garcom(g)
 end
 
 local function equipe_fixa()
+  grupo("cozinheiro")
   if J.ef("cozinheiro") > 0 then
     local x = 0.95 + math.sin(M.tempo * 0.8) * 0.15
     M.boneco({ x = x, z = -2.75, giro = math.pi, fase = 0, pele = "#e0ac7e", tipo = T_COZINHEIRO, chapeu = "#f4f4f0" })
     cilindro(x, 2.08, -2.75, 0.42, 0.24, "#f4f4f0")
   end
+  grupo("bardo")
   if J.ef("bardo") > 0 then
     local b = math.sin(M.tempo * 5) * 0.03
     M.boneco({ x = -5.1, z = -1.25, y = b + 0.03, giro = 0.9, fase = 0, pele = "#c68a5a", tipo = T_BARDO, chapeu = "#3e5a4b" })
     peca("esfera", -4.85, 0.8, -1.0, 0.3, 0.42, 0.14, 0.9, "#a5703f")
     peca("caixa", -4.62, 1.02, -0.86, 0.06, 0.5, 0.06, 0.9, "#6f4326", 0, -1.0)
   end
+  grupo(nil)
 end
 
 local function poeira_briga(p)
@@ -568,6 +637,7 @@ end
 
 function M.desenhar_cena()
   local a = M.anim
+  grupo(nil)
   M.aplicar_camera()
   local t = M.tempo
   local f = 1 + math.sin(t * 9) * 0.1 + math.sin(t * 23) * 0.07
@@ -584,9 +654,13 @@ function M.desenhar_cena()
 
   salao()
   ala_leste(a.leste)
+  grupo("jardim")
   jardim(a.jardim)
+  grupo("cervejaria")
   cervejaria(a.cerveja)
+  grupo("circulo")
   circulo(a.circulo)
+  grupo(nil)
 
   for _, p in ipairs(J.pessoas) do
     M.boneco(p)
@@ -602,6 +676,7 @@ function M.desenhar_cena()
       if ch.invocado and not ch.em_missao and not ch.na_final then
         i = i + 1
         local ang = i * math.pi / 2
+        grupo("circulo")
         M.boneco({ x = 9.25 + math.cos(ang) * 0.9, z = 6.75 + math.sin(ang) * 0.7, giro = -ang + math.pi / 2, fase = 0,
           pele = ch.pele, tipo = J.TIPOS_POR_NOME(ch.tipo), contratado = ch })
       end
@@ -620,6 +695,18 @@ end
 function M.desenhar_baloes()
   local e = util.limitar(1 / M.quadro.escala * M.zoom, 0.72, 1.1)
   for _, p in ipairs(J.pessoas) do
+    if p.estado == "indo_quadro" then
+      -- mostra que está indo atrás de uma missão
+      local x, y = M.posicao_balao(p)
+      if x then
+        y = y + math.sin(M.tempo * 4 + p.fase) * 2
+        local q = 15 * e
+        motor.retangulo(x - q, y - q, q * 2, q * 2, "#fff6e6", 7 * e)
+        motor.triangulo(x - 5 * e, y + q - 1, x + 5 * e, y + q - 1, x, y + q + 5 * e, "#fff6e6")
+        motor.retangulo(x - 7 * e, y - 9 * e, 14 * e, 18 * e, "#e6d3a8", 2)
+        motor.retangulo(x - 7 * e, y - 9 * e, 14 * e, 4 * e, cor.vermelho, 2)
+      end
+    end
     if p.estado == "esperando" or p.estado == "brigando" then
       local x, y = M.posicao_balao(p)
       if x then

@@ -377,6 +377,45 @@ static int l_recorte(lua_State* L) {
     return 0;
 }
 
+// motor.chao(x, y) -> ponto do chão 3D sob esta posição da tela virtual
+static int l_chao(lua_State* L) {
+    Vector3 r;
+    if (!cena3d::chao(num(L, 1), num(L, 2), LARGURA, ALTURA, r)) return 0;
+    lua_pushnumber(L, r.x);
+    lua_pushnumber(L, r.z);
+    return 2;
+}
+
+// Posições editadas: ficam fora da pasta do jogo, assim sobrevivem às atualizações.
+static fs::path arquivoLayout() {
+    fs::path p = M.arquivoSave;
+    p += ".layout";
+    return p;
+}
+
+static int l_layout_salvar(lua_State* L) {
+    size_t n = 0;
+    const char* d = luaL_checklstring(L, 1, &n);
+    std::error_code ec;
+    fs::create_directories(M.arquivoSave.parent_path(), ec);
+    std::ofstream f(arquivoLayout(), std::ios::binary | std::ios::trunc);
+    if (f) f.write(d, (std::streamsize)n);
+    lua_pushboolean(L, (bool)f);
+    return 1;
+}
+
+static int l_layout_carregar(lua_State* L) {
+    std::string d;
+    if (lerArquivo(arquivoLayout(), d)) lua_pushlstring(L, d.data(), d.size());
+    else lua_pushnil(L);
+    return 1;
+}
+
+static int l_copiar(lua_State* L) {
+    SetClipboardText(luaL_checkstring(L, 1));
+    return 0;
+}
+
 static int l_sombras(lua_State* L) { cena3d::E.sombras = lua_toboolean(L, 1); return 0; }
 static int l_som(lua_State* L) { sons::tocar(luaL_checkstring(L, 1)); return 0; }
 static int l_volume(lua_State* L) { sons::volumes(num(L, 1), num(L, 2)); return 0; }
@@ -403,6 +442,8 @@ static void registrarApi(lua_State* L) {
         {"minimizar", l_minimizar}, {"sair", l_sair},
         {"alternar_tela_cheia", l_alternar_tela_cheia}, {"tela_cheia", l_tela_cheia},
         {"mouse_baixo", l_mouse_baixo}, {"roda", l_roda},
+        {"chao", l_chao},           {"layout_salvar", l_layout_salvar},
+        {"layout_carregar", l_layout_carregar}, {"copiar", l_copiar},
         {"recorte", l_recorte},     {"sombras", l_sombras},     {"som", l_som}, {"volume", l_volume},
         {nullptr, nullptr},
     };
@@ -842,6 +883,7 @@ int main() {
             chamar("soltar", {p.x, p.y});
         }
         if (IsKeyPressed(KEY_ESCAPE)) chamar("tecla_esc");
+        if (IsKeyPressed(KEY_F2)) chamar("tecla_f2");
 
         chamar("atualizar", {dt});
         chamar("teste", {dt});

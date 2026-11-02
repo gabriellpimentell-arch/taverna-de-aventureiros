@@ -15,4 +15,8 @@ function motor.alternar_tela_cheia() motor._tela_cheia = not motor._tela_cheia e
 function motor.sair() motor._saiu = true end
 function motor.salvar(s) motor._save = s; return true end
 function motor.carregar() local s = rawget(motor, "_save"); return s or nil end
+function motor.chao(x, y) return (x - 480) / 30, (y - 300) / 26 end
+function motor.layout_salvar(t) motor._layout = t; return true end
+function motor.layout_carregar() local t = rawget(motor, "_layout"); return t or nil end
+function motor.copiar(t) motor._copiado = t end
 function motor.projetar(x, y, z) return 480 + (x - z * 0.3) * 30, 300 + (z * 0.8 - y) * 26 end

@@ -671,6 +671,110 @@ J.estado.ouro = 1e100
 for _, id in ipairs({ "taverna", "arvore" }) do T.aba = id; quadros(2) end
 ok("formatar número enorme", type(util.formatar(1e100)) == "string")
 
+-- Colisões: bonecos não se atravessam nem atravessam mesas ---------------------------------------
+do
+  local Cam = require("caminhos")
+  local L = require("layout")
+  motor._layout = false
+  novo()
+  libera("prateleira", "balcao", "garcom", "garcom", "garcom", "mesa", "mesa", "mesa", "mesa", "vagas", "vagas", "vagas", "vagas", "vagas", "placa", "placa", "placa", "placa", "placa", "placa")
+  local passos, encostos, dentro_mesa, andando = 0, 0, 0, 0
+  for _ = 1, 3000 do
+    J.atualizar(0.1)
+    local lista = {}
+    for _, p in ipairs(J.pessoas) do lista[#lista + 1] = p end
+    for _, g in ipairs(J.garcons) do lista[#lista + 1] = g end
+    for i = 1, #lista do
+      local p = lista[i]
+      if p.andando and not p.fantasma then
+        andando = andando + 1
+        for k = 1, J.num_mesas() do
+          local m = J.POS_MESAS[k]
+          if util.distancia(p.x, p.z, m.x, m.z) < 0.72 then dentro_mesa = dentro_mesa + 1 end
+        end
+      end
+      for j = i + 1, #lista do
+        local q = lista[j]
+        if not p.fantasma and not q.fantasma and util.distancia(p.x, p.z, q.x, q.z) < Cam.DISTANCIA * 0.55 then
+          encostos = encostos + 1
+        end
+      end
+    end
+    passos = passos + 1
+  end
+  ok("ninguém anda por dentro de mesa", dentro_mesa == 0, dentro_mesa)
+  ok("bonecos quase nunca se sobrepõem", encostos <= passos * 0.02, encostos .. " em " .. passos)
+  ok("todos acham caminho", (J.sem_caminho or 0) == 0, J.sem_caminho)
+  ok("pouquíssimos pedidos de socorro", (J.socorros or 0) <= 30, J.socorros)
+  ok("taverna continua servindo", J.estado.servidos > 50, J.estado.servidos)
+  ok("missões continuam concluindo", J.estado.feitas > 10, J.estado.feitas)
+
+  -- pegar missão: vai ao quadro, pega o papel e sai com ele
+  novo()
+  libera("prateleira")
+  J.relogio_aventureiro = 99
+  local viu_ida, viu_pegando, viu_papel, perto = false, false, false, false
+  for _ = 1, 400 do
+    J.atualizar(0.1)
+    for _, p in ipairs(J.pessoas) do
+      if p.estado == "indo_quadro" then viu_ida = true end
+      if p.estado == "pegando" then
+        viu_pegando = true
+        if util.distancia(p.x, p.z, J.QUADRO.x, J.QUADRO.z) < 1.3 then perto = true end
+      end
+      if p.com_papel and p.estado == "saindo" then viu_papel = true end
+    end
+    desenhar()
+  end
+  ok("aventureiro vai ao quadro", viu_ida)
+  ok("para no quadro para pegar", viu_pegando and perto)
+  ok("sai com o papel na mão", viu_papel)
+
+  -- editor
+  novo()
+  T.f2()
+  ok("F2 abre o editor", require("editor").ativo)
+  local Ed = require("editor")
+  local o0 = J.estado.ouro
+  atualizar(0.1); desenhar()
+  ok("jogo pausa no editor", J.editando)
+  Ed.sel = "mesa1"
+  Ed.mover_para("mesa1", -2.0, 0.5)
+  ok("objeto move", J.POS_MESAS[1].x == -2 and J.POS_MESAS[1].z == 0.5)
+  desenhar()
+  for _, z in ipairs(U.zonas) do
+    if z.fn and z.id ~= "editor_sair" and z.id ~= "editor_painel" then
+      local bom, erro = pcall(z.fn)
+      ok("botão editor " .. z.id, bom, erro)
+      atualizar(0.05); desenhar()
+    end
+  end
+  Ed.sel = "mesa1"
+  Ed.mover_para("mesa1", -2.0, 0.5)
+  L.salvar()
+  ok("copiar devolve texto", type(motor._copiado) == "string")
+  T.esc()
+  ok("esc sai do editor", not Ed.ativo and not J.editando and not J.previa)
+  for _ = 1, 100 do atualizar(0.1); desenhar() end
+  iniciar()
+  ok("posição sobrevive a reiniciar", J.POS_MESAS[1].x == -2, J.POS_MESAS[1].x)
+  local l1 = J.lugares[1]
+  ok("assentos acompanham a mesa", util.distancia(l1.x, l1.z, -3.25, 0.5) < 0.01, l1.x)
+  -- objeto em cima da porta não pode travar o jogo
+  L.de("mesa1").x, L.de("mesa1").z = -2.8, 1.4
+  J.aplicar_layout()
+  for _ = 1, 400 do J.atualizar(0.1) end
+  ok("mesa na porta não trava", true)
+  for nome, lixo in pairs({ a = "lixo", b = "{ [\"mesa1\"] = 3 }", c = "{ [\"naoexiste\"] = { [\"x\"] = 1 } }", d = "{ [\"mesa1\"] = { [\"x\"] = 0/0 } }" }) do
+    motor._layout = lixo
+    local bom = pcall(function() iniciar(); quadros(3) end)
+    ok("layout estragado não quebra: " .. nome, bom)
+    ok("mesa continua em número válido", J.POS_MESAS[1].x == J.POS_MESAS[1].x)
+  end
+  motor._layout = false
+  novo()
+end
+
 -- Jogo completo: robô chega ao final ---------------------------------------------------------------
 if arg[3] ~= "rapido" then
   novo()
