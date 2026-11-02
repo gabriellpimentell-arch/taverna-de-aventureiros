@@ -1,6 +1,6 @@
 # GDD — Taverna de Aventureiros
 
-> Atualizado em 2 de novembro de 2026 com a visão completa do jogo. A [versão em Claude Docs](https://claude.ai/artifact/NawRpwFGyEyQge2Ltqta79) ainda é a de 1º de novembro e não tem estas mudanças.
+> Este arquivo é a versão oficial do GDD. Última atualização: 2 de novembro de 2026.
 
 ## Visão geral
 
@@ -56,7 +56,7 @@ O ouro da taverna compra habilidades na árvore, que ampliam a taverna e liberam
 | Missões | Quem contratou a missão paga; a taverna só recebe quando o aventureiro volta com ela concluída, não quando ele a pega | Prateleira de missões |
 | Espólios | A taverna compra os espólios dos aventureiros e eles são revendidos sozinhos, com pouco lucro no início | Mercadinho |
 | Venda | Poções, armaduras e armas vendidas no mercadinho aumentam muito o lucro | Aba de venda |
-| Produção própria | Plantação e bebidas feitas na taverna | Plantação |
+| Produção própria | O jardim produz os alimentos, o cozinheiro prepara a comida e a taverna faz as próprias bebidas | Plantação |
 
 **Comemoração**: herói que volta de missão gasta mais que o normal na taverna, então cada missão cumprida gera um pico de renda.
 
@@ -85,8 +85,8 @@ Todas as melhorias ficam na árvore: comprar uma habilidade abre as próximas. O
 | --- | --- |
 | Salão | Mesas, cadeiras e novas áreas da taverna |
 | Clientes | Frequência e quantidade de clientes |
-| Serviço | Garçons e velocidade de atendimento |
-| Bebidas e comida | Rentabilidade, plantação e bebidas próprias |
+| Serviço | Garçons, cozinheiro e velocidade de atendimento |
+| Bebidas e comida | Rentabilidade, jardim, comida do cozinheiro e bebidas próprias |
 | Guilda | Prateleira de missões, ranks e quantidade de aventureiros |
 | Mercadinho | Espólios e vendas |
 | Heróis | Contratação, parties, propaganda e invocação |
@@ -101,7 +101,7 @@ O jogo começa simples e libera uma coisa de cada vez, para cada desbloqueio vir
 2. **Prateleira de missões**: começa no rank F, e os seguintes abrem pela árvore.
 3. **Mercadinho**: compra e revenda automática de espólios.
 4. **Aba de venda**: poções, armaduras e armas.
-5. **Produção própria**: plantação e bebidas da casa.
+5. **Produção própria**: jardim, cozinheiro e bebidas da casa.
 6. **Aventureiros contratados**: contratação e investimento em armadura, arma e magia.
 7. **Parties**: grupos de 4 aventureiros vão juntos nas missões.
 8. **Heróis e propaganda**: um contratado evolui até virar herói, o que abre a propaganda.
@@ -120,6 +120,8 @@ O ritmo exato (quanto ouro para cada etapa) fica para o balanceamento, já nos s
 | Invocados | Invocação isekai, no fim do jogo | Têm os maiores atributos e continuam evoluindo; 4 deles são exigidos na missão final |
 
 **Propaganda e reputação**: a propaganda abre quando o primeiro contratado vira herói. Ela dá fama aos heróis, a fama traz reputação para a taverna, e a reputação atrai aventureiros de rank mais alto, que geram mais lucro.
+
+**Brigas entre clientes**: combinam com o clima de aventureiros e fazem parte do jogo. Clientes de temperamentos incompatíveis na mesma mesa podem brigar; como isso funciona e o que causa ainda será definido.
 
 **Ideias a avaliar** (vieram da versão anterior, sem decisão nova):
 
