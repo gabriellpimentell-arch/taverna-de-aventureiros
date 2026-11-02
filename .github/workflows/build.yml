@@ -1,0 +1,49 @@
+name: Gerar executável
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configurar
+        run: cmake -S . -B build -A x64
+
+      - name: Compilar
+        run: cmake --build build --config Release --parallel
+
+      - name: Empacotar
+        shell: pwsh
+        run: |
+          $pasta = "dist/TavernaDeAventureiros"
+          New-Item -ItemType Directory -Force $pasta | Out-Null
+          Copy-Item build/Release/TavernaDeAventureiros.exe $pasta
+          Copy-Item -Recurse scripts $pasta
+          Copy-Item -Recurse assets $pasta
+          Compress-Archive -Path $pasta -DestinationPath TavernaDeAventureiros-windows.zip
+
+      - name: Guardar como artefato
+        uses: actions/upload-artifact@v4
+        with:
+          name: TavernaDeAventureiros-windows
+          path: dist/
+
+      - name: Publicar versão de teste
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete teste --yes --cleanup-tag || true
+          gh release create teste TavernaDeAventureiros-windows.zip \
+            --prerelease \
+            --title "Versão de teste" \
+            --notes "Gerada automaticamente a partir do commit ${GITHUB_SHA::7}." \
+            --target "$GITHUB_SHA"

@@ -1,0 +1,572 @@
+// =============================================================================
+//  Taverna de Aventureiros — motor
+//
+//  O motor em C++ cuida do "trabalho pesado": janela, desenho, toque/clique,
+//  fontes e arquivos. Toda a regra do jogo fica nos scripts Lua da pasta
+//  `scripts/`, que o motor carrega e chama a cada quadro:
+//
+//      iniciar()          uma vez, quando os scripts são carregados
+//      atualizar(dt)      a cada quadro (dt = segundos desde o quadro anterior)
+//      desenhar()         a cada quadro, depois de atualizar
+//      tocar(x, y)        quando o jogador toca na tela ou clica
+//      ao_sair()          antes de fechar ou recarregar (hora de salvar)
+//
+//  O jogo é desenhado numa tela virtual em pé de 540 x 960, que o motor
+//  escala para caber na janela (ou na tela do celular, no futuro).
+//
+//  Durante o desenvolvimento, salvar qualquer arquivo .lua recarrega o jogo
+//  na hora. F5 também recarrega.
+// =============================================================================
+
+#include "raylib.h"
+
+extern "C" {
+#include "lua.h"
+#include "lauxlib.h"
+#include "lualib.h"
+}
+
+#include <algorithm>
+#include <cmath>
+#include <cstdlib>
+#include <cstring>
+#include <filesystem>
+#include <fstream>
+#include <map>
+#include <sstream>
+#include <string>
+#include <vector>
+
+namespace fs = std::filesystem;
+
+static const float LARGURA = 540.0f;
+static const float ALTURA = 960.0f;
+
+struct Motor {
+    lua_State* L = nullptr;
+    fs::path pastaScripts;
+    fs::path pastaAssets;
+    fs::path arquivoSave;
+    Font fonteNormal{};
+    Font fonteNegrito{};
+    bool fontesProprias = false;
+    std::string erro;
+    Camera2D camera{};
+    float opacidade = 1.0f;
+    std::map<std::string, long long> datasScripts;
+    float relogioVigia = 0.0f;
+    std::string arquivoTeste;
+};
+
+static Motor M;
+
+// -----------------------------------------------------------------------------
+//  Utilidades
+// -----------------------------------------------------------------------------
+
+// Cores chegam do Lua como texto hexadecimal: "#RRGGBB" ou "#RRGGBBAA".
+static Color corDeLua(lua_State* L, int idx, Color padrao) {
+    Color c = padrao;
+    if (!lua_isnoneornil(L, idx)) {
+        const char* s = luaL_checkstring(L, idx);
+        if (*s == '#') s++;
+        size_t n = strlen(s);
+        unsigned long v = strtoul(s, nullptr, 16);
+        if (n == 6) {
+            c = Color{(unsigned char)((v >> 16) & 255), (unsigned char)((v >> 8) & 255),
+                      (unsigned char)(v & 255), 255};
+        } else if (n == 8) {
+            c = Color{(unsigned char)((v >> 24) & 255), (unsigned char)((v >> 16) & 255),
+                      (unsigned char)((v >> 8) & 255), (unsigned char)(v & 255)};
+        } else {
+            c = MAGENTA;  // cor inválida: fica bem visível para corrigir
+        }
+    }
+    c.a = (unsigned char)(c.a * std::clamp(M.opacidade, 0.0f, 1.0f));
+    return c;
+}
+
+static float num(lua_State* L, int idx) { return (float)luaL_checknumber(L, idx); }
+static float numOpc(lua_State* L, int idx, float padrao) {
+    return (float)luaL_optnumber(L, idx, padrao);
+}
+
+static Font fonte(bool negrito) { return negrito ? M.fonteNegrito : M.fonteNormal; }
+
+static float espacamento(float tamanho) { return M.fontesProprias ? 0.0f : tamanho / 10.0f; }
+
+static bool lerArquivo(const fs::path& p, std::string& saida) {
+    std::ifstream f(p, std::ios::binary);
+    if (!f) return false;
+    std::stringstream ss;
+    ss << f.rdbuf();
+    saida = ss.str();
+    return true;
+}
+
+// -----------------------------------------------------------------------------
+//  API "motor" exposta ao Lua
+// -----------------------------------------------------------------------------
+
+// motor.retangulo(x, y, largura, altura, cor, raio)
+static int l_retangulo(lua_State* L) {
+    Rectangle r{num(L, 1), num(L, 2), num(L, 3), num(L, 4)};
+    Color c = corDeLua(L, 5, WHITE);
+    float raio = numOpc(L, 6, 0);
+    float menor = std::min(r.width, r.height);
+    if (raio <= 0 || menor <= 0) {
+        DrawRectangleRec(r, c);
+    } else {
+        DrawRectangleRounded(r, std::min(1.0f, raio * 2.0f / menor), 12, c);
+    }
+    return 0;
+}
+
+// motor.contorno(x, y, largura, altura, cor, espessura, raio)
+static int l_contorno(lua_State* L) {
+    Rectangle r{num(L, 1), num(L, 2), num(L, 3), num(L, 4)};
+    Color c = corDeLua(L, 5, WHITE);
+    float esp = numOpc(L, 6, 2);
+    float raio = numOpc(L, 7, 0);
+    float menor = std::min(r.width, r.height);
+    if (raio <= 0 || menor <= 0) {
+        DrawRectangleLinesEx(r, esp, c);
+    } else {
+        DrawRectangleRoundedLinesEx(r, std::min(1.0f, raio * 2.0f / menor), 12, esp, c);
+    }
+    return 0;
+}
+
+// motor.circulo(x, y, raio, cor)
+static int l_circulo(lua_State* L) {
+    DrawCircleV(Vector2{num(L, 1), num(L, 2)}, num(L, 3), corDeLua(L, 4, WHITE));
+    return 0;
+}
+
+// motor.anel(x, y, raio_interno, raio_externo, cor, angulo_inicial, angulo_final)
+static int l_anel(lua_State* L) {
+    DrawRing(Vector2{num(L, 1), num(L, 2)}, num(L, 3), num(L, 4), numOpc(L, 6, 0),
+             numOpc(L, 7, 360), 36, corDeLua(L, 5, WHITE));
+    return 0;
+}
+
+// motor.elipse(x, y, raio_x, raio_y, cor)
+static int l_elipse(lua_State* L) {
+    DrawEllipse((int)num(L, 1), (int)num(L, 2), num(L, 3), num(L, 4), corDeLua(L, 5, WHITE));
+    return 0;
+}
+
+// motor.triangulo(x1, y1, x2, y2, x3, y3, cor)
+static int l_triangulo(lua_State* L) {
+    Vector2 a{num(L, 1), num(L, 2)}, b{num(L, 3), num(L, 4)}, c{num(L, 5), num(L, 6)};
+    Color cor = corDeLua(L, 7, WHITE);
+    // A raylib só desenha triângulos numa ordem de vértices; testamos as duas
+    // para o Lua não precisar se preocupar com isso.
+    float cruz = (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+    if (cruz < 0) DrawTriangle(a, b, c, cor);
+    else DrawTriangle(a, c, b, cor);
+    return 0;
+}
+
+// motor.linha(x1, y1, x2, y2, espessura, cor)
+static int l_linha(lua_State* L) {
+    DrawLineEx(Vector2{num(L, 1), num(L, 2)}, Vector2{num(L, 3), num(L, 4)}, numOpc(L, 5, 2),
+               corDeLua(L, 6, WHITE));
+    return 0;
+}
+
+// motor.texto(texto, x, y, tamanho, cor, alinhamento, negrito)
+//   alinhamento: "esquerda" (padrão), "centro" ou "direita"
+static int l_texto(lua_State* L) {
+    const char* t = luaL_checkstring(L, 1);
+    float x = num(L, 2), y = num(L, 3);
+    float tam = numOpc(L, 4, 24);
+    Color c = corDeLua(L, 5, WHITE);
+    const char* alinh = luaL_optstring(L, 6, "esquerda");
+    Font f = fonte(lua_toboolean(L, 7));
+    float esp = espacamento(tam);
+    Vector2 med = MeasureTextEx(f, t, tam, esp);
+    if (strcmp(alinh, "centro") == 0) x -= med.x / 2.0f;
+    else if (strcmp(alinh, "direita") == 0) x -= med.x;
+    DrawTextEx(f, t, Vector2{x, y}, tam, esp, c);
+    return 0;
+}
+
+// motor.largura_texto(texto, tamanho, negrito) -> largura
+static int l_largura_texto(lua_State* L) {
+    const char* t = luaL_checkstring(L, 1);
+    float tam = numOpc(L, 2, 24);
+    Vector2 med = MeasureTextEx(fonte(lua_toboolean(L, 3)), t, tam, espacamento(tam));
+    lua_pushnumber(L, med.x);
+    return 1;
+}
+
+// motor.opacidade(0..1): vale para tudo que for desenhado depois
+static int l_opacidade(lua_State* L) {
+    M.opacidade = numOpc(L, 1, 1);
+    return 0;
+}
+
+// motor.mouse() -> x, y (posição do cursor na tela virtual)
+static int l_mouse(lua_State* L) {
+    Vector2 p = GetScreenToWorld2D(GetMousePosition(), M.camera);
+    lua_pushnumber(L, p.x);
+    lua_pushnumber(L, p.y);
+    return 2;
+}
+
+// motor.tempo() -> segundos desde que o jogo abriu
+static int l_tempo(lua_State* L) {
+    lua_pushnumber(L, GetTime());
+    return 1;
+}
+
+// motor.salvar(texto): grava o progresso
+static int l_salvar(lua_State* L) {
+    size_t n = 0;
+    const char* dados = luaL_checklstring(L, 1, &n);
+    std::error_code ec;
+    fs::create_directories(M.arquivoSave.parent_path(), ec);
+    fs::path temp = M.arquivoSave;
+    temp += ".tmp";
+    {
+        std::ofstream f(temp, std::ios::binary | std::ios::trunc);
+        if (!f) {
+            lua_pushboolean(L, 0);
+            return 1;
+        }
+        f.write(dados, (std::streamsize)n);
+    }
+    // grava num arquivo temporário e troca: se o jogo fechar no meio, o save antigo continua inteiro
+    fs::rename(temp, M.arquivoSave, ec);
+    if (ec) {
+        fs::remove(M.arquivoSave, ec);
+        fs::rename(temp, M.arquivoSave, ec);
+    }
+    lua_pushboolean(L, !ec);
+    return 1;
+}
+
+// motor.carregar() -> texto salvo, ou nil se não houver
+static int l_carregar(lua_State* L) {
+    std::string dados;
+    if (lerArquivo(M.arquivoSave, dados)) lua_pushlstring(L, dados.data(), dados.size());
+    else lua_pushnil(L);
+    return 1;
+}
+
+// motor.log(...): mensagem no console
+static int l_log(lua_State* L) {
+    std::string s;
+    int n = lua_gettop(L);
+    for (int i = 1; i <= n; i++) {
+        if (i > 1) s += " ";
+        s += luaL_tolstring(L, i, nullptr);
+        lua_pop(L, 1);
+    }
+    TraceLog(LOG_INFO, "LUA: %s", s.c_str());
+    return 0;
+}
+
+// motor.captura(arquivo): salva uma imagem da tela (usado em testes)
+static int l_captura(lua_State* L) {
+    TakeScreenshot(luaL_checkstring(L, 1));
+    return 0;
+}
+
+static void registrarApi(lua_State* L) {
+    static const luaL_Reg funcoes[] = {
+        {"retangulo", l_retangulo}, {"contorno", l_contorno},
+        {"circulo", l_circulo},     {"anel", l_anel},
+        {"elipse", l_elipse},       {"triangulo", l_triangulo},
+        {"linha", l_linha},         {"texto", l_texto},
+        {"largura_texto", l_largura_texto},
+        {"opacidade", l_opacidade}, {"mouse", l_mouse},
+        {"tempo", l_tempo},         {"salvar", l_salvar},
+        {"carregar", l_carregar},   {"log", l_log},
+        {"captura", l_captura},     {nullptr, nullptr},
+    };
+    luaL_newlib(L, funcoes);
+    lua_pushnumber(L, LARGURA);
+    lua_setfield(L, -2, "largura");
+    lua_pushnumber(L, ALTURA);
+    lua_setfield(L, -2, "altura");
+#if defined(PLATFORM_ANDROID)
+    lua_pushstring(L, "android");
+#else
+    lua_pushstring(L, "desktop");
+#endif
+    lua_setfield(L, -2, "plataforma");
+    lua_setglobal(L, "motor");
+}
+
+// -----------------------------------------------------------------------------
+//  Carregar e chamar os scripts
+// -----------------------------------------------------------------------------
+
+static int rastreio(lua_State* L) {
+    const char* msg = lua_tostring(L, 1);
+    luaL_traceback(L, L, msg ? msg : "erro desconhecido", 1);
+    return 1;
+}
+
+// Chama uma função global do Lua, se ela existir. Erros vão para a tela de erro.
+static void chamar(const char* nome, std::initializer_list<double> args = {}, bool mesmoComErro = false) {
+    lua_State* L = M.L;
+    if (!L || (!M.erro.empty() && !mesmoComErro)) return;
+    int topo = lua_gettop(L);
+    lua_pushcfunction(L, rastreio);
+    lua_getglobal(L, nome);
+    if (lua_isfunction(L, -1)) {
+        for (double a : args) lua_pushnumber(L, a);
+        if (lua_pcall(L, (int)args.size(), 0, topo + 1) != LUA_OK && M.erro.empty()) {
+            M.erro = lua_tostring(L, -1);
+            TraceLog(LOG_WARNING, "Erro em %s(): %s", nome, M.erro.c_str());
+        }
+    }
+    lua_settop(L, topo);
+    M.opacidade = 1.0f;
+}
+
+static bool executarArquivo(const fs::path& arquivo) {
+    lua_State* L = M.L;
+    int topo = lua_gettop(L);
+    lua_pushcfunction(L, rastreio);
+    std::string codigo;
+    bool ok = false;
+    if (!lerArquivo(arquivo, codigo)) {
+        M.erro = "Não encontrei o arquivo " + arquivo.string();
+    } else {
+        std::string nome = "@" + arquivo.filename().string();
+        if (luaL_loadbuffer(L, codigo.data(), codigo.size(), nome.c_str()) != LUA_OK ||
+            lua_pcall(L, 0, 0, topo + 1) != LUA_OK) {
+            M.erro = lua_tostring(L, -1);
+        } else {
+            ok = true;
+        }
+    }
+    lua_settop(L, topo);
+    return ok;
+}
+
+static std::map<std::string, long long> lerDatasScripts() {
+    std::map<std::string, long long> datas;
+    std::error_code ec;
+    for (const auto& e : fs::recursive_directory_iterator(M.pastaScripts, ec)) {
+        if (e.path().extension() == ".lua") {
+            datas[e.path().string()] = (long long)fs::last_write_time(e.path(), ec).time_since_epoch().count();
+        }
+    }
+    return datas;
+}
+
+static void carregarScripts() {
+    if (M.L) {
+        chamar("ao_sair", {}, true);  // salva o progresso antes de recarregar
+        lua_close(M.L);
+    }
+    M.erro.clear();
+    M.opacidade = 1.0f;
+    M.L = luaL_newstate();
+    luaL_openlibs(M.L);
+    registrarApi(M.L);
+
+    // require("config") procura config.lua dentro da pasta de scripts
+    lua_getglobal(M.L, "package");
+    std::string caminho = (M.pastaScripts / "?.lua").string();
+    lua_pushstring(M.L, caminho.c_str());
+    lua_setfield(M.L, -2, "path");
+    lua_pop(M.L, 1);
+
+    M.datasScripts = lerDatasScripts();
+    if (!executarArquivo(M.pastaScripts / "main.lua")) return;
+    if (!M.arquivoTeste.empty() && !executarArquivo(M.arquivoTeste)) return;
+    chamar("iniciar");
+    TraceLog(LOG_INFO, "Scripts carregados de %s", M.pastaScripts.string().c_str());
+}
+
+// -----------------------------------------------------------------------------
+//  Tela de erro (mostra o problema em vez de fechar o jogo)
+// -----------------------------------------------------------------------------
+
+static std::vector<std::string> quebrarLinhas(const std::string& texto, float tam, float largura) {
+    std::vector<std::string> linhas;
+    std::stringstream ss(texto);
+    std::string paragrafo;
+    while (std::getline(ss, paragrafo)) {
+        std::replace(paragrafo.begin(), paragrafo.end(), '\t', ' ');
+        std::string atual;
+        std::stringstream palavras(paragrafo);
+        std::string p;
+        while (palavras >> p) {
+            std::string teste = atual.empty() ? p : atual + " " + p;
+            if (!atual.empty() &&
+                MeasureTextEx(M.fonteNormal, teste.c_str(), tam, espacamento(tam)).x > largura) {
+                linhas.push_back(atual);
+                atual = p;
+            } else {
+                atual = teste;
+            }
+        }
+        linhas.push_back(atual);
+    }
+    return linhas;
+}
+
+static void desenharErro() {
+    DrawRectangle(0, 0, (int)LARGURA, (int)ALTURA, Color{40, 14, 14, 255});
+    DrawTextEx(M.fonteNegrito, "Erro no script", Vector2{24, 28}, 30, espacamento(30), Color{255, 120, 100, 255});
+    float y = 80;
+    for (const auto& linha : quebrarLinhas(M.erro, 16, LARGURA - 48)) {
+        if (y > ALTURA - 110) break;
+        DrawTextEx(M.fonteNormal, linha.c_str(), Vector2{24, y}, 16, espacamento(16), Color{245, 225, 215, 255});
+        y += 21;
+    }
+    DrawTextEx(M.fonteNormal, "Corrija o arquivo e salve: o jogo recarrega sozinho.", Vector2{24, ALTURA - 80}, 16,
+               espacamento(16), Color{200, 170, 160, 255});
+    DrawTextEx(M.fonteNormal, "Ou toque na tela / aperte F5 para tentar de novo.", Vector2{24, ALTURA - 56}, 16,
+               espacamento(16), Color{200, 170, 160, 255});
+}
+
+// -----------------------------------------------------------------------------
+//  Pastas e fontes
+// -----------------------------------------------------------------------------
+
+// Procura uma pasta ao lado do executável ou em pastas acima (útil no desenvolvimento).
+static fs::path procurarPasta(const std::string& nome, const std::string& marcador) {
+    fs::path base = fs::u8path(GetApplicationDirectory()).lexically_normal();
+    if (!base.has_filename()) base = base.parent_path();
+    for (int i = 0; i < 5 && !base.empty(); i++) {
+        if (fs::exists(base / nome / marcador)) return base / nome;
+        fs::path pai = base.parent_path();
+        if (pai == base) break;
+        base = pai;
+    }
+    std::error_code ec;
+    if (fs::exists(fs::path(nome) / marcador)) return fs::absolute(nome, ec);
+    return {};
+}
+
+static fs::path pastaDeDados() {
+#if defined(_WIN32)
+    const wchar_t* appdata = _wgetenv(L"APPDATA");
+    if (appdata) return fs::path(appdata) / "TavernaDeAventureiros";
+#else
+    const char* xdg = getenv("XDG_DATA_HOME");
+    if (xdg && *xdg) return fs::path(xdg) / "taverna-de-aventureiros";
+    const char* home = getenv("HOME");
+    if (home) return fs::path(home) / ".local" / "share" / "taverna-de-aventureiros";
+#endif
+    return fs::path(".");
+}
+
+static Font carregarFonte(const fs::path& arquivo) {
+    std::vector<int> letras;
+    for (int c = 32; c <= 255; c++) letras.push_back(c);  // inclui acentos: á, ç, õ...
+    for (int c : {0x2022, 0x2026, 0x2013, 0x2014, 0x2191, 0x2192}) letras.push_back(c);
+    Font f = LoadFontEx(arquivo.string().c_str(), 64, letras.data(), (int)letras.size());
+    if (f.texture.id != 0) {
+        GenTextureMipmaps(&f.texture);
+        SetTextureFilter(f.texture, TEXTURE_FILTER_TRILINEAR);
+    }
+    return f;
+}
+
+// -----------------------------------------------------------------------------
+//  Programa principal
+// -----------------------------------------------------------------------------
+
+static void atualizarCamera() {
+    float lw = (float)GetScreenWidth(), lh = (float)GetScreenHeight();
+    float escala = std::min(lw / LARGURA, lh / ALTURA);
+    M.camera.zoom = escala;
+    M.camera.offset = Vector2{std::floor((lw - LARGURA * escala) / 2.0f), std::floor((lh - ALTURA * escala) / 2.0f)};
+    M.camera.target = Vector2{0, 0};
+    M.camera.rotation = 0;
+}
+
+int main() {
+    unsigned int flags = FLAG_WINDOW_RESIZABLE | FLAG_VSYNC_HINT;
+    if (!getenv("TAVERNA_TESTE")) flags |= FLAG_MSAA_4X_HINT;  // bordas mais suaves
+    SetConfigFlags(flags);
+    InitWindow(450, 800, "Taverna de Aventureiros");
+    SetExitKey(KEY_NULL);  // ESC não fecha o jogo
+    SetWindowMinSize(270, 480);
+    SetTargetFPS(60);
+
+    // janela em pé ocupando boa parte da altura do monitor
+    int monitor = GetCurrentMonitor();
+    int mh = GetMonitorHeight(monitor), mw = GetMonitorWidth(monitor);
+    if (mh > 0 && mw > 0 && !getenv("TAVERNA_TESTE")) {
+        int h = (int)(mh * 0.85f), w = (int)(h * LARGURA / ALTURA);
+        SetWindowSize(w, h);
+        SetWindowPosition((mw - w) / 2, (mh - h) / 2);
+    }
+    if (getenv("TAVERNA_TESTE")) SetWindowSize((int)LARGURA, (int)ALTURA);
+
+    M.pastaScripts = procurarPasta("scripts", "main.lua");
+    M.pastaAssets = procurarPasta("assets", "fontes");
+    M.arquivoSave = pastaDeDados() / "progresso.sav";
+    if (const char* teste = getenv("TAVERNA_TESTE")) M.arquivoTeste = teste;
+    if (const char* save = getenv("TAVERNA_SAVE")) M.arquivoSave = save;
+
+    M.fonteNormal = carregarFonte(M.pastaAssets / "fontes" / "Poppins-Regular.ttf");
+    M.fonteNegrito = carregarFonte(M.pastaAssets / "fontes" / "Poppins-Bold.ttf");
+    M.fontesProprias = M.fonteNormal.texture.id != GetFontDefault().texture.id &&
+                       M.fonteNegrito.texture.id != GetFontDefault().texture.id;
+    if (!M.fontesProprias) {
+        M.fonteNormal = GetFontDefault();
+        M.fonteNegrito = GetFontDefault();
+    }
+
+    if (M.pastaScripts.empty()) {
+        M.erro = "Não encontrei a pasta 'scripts' com o main.lua.\nEla precisa ficar ao lado do executável.";
+    } else {
+        carregarScripts();
+    }
+
+    while (!WindowShouldClose()) {
+        float dt = std::min(GetFrameTime(), 0.1f);
+
+        // recarrega sozinho quando algum .lua muda
+        M.relogioVigia += dt;
+        if (!M.pastaScripts.empty() && M.relogioVigia > 0.5f) {
+            M.relogioVigia = 0;
+            if (lerDatasScripts() != M.datasScripts) carregarScripts();
+        }
+        if (IsKeyPressed(KEY_F5) && !M.pastaScripts.empty()) carregarScripts();
+
+        atualizarCamera();
+
+        if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+            Vector2 p = GetScreenToWorld2D(GetMousePosition(), M.camera);
+            if (p.x >= 0 && p.y >= 0 && p.x <= LARGURA && p.y <= ALTURA) {
+                if (M.erro.empty()) chamar("tocar", {p.x, p.y});
+                else if (!M.pastaScripts.empty()) carregarScripts();
+            }
+        }
+
+        chamar("atualizar", {dt});
+        chamar("teste", {dt});
+
+        BeginDrawing();
+        ClearBackground(Color{18, 12, 8, 255});
+        BeginMode2D(M.camera);
+        BeginScissorMode((int)M.camera.offset.x, (int)M.camera.offset.y, (int)std::ceil(LARGURA * M.camera.zoom),
+                         (int)std::ceil(ALTURA * M.camera.zoom));
+        if (M.erro.empty()) chamar("desenhar");
+        if (!M.erro.empty()) desenharErro();
+        EndScissorMode();
+        EndMode2D();
+        EndDrawing();
+    }
+
+    chamar("ao_sair", {}, true);
+    if (M.L) lua_close(M.L);
+    if (M.fontesProprias) {
+        UnloadFont(M.fonteNormal);
+        UnloadFont(M.fonteNegrito);
+    }
+    CloseWindow();
+    return 0;
+}

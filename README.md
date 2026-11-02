@@ -1,0 +1,37 @@
+# Taverna de Aventureiros
+
+Jogo incremental 2D: você gerencia uma taverna que serve heróis, contrata funcionários e cresce até virar o ponto de encontro mais famoso do reino. Tudo se joga com um toque ou um clique.
+
+## Como jogar a versão de teste (Windows)
+
+1. Abra a página **Releases** deste repositório e baixe `TavernaDeAventureiros-windows.zip` da **Versão de teste**.
+2. Extraia o zip e abra `TavernaDeAventureiros.exe` (as pastas `scripts` e `assets` precisam ficar ao lado dele).
+3. Se o Windows mostrar "O Windows protegeu o computador", clique em **Mais informações** → **Executar assim mesmo** (o jogo ainda não tem assinatura digital).
+
+A cada mudança enviada para o GitHub, uma nova versão de teste é gerada automaticamente.
+
+## Como o projeto é organizado
+
+| Pasta | O que tem |
+| --- | --- |
+| `src/` | Motor em C++ (raylib): janela, desenho, toque/clique, fontes, salvar |
+| `scripts/` | O jogo em Lua: regras, desenho do salão, interface |
+| `scripts/config.lua` | Todos os números do balanceamento (preços, tempos, bônus) |
+| `assets/` | Fontes (Poppins, licença OFL) e, no futuro, imagens e sons |
+
+O motor chama estas funções do `scripts/main.lua`: `iniciar()`, `atualizar(dt)`, `desenhar()`, `tocar(x, y)` e `ao_sair()`. O jogo é desenhado numa tela virtual em pé de 540 × 960, que o motor escala para a janela.
+
+**Editando com o jogo aberto:** ao salvar qualquer arquivo `.lua` dentro da pasta `scripts`, o jogo recarrega na hora, mantendo o progresso. F5 também recarrega. Se houver um erro no script, ele aparece na tela em vez de fechar o jogo.
+
+O progresso fica salvo em `%APPDATA%\TavernaDeAventureiros\progresso.sav`. Apague esse arquivo para recomeçar do zero.
+
+## Compilar no próprio computador (opcional)
+
+Precisa de CMake e de um compilador C++ (Visual Studio no Windows):
+
+```
+cmake -S . -B build
+cmake --build build --config Release
+```
+
+A raylib e a Lua são baixadas automaticamente pelo CMake.
