@@ -19,6 +19,7 @@ A cada mudança enviada para o GitHub, uma nova versão de teste é gerada autom
 | `scripts/` | O jogo em Lua: regras, desenho do salão, interface |
 | `scripts/config.lua` | Todos os números do balanceamento (preços, tempos, bônus) |
 | `assets/` | Fontes (Poppins, licença OFL) e, no futuro, imagens e sons |
+| `docs/GDD.md` | Documento de design do jogo (GDD) |
 
 O motor chama estas funções do `scripts/main.lua`: `iniciar()`, `atualizar(dt)`, `desenhar()`, `tocar(x, y)` e `ao_sair()`. O jogo é desenhado numa tela virtual deitada (16:9) de 960 × 540, que o motor escala para a tela. No computador ele abre em tela cheia; F11 ou Alt+Enter alternam com o modo janela, e Alt+F4 fecha o jogo.
 
