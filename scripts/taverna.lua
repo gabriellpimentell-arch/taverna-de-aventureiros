@@ -12,7 +12,7 @@ local T = {}
 T.LARGURA_SALAO = 600
 T.PORTA = { x = 300, y = 525 }
 T.CASA_GARCONETE = { x = 545, y = 76 }
-T.MOEDA_TOPO = { x = 640, y = 52 }
+T.MOEDA_TOPO = { x = 634, y = 34 }
 T.MAX_MESAS = 6
 
 -- ordem em que as mesas novas aparecem

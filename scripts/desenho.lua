@@ -26,9 +26,9 @@ end
 
 function D.coxa(x, y, e)
   e = e or 1
-  motor.linha(x + 2 * e, y + 2 * e, x + 12 * e, y + 12 * e, 5 * e, "#f3e9d2")
-  motor.circulo(x + 13 * e, y + 10 * e, 3.5 * e, "#f3e9d2")
-  motor.circulo(x + 10 * e, y + 13 * e, 3.5 * e, "#f3e9d2")
+  motor.linha(x + 2 * e, y + 2 * e, x + 12 * e, y + 12 * e, 5 * e, "#cdb78e")
+  motor.circulo(x + 13 * e, y + 10 * e, 3.5 * e, "#cdb78e")
+  motor.circulo(x + 10 * e, y + 13 * e, 3.5 * e, "#cdb78e")
   motor.circulo(x - 3 * e, y - 3 * e, 11 * e, "#b8642e")
   motor.circulo(x - 6 * e, y - 7 * e, 4 * e, "#d68a4f")
 end
@@ -121,15 +121,19 @@ end
 -- Personagens --------------------------------------------------------------------------
 
 local function balao(h)
+  local resta = util.limitar(1 - h.t / config.paciencia, 0, 1)
   local bx = h.x
+  if resta < 0.25 then bx = bx + math.sin(h.t * 30) * 1.5 end
   local by = h.y - 96 + math.sin(h.t * 4 + h.fase) * 2
   motor.retangulo(bx - 27, by - 27, 54, 54, "#00000033", 13)
   motor.retangulo(bx - 26, by - 28, 52, 52, "#fff6e6", 12)
   motor.triangulo(bx - 8, by + 22, bx + 8, by + 22, bx, by + 34, "#fff6e6")
+  if h.t <= config.tempo_rapido then
+    motor.contorno(bx - 26, by - 28, 52, 52, cor.verde, 3, 12)
+  end
   if h.pedido == "bebida" then D.caneca(bx, by - 4, 1) else D.coxa(bx, by - 4, 1) end
 
   -- barra de paciência
-  local resta = util.limitar(1 - h.t / config.paciencia, 0, 1)
   local c = resta > 0.5 and cor.verde or (resta > 0.25 and "#e8b13d" or cor.vermelho)
   motor.retangulo(bx - 18, by + 14, 36, 5, "#00000026", 2)
   motor.retangulo(bx - 18, by + 14, 36 * resta, 5, c, 2)

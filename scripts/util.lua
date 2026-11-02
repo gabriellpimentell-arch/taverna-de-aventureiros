@@ -21,6 +21,7 @@ util.cores = {
   texto_fraco  = "#bfa58a",
   ouro         = "#f2c14e",
   ouro_escuro  = "#b8862b",
+  texto_ouro   = "#3a2410",   -- texto em cima de fundo dourado
   verde        = "#7cc56a",
   vermelho     = "#e2604a",
   sombra       = "#00000055",
