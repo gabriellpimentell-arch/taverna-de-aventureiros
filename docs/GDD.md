@@ -19,6 +19,7 @@ Taverna de Aventureiros é um jogo incremental 2D em que uma taverna pequena cre
 Tudo no jogo se faz com um toque (celular) ou um clique (desktop): não há personagem para mover nem comandos de teclado obrigatórios.
 
 - **Uma ação, um toque**: servir, contratar, comprar habilidade, coletar ouro.
+- **Sistema**: configurações (música, efeitos, tela cheia, sombras, FPS), minimizar, estatísticas, créditos, salvar, apagar progresso com confirmação e sair. Esc abre e fecha o menu.
 - **Mesmo comportamento nas duas plataformas**: o motor traduz toque e clique para a mesma ação genérica, e o Lua nunca sabe qual foi.
 - **Botões grandes**: alvos de toque com pelo menos 48 px, pensando no polegar.
 - **Sem gestos difíceis**: nada de arrastar com precisão, pinça ou toque duplo como única forma de fazer algo. Rolagem de listas é o único arraste.
@@ -125,10 +126,10 @@ O ritmo exato (quanto ouro para cada etapa) fica para o balanceamento, já nos s
 
 **Brigas entre clientes**: combinam com o clima de aventureiros e fazem parte do jogo. Clientes de temperamentos incompatíveis na mesma mesa podem brigar. A briga atrapalha um pouco a taverna, mas o jogador pode separá-la com um toque e ganha uma recompensa por isso, para ser um momento divertido e não uma punição.
 
-**Ideias a avaliar** (vieram da versão anterior, sem decisão nova):
+**Eventos e personalidades**:
 
-- Histórias e fofocas: relatos da volta das missões viram eventos na taverna.
-- Personalidades: temperamentos que combinam geram bônus de consumo na mesma mesa.
+- Histórias e fofocas: a cada 12 missões, um relato aumenta o pagamento das missões por 1 minuto.
+- Personalidades: guerreiro e arqueiro na mesma mesa brigam; mago e clérigo geram bônus de consumo.
 - Tom: humor leve, para cada evento ser divertido de ler em poucos segundos.
 
 ## Final do jogo
@@ -170,12 +171,14 @@ O jogo usa um motor em C++ com raylib e toda a lógica em scripts Lua, compilado
 - [x] Montar o motor base em C++ com raylib e Lua.
 - [x] Configurar o build automático do .exe com atualização automática.
 - [ ] Deixar o repositório público (necessário para as atualizações chegarem).
-- [ ] Definir o estilo visual (pixel art, ilustrado, minimalista).
+- [x] Estilo visual: 3D low poly, com personagens sem rosto e câmera fixa de cima (referências em `docs/estilo-visual.md`).
 - [ ] Decidir o nome final do jogo.
 - [ ] Balancear os primeiros 30 minutos de jogo (custos e ganhos iniciais).
 - [ ] Enviar as imagens de referência da árvore de habilidades.
-- [ ] Refazer a interface: taverna em tela cheia e abas (a HUD do branch `melhoria-hud` ainda usa o painel lateral).
-- [ ] Criar a árvore de habilidades e mover para ela as melhorias atuais.
-- [ ] Adicionar clientes comuns, além dos aventureiros.
-- [ ] Próxima mecânica: prateleira de missões.
+- [x] Refazer a interface: taverna em tela cheia e abas.
+- [x] Criar a árvore de habilidades e mover para ela as melhorias atuais.
+- [x] Adicionar clientes comuns, além dos aventureiros.
+- [x] Implementar as mecânicas deste documento (branch `jogo-3d`, para avaliação).
+- [ ] Testar no Windows e ajustar o balanceamento (o robô de teste é a primeira referência de ritmo).
+- [ ] Trocar a árvore pelas imagens de referência, quando chegarem.
 - [ ] Versão Android (APK) na horizontal.

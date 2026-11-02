@@ -1,10 +1,10 @@
-name: Protótipo 3D
+name: Jogo 3D (versão de avaliação)
 
-# Publica um zip na versão "prototipo-3d". O atualizador do jogo só olha a versão "teste",
+# Publica um zip na versão "jogo-3d-teste". O atualizador do jogo só olha a versão "teste",
 # então isto não atualiza o jogo de ninguém.
 on:
   push:
-    branches: [prototipo-3d]
+    branches: [jogo-3d]
 
 permissions:
   contents: write
@@ -29,11 +29,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          mv dist TavernaPrototipo3D
-          7z a TavernaPrototipo3D.zip TavernaPrototipo3D
-          gh release delete prototipo-3d --yes --cleanup-tag || true
-          gh release create prototipo-3d TavernaPrototipo3D.zip \
+          mv dist TavernaDeAventureiros3D
+          7z a TavernaDeAventureiros3D.zip TavernaDeAventureiros3D
+          gh release delete jogo-3d-teste --yes --cleanup-tag || true
+          gh release create jogo-3d-teste TavernaDeAventureiros3D.zip \
             --prerelease --latest=false \
-            --title "Protótipo 3D (só para avaliar)" \
-            --notes "Extraia o zip e abra o .exe de dentro da pasta. Não usa o progresso salvo e não se atualiza." \
+            --title "Jogo 3D (só para avaliar)" \
+            --notes "Extraia o zip e abra o .exe de dentro da pasta. Tem progresso próprio, separado do jogo 2D, e não se atualiza sozinho." \
             --target "$GITHUB_SHA"
