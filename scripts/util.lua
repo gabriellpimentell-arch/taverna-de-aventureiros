@@ -46,7 +46,8 @@ function util.formatar(n)
   n = math.floor(n + 0.5)
   for _, s in ipairs(sufixos) do
     local base = s[1] == 1e4 and 1e3 or s[1]
-    if n >= s[1] then
+    -- 999.999 vira "1 mi", e não "1000 mil"
+    if n >= s[1] * (s[1] > 1e4 and 0.9995 or 1) then
       local v = n / base
       local casas = v < 10 and 2 or (v < 100 and 1 or 0)
       return decimal(v, casas) .. " " .. s[2]
@@ -65,7 +66,9 @@ function util.serializar(t)
     local v = t[k]
     local tipo = type(v)
     local valor
-    if tipo == "number" then valor = string.format("%.17g", v)
+    if tipo == "number" then
+      -- "nan" e "-inf" não voltam como número e podiam invalidar o save inteiro
+      if v == v and v ~= math.huge and v ~= -math.huge then valor = string.format("%.17g", v) end
     elseif tipo == "boolean" then valor = tostring(v)
     elseif tipo == "string" then valor = string.format("%q", v)
     elseif tipo == "table" then valor = util.serializar(v)

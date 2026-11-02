@@ -45,6 +45,7 @@ ok("100 mi", util.formatar(100e6) == "100 mi", util.formatar(100e6))
 ok("120 mil", util.formatar(120000) == "120 mil", util.formatar(120000))
 ok("1,5 bi", util.formatar(1.5e9) == "1,5 bi", util.formatar(1.5e9))
 ok("12.340 fica curto", util.formatar(12340) == "12,3 mil", util.formatar(12340))
+ok("999.999 não vira 1000 mil", util.formatar(999999) == "1 mi", util.formatar(999999))
 ok("9.999", util.formatar(9999) == "9.999", util.formatar(9999))
 
 -- Árvore -------------------------------------------------------------------------
@@ -350,6 +351,318 @@ for i = 1, 600 do
     end
   end
   atualizar(0.05); desenhar()
+end
+
+-- Regressões: gente, lugares, saves, tempo fora e toques -------------------------------------------
+local function tudo_comprado()
+  novo()
+  local prog = true
+  while prog do
+    prog = false
+    for _, no in ipairs(A.NOS) do
+      J.estado.ouro = 1e60
+      if not J.no_maximo(no) and J.comprar_no(no.id) then prog = true end
+    end
+  end
+  J.estado.ouro = 1e60
+end
+local function tipo_nome(n)
+  for _, t in ipairs(J.TIPOS) do if t.nome == n then return t end end
+end
+local function sentar(t, l)
+  local p = { x = l.x, z = l.z, y = 0.42, giro = 0, fase = 0, t = 0, tipo = t, pele = "#ffffff", rota = {}, estado = "esperando", sentado = true, lugar = l, pedido = "bebida" }
+  l.dono = p
+  J.pessoas[#J.pessoas + 1] = p
+  return p
+end
+
+-- comprar mesa depois do balcão embaralhava quem estava sentado
+novo()
+libera("balcao")
+do
+  local banco
+  for _, l in ipairs(J.lugares) do if l.balcao then banco = l; break end end
+  local p = sentar(tipo_nome("comum"), banco)
+  local x, z = banco.x, banco.z
+  J.estado.ouro = 1e9
+  J.comprar_no("mesa")
+  ok("sentado continua no próprio lugar ao abrir mesa", p.lugar.x == x and p.lugar.z == z and p.lugar.dono == p)
+  local donos = 0
+  for _, l in ipairs(J.lugares) do if l.dono then donos = donos + 1 end end
+  ok("sem lugar fantasma ao abrir mesa", donos == 1, donos)
+end
+
+-- rodada longa com tudo aberto: ninguém fica preso em lugar, reserva ou briga
+tudo_comprado()
+for _ = 1, 8 do J.contratar(); J.estado.ouro = 1e60 end
+do
+  local presos
+  local function conferir(rotulo)
+    local vivos = {}
+    for _, p in ipairs(J.pessoas) do vivos[p] = true end
+    for _, l in ipairs(J.lugares) do
+      if l.dono then
+        ok("lugar com dono vivo " .. rotulo, vivos[l.dono] and l.dono.lugar == l)
+      end
+    end
+    local alvos = {}
+    for _, g in ipairs(J.garcons) do if g.alvo then alvos[g.alvo] = true end end
+    for _, p in ipairs(J.pessoas) do
+      if p.reservado then ok("reserva tem garçom " .. rotulo, alvos[p]) end
+      if p.estado == "brigando" then ok("briga dura pouco " .. rotulo, p.t <= C.briga_espera + 1, p.t) end
+      if p.estado == "esperando" then ok("espera dura pouco " .. rotulo, p.t <= J.paciencia() + 1, p.t) end
+      if p.lugar then ok("quem tem lugar é dono dele " .. rotulo, p.lugar.dono == p) end
+    end
+  end
+  for i = 1, 3000 do
+    J.atualizar(0.25)
+    if i % 50 == 0 then conferir("na rodada") end
+    if i == 1500 then
+      J.salvar(); iniciar()
+      local tot = 0
+      for _, c in ipairs(J.estado.contratados) do if c.em_missao then tot = tot + 1 end end
+      ok("contratados continuam em missão após carregar", tot > 0, tot)
+    end
+  end
+  -- nenhum contratado fica parado na taverna sem motivo
+  for _, c in ipairs(J.estado.contratados) do ok("contratado segue trabalhando: " .. c.nome, c.em_missao ~= nil or c.party) end
+end
+
+-- saves com partes estragadas não quebram nem prendem ninguém
+for nome, lixo in pairs({
+  missoes_numero = '{ ["versao"] = 2, ["missoes"] = 7 }',
+  contratados_numero = '{ ["versao"] = 2, ["contratados"] = 7, ["parties"] = 3 }',
+  contratado_ruim = '{ ["versao"] = 2, ["contratados"] = { 5, { ["id"] = 1 }, { ["id"] = 2, ["tipo"] = "mago" } } }',
+  textos = '{ ["versao"] = 2, ["tempo"] = "x", ["ouro"] = "y", ["final_resta"] = "z", ["salvo_em"] = "w", ["opcoes"] = 3, ["feitas_rank"] = { "a" } }',
+  no_texto = '{ ["versao"] = 2, ["nos"] = { ["mesa"] = "x", ["garcom"] = -2 } }',
+}) do
+  motor._save = lixo
+  local bom, erro = pcall(function()
+    iniciar()
+    T.aba = "aventureiros"; quadros(3)
+    J.estado.ouro = 5; T.aba = "taverna"; quadros(3)
+  end)
+  ok("save estragado não quebra: " .. nome, bom, erro)
+end
+motor._save = '{ ["versao"] = 2, ["nos"] = { ["prateleira"] = 1, ["recrutador"] = 1 }, ["contratados"] = { { ["id"] = 1, ["tipo"] = "mago", ["party"] = 9 } }, ["parties"] = { { ["id"] = 9, ["membros"] = { 1, 2, 3, 4 } } } }'
+iniciar()
+J.atualizar(0.1)
+ok("party incompleta não prende o membro", J.estado.contratados[1].em_missao == true and #J.estado.parties == 0)
+motor._save = '{ ["versao"] = 2, ["final_resta"] = 1e30, ["missoes"] = { { ["rank"] = 1, ["resta"] = 1e30 }, { ["rank"] = 1, ["resta"] = -5, ["contratado"] = 40 } } }'
+iniciar()
+ok("final e missão não ficam eternos", J.estado.final_resta <= C.sss.duracao and J.estado.missoes[1].resta <= C.ranks[1].duracao and #J.estado.missoes == 1)
+-- número inválido em um campo não pode perder o save inteiro
+novo()
+J.estado.ouro = 777
+J.estado.fama = -1 / 0
+J.salvar()
+iniciar()
+ok("campo infinito não perde o save", J.estado.ouro == 777 and J.estado.fama == 0, J.estado.ouro)
+-- início que falha não pode gravar por cima do progresso
+novo()
+J.estado.ouro = 777
+J.salvar()
+do
+  local guardado, carregar = motor._save, motor.carregar
+  motor.carregar = function() error("falha simulada") end
+  ok("início falha", not pcall(iniciar))
+  motor.carregar = carregar
+  pcall(ao_sair)
+  ok("início que falhou não apaga o save", motor._save == guardado)
+  iniciar()
+end
+
+-- final com tempo fora e depois de carregar
+tudo_comprado()
+for _ = 1, 4 do J.invocar(); J.estado.ouro = 1e60 end
+ok("party final", J.formar_party_final())
+for _, c in ipairs(J.estado.contratados) do
+  if c.invocado then for _ = 1, 60 do J.investir(c, "magia"); J.estado.ouro = 1e60 end end
+end
+ok("final começa", J.iniciar_final())
+J.salvar()
+iniciar()
+ok("final continua após carregar", J.estado.final_resta ~= nil and not J.estado.fim)
+for _, id in ipairs(J.party_final().membros) do ok("membro segue na final", J.contratado_por_id(id).na_final) end
+J.estado.salvo_em = os.time() - 100000
+J.estado.rps = 10
+motor._save = util.serializar(J.estado)
+iniciar()
+ok("tempo fora não termina a final sozinho", J.estado.final_resta == 1 and not J.estado.fim, J.estado.final_resta)
+J.coletar_offline()
+for _ = 1, 30 do J.atualizar(0.1) end
+ok("final termina depois de voltar", J.estado.fim)
+for _, c in ipairs(J.estado.contratados) do ok("ninguém preso na final", not c.na_final) end
+J.salvar()
+iniciar()
+T.iniciar()
+ok("final continua ganho ao carregar", J.estado.fim and not J.offline)
+-- a tela final congela o mundo e não deixa tocar no que está atrás
+do
+  local e = J.estado
+  local ouro, tempo = e.total, e.tempo
+  for _ = 1, 400 do J.atualizar(0.25) end
+  ok("nada corre atrás da tela final", e.total == ouro and e.tempo == tempo)
+  local p = sentar(tipo_nome("comum"), J.lugares[1])
+  T.aba = "taverna"; desenhar()
+  local serv = e.servidos
+  local x, y = require("mundo").posicao_balao(p)
+  T.tocar(x, y); T.soltar(x, y)
+  ok("toque na tela final não serve", e.servidos == serv and p.estado == "esperando")
+  U.limpar()
+  T.tocar(x, y); T.soltar(x, y)
+  ok("nem no quadro em que o final aparece", e.servidos == serv)
+  desenhar()
+  local mundo = require("mundo")
+  mundo.zoom_alvo = 1
+  motor._roda = 5; T.atualizar(0.1)
+  ok("roda não mexe atrás da tela final", mundo.zoom_alvo == 1)
+  ok("jogar de novo", U.apertar("novo_jogo"))
+  ok("recomeça do zero", J.estado.fim == false and J.estado.ouro == 0 and #J.estado.contratados == 0 and #J.garcons == 0 and J.fofoca_conta == 0)
+  desenhar(); atualizar(0.1)
+  ok("recomeço fica salvo vazio", motor._save == "")
+end
+
+-- janela aberta: arrastar não rola nem move o que está atrás
+tudo_comprado()
+for _ = 1, 16 do J.contratar(); J.estado.ouro = 1e60 end
+T.aba = "aventureiros"; desenhar()
+T.modal = "config"; desenhar()
+T.rolagem.aventureiros = 40
+T.tocar(20, 300)
+motor._baixo = true; motor._mouse = { 20, 200 }
+T.atualizar(0.1)
+ok("arrastar não rola atrás da janela", T.rolagem.aventureiros == 40, T.rolagem.aventureiros)
+motor._baixo = false; motor._mouse = { 480, 270 }
+T.soltar(20, 200)
+T.modal = nil
+
+-- botões da lista rolável: tocar de verdade funciona; arrastar rola sem comprar
+T.rolagem.aventureiros = 0
+atualizar(0.05); desenhar()
+ok("lista tem o que rolar", T.limite_rolagem > 0)
+do
+  local c = J.estado.contratados[1]
+  local z
+  for _, q in ipairs(U.zonas) do if q.id == "investir_" .. c.id .. "_arma" then z = q end end
+  ok("botão visível existe", z ~= nil)
+  local x, y = z.x + 5, z.y + 5
+  ok("toque encontra o botão, não uma área por cima", U.achar(x, y) == z, U.achar(x, y) and U.achar(x, y).id)
+  local nv = c.arma
+  T.tocar(x, y); T.soltar(x, y)
+  ok("tocar no botão da lista compra", c.arma == nv + 1, c.arma)
+  desenhar()
+  nv = c.arma
+  T.tocar(x, y)
+  motor._baixo = true; motor._mouse = { x, y - 60 }
+  T.atualizar(0.05)
+  motor._baixo = false
+  T.soltar(x, y - 60)
+  motor._mouse = { 480, 270 }
+  ok("arrastar sobre o botão só rola", c.arma == nv and T.rolagem.aventureiros > 0, c.arma)
+  -- com a lista rolada, cada botão vivo está inteiro na lista e não tapa os de cima
+  for _, ro in ipairs({ 13, 37, 70, 90, 155 }) do
+    T.rolagem.aventureiros = ro
+    desenhar()
+    for _, q in ipairs(U.zonas) do
+      if q.id:find("^investir_") then ok("botão cortado não fica tocável", q.y >= 148 and q.y + q.h <= 470, q.y) end
+    end
+    local q = U.achar(100, 130)
+    ok("Contratar não é tapado pela lista", q and q.id == "contratar", q and q.id)
+  end
+  T.rolagem.aventureiros = 0
+end
+
+-- árvore: nó cortado pela borda não recebe toque atrás do ouro nem das abas
+novo()
+T.aba = "arvore"; desenhar()
+do
+  T.arv.manual = true
+  T.arv.y = -268 - A.POR_ID.mesa.y * T.arv.zoom + 20  -- nó "mesa" acima da área
+  T.arv.x = -A.POR_ID.mesa.x * T.arv.zoom - 480 + 130
+  desenhar()
+  local q = U.achar(130, 20)
+  ok("nó fora da área não é tocável", not (q and q.id == "no_mesa"), q and q.id)
+end
+T.aba = "taverna"
+
+-- party final funciona mesmo com invocado em outra party
+tudo_comprado()
+for _ = 1, 4 do J.contratar(); J.estado.ouro = 1e60 end
+for _ = 1, 3 do J.invocar(); J.estado.ouro = 1e60 end
+ok("party mista", J.criar_party(J.melhores_sem_party()))
+for _ = 1, 8 do J.contratar(); J.estado.ouro = 1e60 end
+J.invocar(); J.estado.ouro = 1e60
+T.aba = "invocacao"; desenhar()
+ok("botão da party final", U.apertar("party_final"))
+ok("party final reúne os 4 invocados", J.party_final() ~= nil)
+for _, c in ipairs(J.estado.contratados) do
+  if not c.invocado then ok("os outros não ficam presos", not c.party or J.party_final().id ~= c.party) end
+end
+T.aba = "taverna"
+
+-- contratado mantém a mesma aparência (o círculo pisca se sortear a cada quadro)
+do
+  local t = J.TIPOS_POR_NOME("guerreiro")
+  local igual = true
+  for _ = 1, 50 do igual = igual and J.TIPOS_POR_NOME("guerreiro") == t end
+  ok("mesmo visual a cada quadro", igual)
+end
+
+-- mercadinho nunca fica fora da ala, nem em save antigo
+novo()
+libera("prateleira", "mercadinho")
+do
+  local mundo = require("mundo")
+  ok("mercadinho abre a ala", mundo.alvos().leste == 1)
+  motor._save = '{ ["versao"] = 2, ["nos"] = { ["merc_e"] = 1 } }'
+  iniciar()
+  ok("save sem a ala ainda mostra a barraca", J.mercadinho_aberto() and mundo.alvos().leste == 1)
+end
+
+-- tempo fora: missões não ficam negativas, ganho não vira renda e sair sem coletar não perde
+novo()
+libera("garcom", "prateleira")
+J.estado.missoes = { { rank = 1, resta = 5 } }
+J.estado.rps = 10
+J.estado.salvo_em = os.time() - 5000
+motor._save = util.serializar(J.estado)
+iniciar()
+ok("oferta com missão", J.offline ~= nil)
+ok("missão fora não fica negativa", J.estado.missoes[1].resta == 0, J.estado.missoes[1].resta)
+do
+  local ganho = J.offline.ganho
+  local ouro = J.estado.ouro
+  ao_sair()
+  ok("sair sem coletar não perde o ouro", J.estado.ouro == ouro + ganho and not J.offline)
+  iniciar()
+  ok("ganho continua após recarregar", J.estado.ouro == ouro + ganho and not J.offline)
+  ok("missão fora paga só uma vez", J.estado.missoes[1] ~= nil)
+  local feitas, antes = J.estado.feitas, J.estado.total
+  J.atualizar(0.1)
+  ok("missão conclui uma vez", J.estado.feitas == feitas + 1, J.estado.feitas)
+end
+novo()
+libera("garcom")
+J.estado.rps = 10
+J.estado.salvo_em = os.time() - 100000
+motor._save = util.serializar(J.estado)
+iniciar()
+J.coletar_offline()
+for _ = 1, 15 do J.atualizar(0.1) end
+ok("coletar não infla o ouro por segundo", J.estado.rps < 50, J.estado.rps)
+
+-- recarga: salva, recomeça do save e continua
+novo()
+libera("garcom", "prateleira", "balcao")
+for _ = 1, 400 do J.atualizar(0.1) end
+do
+  local nm, total = #J.estado.missoes, J.estado.total
+  ao_sair()
+  iniciar()
+  ok("recarga mantém ouro e missões", J.estado.total == total and #J.estado.missoes == nm and not J.offline)
+  ok("recarga refaz equipe e lugares", #J.garcons == 1 and #J.lugares == 8, #J.lugares)
+  quadros(20)
 end
 
 -- Números enormes

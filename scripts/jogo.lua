@@ -16,7 +16,7 @@ J.QUADRO = { x = -2.6, z = -3.7 }
 J.BARRACA = { x = 9.3, z = -1.0 }
 
 local POS_MESAS = {
-  { x = -3.6, z = -0.7 }, { x = 0.3, z = -0.7 }, { x = 4.2, z = -0.7 },
+  { x = -3.6, z = -0.3 }, { x = 0.3, z = -0.3 }, { x = 4.2, z = -0.3 },
   { x = -3.6, z = 2.9 }, { x = 0.3, z = 2.9 }, { x = 4.2, z = 2.9 },
   { x = 8.0, z = 2.9 }, { x = 10.7, z = 2.9 },
 }
@@ -167,11 +167,16 @@ function J.reconstruir_lugares()
       l[#l + 1] = { x = x, z = -1.42, giro = math.pi, y = 0.42, balcao = true }
     end
   end
-  -- quem está sentado continua no mesmo lugar
-  for i, v in ipairs(velhos) do
-    if l[i] and v.dono then
-      l[i].dono = v.dono
-      v.dono.lugar = l[i]
+  -- quem está sentado continua no mesmo lugar: a ordem da lista muda, a posição não
+  for _, v in ipairs(velhos) do
+    if v.dono then
+      for _, n in ipairs(l) do
+        if n.x == v.x and n.z == v.z then
+          n.dono = v.dono
+          v.dono.lugar = n
+          break
+        end
+      end
     end
   end
   J.lugares = l
@@ -226,7 +231,12 @@ local function rota_ate(p, x, z)
 end
 
 local function rota_saida(p)
+  local balcao = p.z < -1.2
   p.rota = { { x = p.x, z = J.RUA_Z }, { x = J.PORTA.x + 1.2, z = J.RUA_Z }, { x = J.PORTA.x, z = J.PORTA.z } }
+  if balcao then
+    table.insert(p.rota, 1, { x = 2.25, z = -1.1 })
+    p.rota[2] = { x = 2.25, z = J.RUA_Z }
+  end
   p.andando = true
   p.estado = "saindo"
 end
@@ -234,7 +244,13 @@ end
 local function sentar_cliente(p, lugar)
   p.lugar = lugar
   lugar.dono = p
-  rota_ate(p, lugar.x, lugar.z)
+  if lugar.balcao then
+    -- passa pelo vão entre as mesas para não atravessar nenhuma
+    p.rota = { { x = p.x, z = J.RUA_Z }, { x = 2.25, z = J.RUA_Z }, { x = 2.25, z = -1.1 }, { x = lugar.x, z = -1.1 }, { x = lugar.x, z = lugar.z } }
+    p.andando = true
+  else
+    rota_ate(p, lugar.x, lugar.z)
+  end
   p.estado = "entrando"
 end
 
@@ -637,7 +653,10 @@ end
 
 -- Contratados e heróis ----------------------------------------------------------------------
 
-function J.TIPOS_POR_NOME(nome) return tipo_de(nome) end
+-- sempre o mesmo visual para o mesmo contratado (é chamado a cada quadro no círculo)
+function J.TIPOS_POR_NOME(nome)
+  for _, t in ipairs(J.TIPOS) do if t.nome == nome then return t end end
+end
 
 function J.contratado_por_id(id)
   for _, c in ipairs(J.estado.contratados) do if c.id == id then return c end end
@@ -745,6 +764,21 @@ function J.desfazer_party(num)
     end
   end
   return false
+end
+
+-- junta os 4 invocados, tirando-os de qualquer outra party
+function J.formar_party_final()
+  if J.ef("party") <= 0 then return false end
+  local ids = {}
+  for _, c in ipairs(J.estado.contratados) do
+    if c.invocado then ids[#ids + 1] = c.id end
+  end
+  if #ids ~= 4 then return false end
+  for _, id in ipairs(ids) do
+    local c = J.contratado_por_id(id)
+    if c.party then J.desfazer_party(c.party) end
+  end
+  return J.criar_party(ids)
 end
 
 -- monta uma party com os 4 mais fortes disponíveis (invocados primeiro, se houver 4)
@@ -900,6 +934,7 @@ end
 -- Ciclo ----------------------------------------------------------------------------------------------
 
 function J.iniciar()
+  J.pronto = false
   J.estado = estado_inicial()
   J.pessoas = {}
   J.garcons = {}
@@ -914,16 +949,23 @@ function J.iniciar()
   J.relogio_segundo = 0
   J.ganho_segundo = 0
   J.relogio_salvar = 0
+  J.fofoca_conta = 0
   J.carregar()
   recalcular()
   J.reconstruir_lugares()
   J.ajustar_equipe()
   J.calcular_offline()
+  J.pronto = true
 end
 
 function J.atualizar(dt)
   local e = J.estado
   if J.offline then return end
+  -- depois do final o mundo para: nada de ouro, sons ou tempo correndo atrás da tela final
+  if e.fim then
+    J.aviso, J.efeitos = nil, {}
+    return
+  end
   e.tempo = e.tempo + dt
 
   if not e.fim then
@@ -981,6 +1023,10 @@ end
 -- Salvar e carregar ------------------------------------------------------------------------------------
 
 function J.salvar()
+  -- se o início falhou, o estado está vazio: gravar agora apagaria o progresso de verdade
+  if not J.pronto then return end
+  -- quem sai sem coletar não perde o ganho do tempo fora
+  if J.offline then J.coletar_offline() end
   local e = J.estado
   e.salvo_em = os.time()
   motor.salvar(util.serializar(e))
@@ -989,14 +1035,53 @@ end
 local function copiar_sobre(destino, origem)
   for k, v in pairs(origem) do
     if type(v) == "table" and type(destino[k]) == "table" then copiar_sobre(destino[k], v)
-    else destino[k] = v end
+    elseif destino[k] == nil or type(destino[k]) == type(v) then destino[k] = v end
   end
 end
 
 -- números inválidos em um save danificado não podem travar o jogo
+local limpar_contratados
+
 local function saneado(v, padrao)
   if type(v) ~= "number" or v ~= v or v == math.huge or v == -math.huge then return padrao end
   return v
+end
+
+-- contratado estragado sai do save; party incompleta é desfeita (sem isso, os membros nunca mais saem em missão)
+local TIPOS_CONTRATADO = { guerreiro = true, mago = true, arqueiro = true, clerigo = true }
+
+function limpar_contratados(e)
+  local maior = 0
+  for i = #e.contratados, 1, -1 do
+    local c = e.contratados[i]
+    if type(c) ~= "table" or not saneado(c.id, nil) or not TIPOS_CONTRATADO[c.tipo] then
+      table.remove(e.contratados, i)
+    else
+      maior = math.max(maior, c.id)
+      if type(c.nome) ~= "string" then c.nome = "Aventureiro" end
+      if type(c.titulo) ~= "string" then c.titulo = c.invocado and "Herói" or nil end
+      if type(c.pele) ~= "string" then c.pele = PELES[1] end
+      for _, k in ipairs({ "armadura", "arma", "magia", "fama", "missoes" }) do c[k] = math.max(0, saneado(c[k], 0)) end
+    end
+  end
+  local por_id, em_party = {}, {}
+  for _, c in ipairs(e.contratados) do por_id[c.id] = c; c.party = nil end
+  for i = #e.parties, 1, -1 do
+    local p = e.parties[i]
+    local boa = type(p) == "table" and saneado(p.id, nil) and type(p.membros) == "table" and #p.membros == 4
+    if boa then
+      for _, id in ipairs(p.membros) do
+        if not por_id[id] or em_party[id] then boa = false end
+      end
+    end
+    if boa then
+      maior = math.max(maior, p.id)
+      for _, id in ipairs(p.membros) do em_party[id] = true; por_id[id].party = p.id end
+    else
+      table.remove(e.parties, i)
+    end
+  end
+  e.prox_id = math.max(math.floor(e.prox_id), maior + 1)
 end
 
 function J.carregar()
@@ -1009,19 +1094,33 @@ function J.carregar()
   e.rps = math.max(0, saneado(e.rps, 0))
   e.fama = math.max(0, saneado(e.fama, 0))
   e.estoque = math.max(0, saneado(e.estoque, 0))
+  for k, v in pairs(estado_inicial()) do
+    if type(v) == "number" then e[k] = saneado(e[k], v) end
+  end
+  e.salvo_em = saneado(e.salvo_em, nil)
+  e.final_resta = saneado(e.final_resta, nil)
+  if e.fim then e.final_resta = nil end
+  if e.final_resta then e.final_resta = util.limitar(e.final_resta, 0, C.sss.duracao) end
+  e.invocados_feitos = util.limitar(math.floor(e.invocados_feitos), 0, #C.invocados)
+  for r, n in pairs(e.feitas_rank) do
+    if type(n) ~= "number" then e.feitas_rank[r] = nil end
+  end
   -- ignora nós que não existem mais e níveis acima do máximo
   for id, nv in pairs(e.nos) do
     local no = A.POR_ID[id]
-    if not no or type(nv) ~= "number" then e.nos[id] = nil
-    elseif nv > no.max then e.nos[id] = no.max end
+    nv = saneado(nv, 0)
+    if not no or nv < 1 then e.nos[id] = nil
+    else e.nos[id] = math.min(math.floor(nv), no.max) end
   end
+  limpar_contratados(e)
   -- ninguém fica preso em uma missão que sumiu do save
-  local em = {}
+  local em, ids = {}, {}
+  for _, c in ipairs(e.contratados) do ids[c.id] = true end
   for i = #e.missoes, 1, -1 do
     local m = e.missoes[i]
-    if type(m) ~= "table" or not (C.ranks[m.rank]) then table.remove(e.missoes, i)
+    if type(m) ~= "table" or not (C.ranks[m.rank]) or (m.contratado and not ids[m.contratado]) then table.remove(e.missoes, i)
     else
-      m.resta = saneado(m.resta, 1)
+      m.resta = util.limitar(saneado(m.resta, 1), 0, C.ranks[m.rank].duracao)
       if m.contratado then em[m.contratado] = true end
     end
   end
@@ -1040,14 +1139,17 @@ function J.calcular_offline()
   local s = math.min(fora, C.offline_maximo)
   local ganho = math.floor(e.rps * s * C.offline_eficiencia)
   -- as missões em andamento também avançam
-  for _, m in ipairs(e.missoes) do m.resta = m.resta - s end
+  for _, m in ipairs(e.missoes) do m.resta = math.max(0, m.resta - s) end
   if e.final_resta then e.final_resta = math.max(1, e.final_resta - s) end
   if ganho >= 1 then J.offline = { ganho = ganho, segundos = fora } end
 end
 
 function J.coletar_offline()
   if not J.offline then return end
-  J.ganhar(J.offline.ganho)
+  -- entra de uma vez, mas não conta como renda por segundo: senão o próximo tempo fora rende muito mais
+  local g = J.offline.ganho
+  J.ganhar(g)
+  J.ganho_segundo = J.ganho_segundo - g
   J.offline = nil
 end
 

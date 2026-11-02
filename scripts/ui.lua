@@ -65,7 +65,7 @@ function U.rotulo_preco(texto, valor, x, y, w, h, tam, c)
   motor.texto(num, px + r * 2 + 4, ty, tam, c, "esquerda", true)
 end
 
--- botao(id, x, y, w, h, texto, { ativo, cor, cor_texto, tam, som, preco, icone })
+-- botao(id, x, y, w, h, texto, { ativo, cor, cor_texto, tam, som, preco, icone, solto })
 function U.botao(id, x, y, w, h, texto, o, fn)
   o = o or {}
   local ativo = o.ativo ~= false
@@ -96,7 +96,7 @@ function U.botao(id, x, y, w, h, texto, o, fn)
     else
       motor.som("erro")
     end
-  end)
+  end, o.solto)
 end
 
 function U.painel(x, y, w, h, c, borda)

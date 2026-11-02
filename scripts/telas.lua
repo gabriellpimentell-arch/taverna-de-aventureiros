@@ -307,8 +307,12 @@ local function tela_arvore(entrando)
       else
         motor.texto(nv .. "/" .. no.max, x, y - 9, no.max >= 10 and 13 or 15, nv > 0 and "#21150e" or cor.texto, "centro", true)
       end
-      U.zona("no_" .. no.id, { x = x - raio - 4, y = y - raio - 4, w = raio * 2 + 8, h = raio * 2 + 8 },
-        function() a.sel = no.id; motor.som("clique") end, true)
+      -- só a parte do nó dentro da área da árvore pode ser tocada
+      local z0, z1 = math.max(y - raio - 4, 56), math.min(y + raio + 4, 480)
+      if z1 > z0 then
+        U.zona("no_" .. no.id, { x = x - raio - 4, y = z0, w = raio * 2 + 8, h = z1 - z0 },
+          function() a.sel = no.id; motor.som("clique") end, true)
+      end
     end
   end
 
@@ -584,12 +588,12 @@ local function cartao_contratado(c, x, y, w)
     local px = bx + (i - 1) * 124
     motor.texto(d.nome .. " " .. (c[id] or 0), px + 60, y + 4, 13, cor.texto, "centro")
     local pode = J.estado.ouro >= custo
-    U.botao("investir_" .. c.id .. "_" .. id, px, y + 22, 118, 40, nil, { preco = custo, ativo = pode, cor_texto = pode and cor.texto_ouro or cor.texto, tam = 14, som = "compra" },
+    U.botao("investir_" .. c.id .. "_" .. id, px, y + 22, 118, 40, nil, { preco = custo, ativo = pode, cor_texto = pode and cor.texto_ouro or cor.texto, tam = 14, som = "compra", solto = true },
       function() J.investir(c, id) end)
   end
   if J.pode_promover(c) then
     local cp = J.custo_promover(c)
-    U.botao("promover_" .. c.id, bx - 210, y + 22, 202, 44, "Virar herói", { preco = cp, ativo = J.estado.ouro >= cp, tam = 14, cor = "#7f8fe6", cor_texto = "#10131f", som = "compra" },
+    U.botao("promover_" .. c.id, bx - 210, y + 22, 202, 44, "Virar herói", { preco = cp, ativo = J.estado.ouro >= cp, tam = 14, cor = "#7f8fe6", cor_texto = "#10131f", som = "compra", solto = true },
       function() J.promover(c) end)
   end
 end
@@ -642,16 +646,16 @@ local function tela_aventureiros()
     y = y + 90
   end
   motor.recorte()
-  -- botões cortados pela rolagem não podem ser tocados
-  for _, z in ipairs(U.zonas) do
-    if z.id:find("^investir_") or z.id:find("^promover_") then
-      if z.y + z.h > ly + lh or z.y < ly then z.fn = nil end
+  -- botões cortados pela rolagem não existem para o toque (nem tapam o que está em volta)
+  for i = #U.zonas, 1, -1 do
+    local z = U.zonas[i]
+    if (z.id:find("^investir_") or z.id:find("^promover_")) and (z.y + z.h > ly + lh or z.y < ly) then
+      table.remove(U.zonas, i)
     end
   end
   if maximo > 0 then
     local p = T.rolagem.aventureiros / maximo
     motor.retangulo(lx + lw - 8, ly + p * (lh - 50), 6, 50, cor.texto_fraco, 3)
-    U.zona("area_rolagem", { x = lx, y = ly, w = lw, h = lh })
   end
 end
 
@@ -694,8 +698,7 @@ local function tela_invocacao()
     local pt = J.party_final()
     motor.texto((pt and "Party dos 4 invocados formada" or "Forme uma party com os 4 invocados") .. "  •  Poder exigido de cada um: " .. fmt(C.sss.poder), AREA.x + 16, y + 44, 14, cor.texto)
     if e.invocados_feitos == 4 and not pt and J.ef("party") > 0 then
-      local ids = J.melhores_sem_party()
-      U.botao("party_final", AREA.x + 16, y + 76, 240, 46, "Formar a party final", { cor = "#9c78ff", cor_texto = "#120c20" }, function() J.criar_party(ids) end)
+      U.botao("party_final", AREA.x + 16, y + 76, 240, 46, "Formar a party final", { cor = "#9c78ff", cor_texto = "#120c20" }, function() J.formar_party_final() end)
     end
     if pt then
       local x = AREA.x + 16
@@ -874,12 +877,13 @@ function T.atualizar(dt)
 
   -- roda do mouse e arrastar
   local roda = motor.roda()
-  if roda ~= 0 and not T.modal then
+  local bloqueado = T.modal or J.offline or J.estado.fim
+  if roda ~= 0 and not bloqueado then
     if T.aba == "taverna" then M.rolar(roda)
     elseif T.aba == "arvore" then T.arv.zoom = util.limitar(T.arv.zoom + roda * 0.08, ZOOM_MIN, ZOOM_MAX); T.arv.manual = true; limitar_arvore()
     elseif T.aba == "aventureiros" then T.rolagem.aventureiros = T.rolagem.aventureiros - roda * 40 end
   end
-  if T.toque and motor.mouse_baixo() then
+  if T.toque and motor.mouse_baixo() and not bloqueado then
     local mx, my = motor.mouse()
     local dx, dy = mx - T.toque.ux, my - T.toque.uy
     T.toque.ux, T.toque.uy = mx, my
@@ -935,7 +939,7 @@ function T.tocar(x, y)
     return
   end
   T.toque.arrasta = true
-  if T.aba == "taverna" and not T.modal and not J.offline then M.tocar(x, y) end
+  if T.aba == "taverna" and not T.modal and not J.offline and not J.estado.fim then M.tocar(x, y) end
 end
 
 function T.soltar(x, y)

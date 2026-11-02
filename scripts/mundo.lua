@@ -43,7 +43,7 @@ end
 
 function M.alvos()
   return {
-    leste = J.ef("a_leste") > 0 and 1 or 0,
+    leste = (J.ef("a_leste") > 0 or J.mercadinho_aberto()) and 1 or 0,
     jardim = J.ef("a_jardim") > 0 and 1 or 0,
     cerveja = J.ef("a_cerveja") > 0 and 1 or 0,
     circulo = J.ef("a_circulo") > 0 and 1 or 0,
