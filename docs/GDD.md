@@ -1,105 +1,137 @@
 # GDD — Taverna de Aventureiros
 
-> Cópia do GDD de 1º de novembro de 2026. A versão editável fica em [Claude Docs](https://claude.ai/artifact/NawRpwFGyEyQge2Ltqta79).
+> Atualizado em 2 de novembro de 2026 com a visão completa do jogo. A [versão em Claude Docs](https://claude.ai/artifact/NawRpwFGyEyQge2Ltqta79) ainda é a de 1º de novembro e não tem estas mudanças.
 
 ## Visão geral
 
-Taverna de Aventureiros é um jogo incremental 2D em que o jogador gerencia uma taverna que contrata heróis, intermedeia missões e lucra com tudo que passa por ela.
+Taverna de Aventureiros é um jogo incremental 2D em que uma taverna pequena cresce aos poucos até virar uma guilda de aventureiros, como as de anime, e a história termina com a derrota do Lorde Demônio.
 
 - **Gênero**: incremental/idle com leve gestão.
 - **Plataformas**: Android (APK/AAB) e desktop (Windows), com o mesmo código.
 - **Público**: jogadores casuais de celular e a comunidade de incrementais da Steam.
-- **Fantasia central**: ver uma taverna simples virar o ponto de encontro mais famoso do reino.
+- **Fantasia central**: ver uma taverna simples virar a guilda que salva o mundo.
+- **Ritmo**: o jogo é contínuo, sem runs: a taverna não abre e fecha em sessões, porque os aventureiros precisam sair em missão e voltar depois.
+- **Sem aleatoriedade nas missões**: o aventureiro nunca morre nem falha; ele sempre volta.
+- **Fim**: ao derrotar o Lorde Demônio, o mundo entra em paz e o jogo acaba, sem modo infinito nem recomeço.
 
 ## Controles
 
 Tudo no jogo se faz com um toque (celular) ou um clique (desktop): não há personagem para mover nem comandos de teclado obrigatórios.
 
-- **Uma ação, um toque**: contratar, aceitar missão, comprar upgrade, coletar ouro.
+- **Uma ação, um toque**: servir, contratar, comprar habilidade, coletar ouro.
 - **Mesmo comportamento nas duas plataformas**: o motor traduz toque e clique para a mesma ação genérica, e o Lua nunca sabe qual foi.
 - **Botões grandes**: alvos de toque com pelo menos 48 px, pensando no polegar.
 - **Sem gestos difíceis**: nada de arrastar com precisão, pinça ou toque duplo como única forma de fazer algo. Rolagem de listas é o único arraste.
-- **Tela**: o jogo é sempre na horizontal (16:9), com o salão à esquerda e o painel de ouro e melhorias à direita. No computador abre em tela cheia (F11 ou Alt+Enter alternam com o modo janela); no celular fica travado na horizontal.
+- **Tela**: o jogo é sempre na horizontal (16:9), com a taverna ocupando a tela principal e a evolução em abas separadas. No computador abre em tela cheia (F11 ou Alt+Enter alternam com o modo janela); no celular fica travado na horizontal.
 - **Feedback imediato**: todo toque gera resposta visual e sonora (número de ouro subindo, brilho no botão).
 
 ## Loop principal
 
 ```mermaid
 flowchart LR
-    A[Taverna melhorada] --> B[Atrai heróis mais fortes]
-    B --> C[Aceitam missões caras]
-    C --> D[Voltam da missão]
-    D --> E[Comissão, festa, espólios]
-    E --> F[Mais ouro]
-    F -- compra upgrades --> A
+    A[Taverna serve os clientes] --> B[Mais ouro]
+    B -- compra na árvore --> C[Taverna maior e novas mecânicas]
+    C --> D[Aventureiros de rank mais alto]
+    D --> E[Voltam das missões com pagamento e espólios]
+    E --> B
 ```
 
-A taverna melhor atrai heróis mais fortes, que aceitam missões mais caras e voltam gerando comissão, comemoração e espólios; esse ouro paga os próximos upgrades.
+O ouro da taverna compra habilidades na árvore, que ampliam a taverna e liberam novas mecânicas. Aventureiros melhores fazem missões mais caras e trazem mais ouro.
+
+## Telas
+
+- **Taverna (tela principal)**: mostra só a taverna, sem o painel lateral de melhorias. Ela cresce visualmente e ganha novas áreas com o tempo.
+- **Árvore de habilidades (aba)**: árvore em que comprar um item abre os próximos, como na maioria dos incrementais. É aqui que o jogador compra melhorias e libera as novas mecânicas.
+- **Mercadinho (aba)**: abre com a área de espólios; depois ganha a parte de venda.
+- **Aventureiros (aba)**: contratação, evolução e parties.
+- **Propaganda (aba ou ramo da árvore)**: fama dos heróis e reputação da taverna.
 
 ## Economia
 
-Quem paga as missões são os clientes, não a taverna: ela é a intermediária e ganha ouro de três fontes.
+**Tudo custa ouro.** A reputação não é gasta como dinheiro: ela é um nível da taverna que sobe sozinho e atrai aventureiros de rank mais alto.
 
-| Fonte | Como gera ouro | Quando acontece |
+| Fonte | Como gera ouro | Quando abre |
 | --- | --- | --- |
-| Comissão | Clientes pagam para pendurar pedidos no quadro; a taverna fica com uma porcentagem da recompensa | A cada missão cumprida |
-| Consumo | Heróis comem, bebem e alugam quartos enquanto estão na taverna | Contínuo (renda passiva) |
-| Espólios | Heróis voltam com itens; a taverna compra barato e revende ou usa | Na volta de cada missão |
+| Consumo | Clientes e aventureiros comem e bebem | Desde o início |
+| Missões | Quem contratou a missão paga; a taverna só recebe quando o aventureiro volta com ela concluída, não quando ele a pega | Prateleira de missões |
+| Espólios | A taverna compra os espólios dos aventureiros e eles são revendidos sozinhos, com pouco lucro no início | Mercadinho |
+| Venda | Poções, armaduras e armas vendidas no mercadinho aumentam muito o lucro | Aba de venda |
+| Produção própria | Plantação e bebidas feitas na taverna | Plantação |
 
-**Comemoração**: herói que volta de missão bem-sucedida gasta bem mais que o normal, então cada missão cumprida gera um pico duplo (comissão + festa).
+**Comemoração**: herói que volta de missão gasta mais que o normal na taverna, então cada missão cumprida gera um pico de renda.
 
-**As fontes conversam entre si**:
+**Ideia a avaliar**: espólios raros virarem ingredientes de pratos especiais.
 
-- Espólios raros viram ingredientes de pratos especiais, que aumentam o consumo.
-- Heróis bem alimentados e descansados falham menos, o que protege a comissão.
-- Missões perigosas pagam comissão menor, mas trazem espólios melhores.
+## Missões
 
-**Patrocínio**: a taverna pode pagar o equipamento de um herói em troca de uma fatia maior da recompensa. Se ele falhar, o investimento é perdido.
+- **Ranks**: F, E, D, C, B, A, S e SS. O SSS existe só como a missão final.
+- **Como abrem**: cada rank é comprado na árvore de habilidades.
+- **Como funcionam**: aventureiros pegam a missão na prateleira sozinhos, saem, voltam depois de um tempo e trazem o pagamento.
+- **Sem espólios no início**: a prateleira rende só o pagamento até o mercadinho abrir.
+- **Rank e espólios**: missões de rank mais alto trazem mais espólios.
 
-## Upgrades
+## Mercadinho
 
-Cada categoria de upgrade alimenta uma parte diferente do loop, para o jogador alternar o foco.
+Uma área nova da taverna, construída e melhorada do rank F ao SS.
 
-| Categoria | Exemplos | O que melhora |
-| --- | --- | --- |
-| Espaço | Mesas, quartos, salão maior | Mais heróis ao mesmo tempo |
-| Cardápio e bar | Pratos, bebidas, ingredientes raros | Gasto por visita (consumo) |
-| Quadro de missões | Missões de nível mais alto | Comissões maiores, exige heróis melhores |
-| Reputação | Fama da taverna | Heróis mais fortes e clientes mais ricos |
-| Funcionários | Bardo, cozinheiro, recrutador | Felicidade, consumo e automação |
+1. **Compra de espólios**: ao voltar, os aventureiros vendem seus itens no mercadinho. A revenda é automática e dá pouco lucro, para a área já render desde a abertura.
+2. **Aba de venda**: mais tarde, o jogador passa a vender poções, armaduras e armas, com lucro bem maior.
 
-Os funcionários são a principal fonte de automação: o recrutador, por exemplo, traz heróis sem o jogador precisar tocar.
+## Árvore de habilidades
+
+Todas as melhorias ficam na árvore: comprar uma habilidade abre as próximas. Os ramos são:
+
+| Ramo | O que melhora |
+| --- | --- |
+| Salão | Mesas, cadeiras e novas áreas da taverna |
+| Clientes | Frequência e quantidade de clientes |
+| Serviço | Garçons e velocidade de atendimento |
+| Bebidas e comida | Rentabilidade, plantação e bebidas próprias |
+| Guilda | Prateleira de missões, ranks e quantidade de aventureiros |
+| Mercadinho | Espólios e vendas |
+| Heróis | Contratação, parties, propaganda e invocação |
+
+As imagens de referência do visual da árvore ainda serão enviadas.
 
 ## Ordem de desbloqueio
 
-O jogo começa com uma única fonte de ouro e libera as outras aos poucos, para cada desbloqueio virar um momento de novidade.
+O jogo começa simples e libera uma coisa de cada vez, para cada desbloqueio virar um momento de novidade.
 
-1. **Consumo**: a taverna vazia, um herói por vez, toque para servir e coletar ouro.
-2. **Espaço**: primeiras mesas e quartos, mais heróis simultâneos.
-3. **Quadro de missões**: heróis passam a sair em missões; entra a comissão e a comemoração na volta.
-4. **Espólios**: missões começam a trazer itens para vender ou usar.
-5. **Funcionários**: automação começa (recrutador, cozinheiro, bardo).
-6. **Patrocínio e reputação**: decisões de risco e heróis de nível alto.
-7. **Prestígio**: liberado quando a primeira taverna atinge o auge.
+1. **Taverna**: poucos clientes, misturando pessoas comuns e aventureiros; mesas, garçons e bebidas.
+2. **Prateleira de missões**: começa no rank F, e os seguintes abrem pela árvore.
+3. **Mercadinho**: compra e revenda automática de espólios.
+4. **Aba de venda**: poções, armaduras e armas.
+5. **Produção própria**: plantação e bebidas da casa.
+6. **Aventureiros contratados**: contratação e investimento em armadura, arma e magia.
+7. **Parties**: grupos de 4 aventureiros vão juntos nas missões.
+8. **Heróis e propaganda**: um contratado evolui até virar herói, o que abre a propaganda.
+9. **Invocação isekai**: heróis de outro mundo, com atributos maiores que os dos contratados.
+10. **Missão final SSS**: uma party de 4 heróis invocados derrota o Lorde Demônio e o jogo acaba.
 
 O ritmo exato (quanto ouro para cada etapa) fica para o balanceamento, já nos scripts em Lua.
 
-## Heróis e eventos
+## Aventureiros e heróis
 
-Os heróis são o que dá personalidade ao jogo e o diferencia de outros incrementais de guilda.
+| Tipo | Como chega | O que faz |
+| --- | --- | --- |
+| Clientes comuns | Sozinhos | Comem, bebem e vão embora |
+| Aventureiros comuns | Sozinhos | Pegam missões, voltam e vão embora |
+| Contratados | O jogador contrata | Evoluem com investimento em armadura, arma e magia, formam parties e podem virar heróis |
+| Invocados | Invocação isekai, no fim do jogo | Têm os maiores atributos e continuam evoluindo; 4 deles são exigidos na missão final |
 
-- **Histórias e fofocas**: heróis voltam com relatos que viram eventos na taverna (um dragão avistado abre missões novas, uma briga entre guildas muda os preços).
-- **Personalidades**: cada cliente tem um temperamento; colocar os errados na mesma mesa causa briga, os certos geram combos de consumo.
-- **Evolução**: heróis ganham nível com missões cumpridas e passam a aceitar missões mais caras.
-- **Tom**: humor leve, para cada evento ser divertido de ler em poucos segundos.
+**Propaganda e reputação**: a propaganda abre quando o primeiro contratado vira herói. Ela dá fama aos heróis, a fama traz reputação para a taverna, e a reputação atrai aventureiros de rank mais alto, que geram mais lucro.
 
-## Prestígio
+**Ideias a avaliar** (vieram da versão anterior, sem decisão nova):
 
-O prestígio é vender a taverna e abrir outra em uma nova cidade, recomeçando a economia mas mantendo a reputação.
+- Histórias e fofocas: relatos da volta das missões viram eventos na taverna.
+- Personalidades: temperamentos que combinam geram bônus de consumo na mesma mesa.
+- Tom: humor leve, para cada evento ser divertido de ler em poucos segundos.
 
-- A reputação acumulada vira um bônus permanente (heróis melhores e clientes mais ricos desde o início).
-- Cada cidade nova pode trazer um tipo diferente de missão ou cliente, renovando o interesse.
-- Ideia a avaliar: alguns heróis favoritos podem seguir o jogador para a nova taverna.
+## Final do jogo
+
+A última missão é a SSS: derrotar o Lorde Demônio. Para isso, o jogador invoca quatro heróis e forma uma party com eles. Quando eles vencem, o mundo entra em paz e o jogo acaba.
+
+O prestígio da versão anterior (vender a taverna e recomeçar em outra cidade) saiu do jogo com esta decisão.
 
 ## Monetização
 
@@ -137,6 +169,9 @@ O jogo usa um motor em C++ com raylib e toda a lógica em scripts Lua, compilado
 - [ ] Definir o estilo visual (pixel art, ilustrado, minimalista).
 - [ ] Decidir o nome final do jogo.
 - [ ] Balancear os primeiros 30 minutos de jogo (custos e ganhos iniciais).
-- [ ] Decidir se heróis seguem o jogador no prestígio.
-- [ ] Próxima etapa: quadro de missões.
+- [ ] Enviar as imagens de referência da árvore de habilidades.
+- [ ] Refazer a interface: taverna em tela cheia e abas (a HUD do branch `melhoria-hud` ainda usa o painel lateral).
+- [ ] Criar a árvore de habilidades e mover para ela as melhorias atuais.
+- [ ] Adicionar clientes comuns, além dos aventureiros.
+- [ ] Próxima mecânica: prateleira de missões.
 - [ ] Versão Android (APK) na horizontal.
