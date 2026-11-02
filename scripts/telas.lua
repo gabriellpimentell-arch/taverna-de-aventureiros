@@ -77,6 +77,21 @@ end
 
 -- HUD --------------------------------------------------------------------------------
 
+-- Faixa central do topo, entre o ouro e os botões. Texto longo usa duas linhas.
+local function pilula(txt, y, fundo, frente, raio)
+  local tw = motor.largura_texto(txt, 14, true)
+  local maximo = 492
+  local cx = 502
+  if tw + 28 <= maximo then
+    local w = math.max(200, tw + 28)
+    motor.retangulo(cx - w / 2, y + 2, w, 40, fundo, raio or 10)
+    motor.texto(txt, cx, y + 13, 14, frente, "centro", true)
+  else
+    motor.retangulo(cx - maximo / 2, y, maximo, 44, fundo, raio or 10)
+    U.paragrafo(txt, cx - maximo / 2 + 12, y + 3, maximo - 24, 14, frente, true, "centro")
+  end
+end
+
 local function hud()
   local e = J.estado
   motor.retangulo(12, 10, 236, 44, "#21150ee8", 12)
@@ -86,12 +101,10 @@ local function hud()
   local rps = e.rps < 10 and (string.format("%.1f", e.rps):gsub("%.", ",")) or fmt(e.rps)
   motor.texto("+" .. rps .. " por segundo", 54, 35, 13, cor.verde, "esquerda", true)
 
-  -- objetivo atual
-  local obj = J.objetivo()
-  local largura = util.limitar(motor.largura_texto(obj, 14, true) + 28, 200, 440)
-  local ox = 480 - largura / 2 + 20
-  motor.retangulo(ox, 12, largura, 32, "#21150ee8", 10)
-  motor.texto(obj, ox + largura / 2, 18, motor.largura_texto(obj, 14, true) > largura - 16 and 12 or 14, cor.texto, "centro", true)
+  -- objetivo atual (o aviso aparece neste mesmo lugar, sem cobrir o conteúdo)
+  if not J.aviso then
+    pilula(J.objetivo(), 10, "#21150ee8", cor.texto)
+  end
 
   -- botões de sistema
   U.botao("minimizar", 852, 10, 44, 44, nil, { cor = "#21150ee8" }, function() motor.minimizar() end)
@@ -102,16 +115,13 @@ local function hud()
   local nv = J.nivel_reputacao()
   if nv > 0 or J.ef("propaganda") > 0 then
     motor.retangulo(760, 12, 84, 40, "#21150ee8", 10)
-    motor.texto("Reputação", 802, 13, 12, cor.texto_fraco, "centro")
+    motor.texto("Reputação", 802, 13, 13, cor.texto_fraco, "centro")
     motor.texto("Nível " .. nv, 802, 28, 14, cor.ouro, "centro", true)
   end
 
   if e.opcoes.fps then
     motor.texto(motor.fps() .. " FPS", 948, 60, 13, cor.texto, "direita", true)
   end
-  motor.opacidade(0.6)
-  motor.texto("versão " .. (motor.versao or "dev"), 10, 524, 11, cor.texto_fraco)
-  motor.opacidade(1)
 end
 
 local function aviso()
@@ -120,12 +130,7 @@ local function aviso()
   local entrada = util.limitar(a.vida / 0.3, 0, 1)
   local saida = util.limitar((a.duracao - a.vida) / 0.4, 0, 1)
   motor.opacidade(math.min(entrada, saida))
-  local tam = 16
-  local w = math.min(880, motor.largura_texto(a.texto, tam, true) + 40)
-  local y = 60 - (1 - util.suave(entrada)) * 20
-  motor.retangulo(480 - w / 2, y + 3, w, 38, cor.sombra, 19)
-  motor.retangulo(480 - w / 2, y, w, 38, cor.ouro, 19)
-  motor.texto(a.texto, 480, y + 9, tam, cor.texto_ouro, "centro", true)
+  pilula(a.texto, 10 - (1 - util.suave(entrada)) * 12, cor.ouro, cor.texto_ouro)
   motor.opacidade(1)
 end
 
@@ -152,13 +157,96 @@ end
 
 -- Árvore -----------------------------------------------------------------------------
 
+local ZOOM_MIN, ZOOM_MAX = 0.6, 1.3
+local ORDEM_RAMOS = { "salao", "clientes", "servico", "bebidas", "guilda", "mercado", "herois" }
+
 local function no_tela(no)
   local a = T.arv
   return 480 + a.x + no.x * a.zoom, 268 + a.y + no.y * a.zoom
 end
 
-local function tela_arvore()
+-- O jogador vê o que já tem, o que pode comprar e o passo seguinte (bloqueado).
+local function no_visivel(no)
+  if J.nivel(no.id) > 0 or J.no_liberado(no) then return true end
+  local pai = no.pre[1] and A.POR_ID[no.pre[1]]
+  return pai ~= nil and J.no_liberado(pai)
+end
+
+local function limites_visiveis()
+  local x0, y0, x1, y1, n = 0, 0, 0, 0, 0
+  for _, no in ipairs(A.NOS) do
+    if no_visivel(no) then
+      n = n + 1
+      x0, x1 = math.min(x0, no.x), math.max(x1, no.x)
+      y0, y1 = math.min(y0, no.y), math.max(y1, no.y)
+    end
+  end
+  return x0, y0, x1, y1, n
+end
+
+-- Enquadra tudo o que está visível, descontando a folga para nós e nomes.
+local function enquadrar_arvore()
   local a = T.arv
+  local x0, y0, x1, y1, n = limites_visiveis()
+  local zx = (960 - 2 * 78) / math.max(1, x1 - x0)
+  local zy = (416 - 44 - 62) / math.max(1, y1 - y0)
+  a.zoom = util.limitar(math.min(zx, zy), ZOOM_MIN, 1.05)
+  a.x = -a.zoom * (x0 + x1) / 2
+  a.y = 266 + 9 - 268 - a.zoom * (y0 + y1) / 2
+  a.manual = false
+  a.n_visiveis = n
+end
+
+-- Deixa arrastar só até o limite do que existe, em qualquer zoom.
+local function limitar_arvore()
+  local a = T.arv
+  local x0, y0, x1, y1 = limites_visiveis()
+  a.x = util.limitar(a.x, -x1 * a.zoom - 300, -x0 * a.zoom + 300)
+  a.y = util.limitar(a.y, -y1 * a.zoom - 120, -y0 * a.zoom + 120)
+end
+
+-- Rótulos: cada um procura um lugar livre; se não houver, não é desenhado.
+local function bate(r, lista)
+  if r.x < 4 or r.x + r.w > 956 or r.y < 60 or r.y + r.h > 476 then return true end
+  for _, o in ipairs(lista) do
+    if r.x < o.x + o.w and r.x + r.w > o.x and r.y < o.y + o.h and r.y + r.h > o.y then return true end
+  end
+  return false
+end
+
+local function colocar(cands, ocupado)
+  for _, r in ipairs(cands) do
+    if not bate(r, ocupado) then
+      ocupado[#ocupado + 1] = r
+      return r
+    end
+  end
+  return nil
+end
+
+local function candidatos_no(x, y, raio, w, h)
+  local f = raio + 5
+  return {
+    { x = x - w / 2, y = y + f, w = w, h = h },
+    { x = x - w / 2, y = y - f - h, w = w, h = h },
+    { x = x + f, y = y - h / 2, w = w, h = h },
+    { x = x - f - w, y = y - h / 2, w = w, h = h },
+  }
+end
+
+local function desenhar_rotulo_no(r, no, lib, custo, pode)
+  motor.retangulo(r.x, r.y, r.w, r.h, "#1a110bd8", 4)
+  local cx = r.x + r.w / 2
+  motor.texto(lib and no.nome or "???", cx, r.y + 1, 13, lib and cor.texto or cor.texto_fraco, "centro", true)
+  if custo then
+    U.rotulo_preco(nil, custo, r.x, r.y + 17, r.w, 17, 13, pode and cor.ouro or cor.texto_fraco)
+  end
+end
+
+local function tela_arvore(entrando)
+  local a = T.arv
+  local _, _, _, _, nvis = limites_visiveis()
+  if entrando or (not a.manual and nvis ~= a.n_visiveis) then enquadrar_arvore() end
   motor.retangulo(0, 56, 960, 424, "#1a110bf4")
   motor.recorte(0, 56, 960, 424)
   local zoom = a.zoom
@@ -166,108 +254,148 @@ local function tela_arvore()
   -- ligações
   local cx, cy = 480 + a.x, 268 + a.y
   for _, no in ipairs(A.NOS) do
-    local x, y = no_tela(no)
-    local tem = J.nivel(no.id) > 0
-    local c = tem and A.RAMOS[no.ramo].cor or "#5c4a3a"
-    local esp = tem and 4 or 2.5
-    if no.pai then
-      local pai = A.POR_ID[no.pre[1]]
-      motor.linha(x, y, select(1, no_tela(pai)), select(2, no_tela(pai)), esp, c)
-    else
-      motor.linha(x, y, cx, cy, esp, c)
-    end
-    if no.req then
-      local r = A.POR_ID[no.req]
-      motor.linha(x, y, select(1, no_tela(r)), select(2, no_tela(r)), 1.5, "#7c6a5a")
+    if no_visivel(no) then
+      local x, y = no_tela(no)
+      local tem = J.nivel(no.id) > 0
+      local c = tem and A.RAMOS[no.ramo].cor or "#6e5a48"
+      local esp = tem and 4 or 2.5
+      if no.pai then
+        local pai = A.POR_ID[no.pre[1]]
+        motor.linha(x, y, select(1, no_tela(pai)), select(2, no_tela(pai)), esp, c)
+      else
+        motor.linha(x, y, cx, cy, esp, c)
+      end
+      if no.req and no_visivel(A.POR_ID[no.req]) then
+        local r = A.POR_ID[no.req]
+        motor.linha(x, y, select(1, no_tela(r)), select(2, no_tela(r)), 1.5, "#8c7a6a")
+      end
     end
   end
 
   -- centro
-  motor.circulo(cx, cy, 34 * zoom, "#3d291b")
-  motor.anel(cx, cy, 31 * zoom, 34 * zoom, cor.ouro)
+  local rc0 = 34 * zoom
+  motor.circulo(cx, cy, rc0, "#3d291b")
+  motor.anel(cx, cy, rc0 - 3 * zoom, rc0, cor.ouro)
   U.caneca(cx - 1, cy, 1.1 * zoom)
 
-  -- nomes dos ramos
-  for _, r in pairs(A.RAMOS) do
-    local ang = math.rad(r.angulo)
-    motor.texto(r.nome, cx + math.cos(ang) * 96 * zoom, cy - math.sin(ang) * 96 * zoom - 8, 13, r.cor, "centro", true)
+  -- nós
+  local raio = math.max(19, 25 * zoom)
+  local ocupado = { { x = cx - rc0 - 3, y = cy - rc0 - 3, w = rc0 * 2 + 6, h = rc0 * 2 + 6 } }
+  for _, no in ipairs(A.NOS) do
+    if no_visivel(no) then
+      local x, y = no_tela(no)
+      ocupado[#ocupado + 1] = { x = x - raio - 3, y = y - raio - 3, w = raio * 2 + 6, h = raio * 2 + 6 }
+      local nv = J.nivel(no.id)
+      local lib = J.no_liberado(no)
+      local pode = J.pode_comprar_no(no)
+      local rc = A.RAMOS[no.ramo].cor
+      motor.circulo(x, y, raio + 3, "#00000080")
+      motor.circulo(x, y, raio, nv > 0 and rc or (lib and "#4a3627" or "#2a2019"))
+      if pode then
+        local g = 1 + math.sin(motor.tempo() * 5) * 0.08
+        motor.anel(x, y, raio * g, raio * g + 3.5, cor.ouro)
+      elseif lib then
+        motor.anel(x, y, raio - 2, raio, rc)
+      else
+        motor.anel(x, y, raio - 2, raio, "#7c6a5a")
+      end
+      if a.sel == no.id then motor.anel(x, y, raio + 4, raio + 7, "#ffffff") end
+      if not lib then
+        U.cadeado(x, y, "#b09c88")
+      elseif no.max == 1 and nv > 0 then
+        motor.texto("OK", x, y - 9, 15, "#21150e", "centro", true)
+      else
+        motor.texto(nv .. "/" .. no.max, x, y - 9, no.max >= 10 and 13 or 15, nv > 0 and "#21150e" or cor.texto, "centro", true)
+      end
+      U.zona("no_" .. no.id, { x = x - raio - 4, y = y - raio - 4, w = raio * 2 + 8, h = raio * 2 + 8 },
+        function() a.sel = no.id; motor.som("clique") end, true)
+    end
   end
 
-  -- nós
-  local raio = 25 * zoom
-  for _, no in ipairs(A.NOS) do
-    local x, y = no_tela(no)
-    local nv = J.nivel(no.id)
-    local lib = J.no_liberado(no)
-    local pode = J.pode_comprar_no(no)
-    local rc = A.RAMOS[no.ramo].cor
-    motor.circulo(x, y, raio + 3, "#00000080")
-    motor.circulo(x, y, raio, nv > 0 and rc or (lib and "#4a3627" or "#2a2019"))
-    if pode then
-      local g = 1 + math.sin(motor.tempo() * 5) * 0.08
-      motor.anel(x, y, raio * g, raio * g + 3.5, cor.ouro)
-    elseif lib then
-      motor.anel(x, y, raio - 2, raio, rc)
-    else
-      motor.anel(x, y, raio - 2, raio, "#5c4a3a")
+  -- nomes: primeiro o que dá para comprar, depois os ramos, por fim os bloqueados
+  local function nomes(de_liberados)
+    for _, no in ipairs(A.NOS) do
+      if no_visivel(no) and J.no_liberado(no) == de_liberados then
+        local x, y = no_tela(no)
+        local lib = de_liberados
+        local custo = lib and not J.no_maximo(no) and J.custo_no(no) or nil
+        local txt = lib and no.nome or "???"
+        local w = motor.largura_texto(txt, 13, true) + 8
+        if custo then w = math.max(w, motor.largura_texto(fmt(custo), 13, true) + 28) end
+        local r = colocar(candidatos_no(x, y, raio, w, custo and 35 or 18), ocupado)
+        if r then desenhar_rotulo_no(r, no, lib, custo, J.pode_comprar_no(no)) end
+      end
     end
-    if T.arv.sel == no.id then motor.anel(x, y, raio + 4, raio + 7, "#ffffff") end
-    if not lib then
-      U.cadeado(x, y, "#7c6a5a")
-    elseif no.max == 1 then
-      motor.texto(nv > 0 and "OK" or "?", x, y - 9, 16, nv > 0 and "#21150e" or cor.texto, "centro", true)
-    else
-      motor.texto(nv .. "/" .. no.max, x, y - 9, 15, nv > 0 and "#21150e" or cor.texto, "centro", true)
-    end
-    if zoom >= 0.7 then
-      local txt = lib and no.nome or "???"
-      local t2 = 12
-      motor.texto(txt, x + 1, y + raio + 5, t2, "#000000", "centro", true)
-      motor.texto(txt, x, y + raio + 4, t2, lib and cor.texto or cor.texto_fraco, "centro", true)
-    end
-    U.zona("no_" .. no.id, { x = x - raio - 4, y = y - raio - 4, w = raio * 2 + 8, h = raio * 2 + 8 },
-      function() T.arv.sel = no.id; motor.som("clique") end, true)
   end
+  nomes(true)
+  for _, id in ipairs(ORDEM_RAMOS) do
+    local ramo = A.RAMOS[id]
+    local ang = math.rad(ramo.angulo)
+    local dx, dy = math.cos(ang), -math.sin(ang)
+    local w = motor.largura_texto(ramo.nome, 13, true) + 12
+    local cands = {}
+    for _, d in ipairs({ 86, 106, 66, 126, 146, 166, 186 }) do
+      for _, lado in ipairs({ 0, 15, -15, 30, -30, 45, -45, 60, -60 }) do
+        local px = cx + (dx * d - dy * lado) * zoom / 0.85
+        local py = cy + (dy * d + dx * lado) * zoom / 0.85
+        cands[#cands + 1] = { x = px - w / 2, y = py - 9, w = w, h = 18 }
+      end
+    end
+    local visivel = false
+    for _, no in ipairs(A.NOS) do
+      if no.ramo == id and no_visivel(no) then visivel = true; break end
+    end
+    local r = visivel and colocar(cands, ocupado)
+    if r then
+      motor.retangulo(r.x, r.y, r.w, r.h, "#1a110be8", 9)
+      motor.texto(ramo.nome, r.x + r.w / 2, r.y + 1, 13, ramo.cor, "centro", true)
+    end
+  end
+  nomes(false)
   motor.recorte()
 
   -- instruções e ajuda
-  motor.retangulo(14, 64, 250, 28, "#21150ed0", 8)
+  motor.retangulo(14, 64, 250, 28, "#21150ee8", 8)
   motor.texto("Arraste para navegar  •  Roda: zoom", 24, 69, 13, cor.texto_fraco)
   U.botao("arvore_centro", 14, 96, 104, 40, "Centralizar", { cor = "#3d291b", cor_texto = cor.texto, tam = 13 },
-    function() a.x, a.y, a.zoom = 0, 0, 0.85 end)
+    enquadrar_arvore)
 
   -- detalhe do nó escolhido
   local no = a.sel and A.POR_ID[a.sel]
   if no then
-    local px, py, pw, ph = 672, 64, 276, 262
+    local px, py, pw, ph = 672, 64, 276, 280
     U.painel(px, py, pw, ph, "#2c1d13f8", A.RAMOS[no.ramo].cor)
     U.zona("painel_no", { x = px, y = py, w = pw, h = ph })
     local lib = J.no_liberado(no)
+    local custo = J.custo_no(no)
     motor.texto(A.RAMOS[no.ramo].nome, px + 14, py + 10, 13, A.RAMOS[no.ramo].cor, "esquerda", true)
-    local h = U.paragrafo(lib and no.nome or "Habilidade bloqueada", px + 14, py + 30, pw - 28, 18, cor.texto, true)
-    local y = py + 32 + h
+    local h = U.paragrafo(lib and no.nome or "Habilidade bloqueada", px + 14, py + 30, pw - 28 - 30, 18, cor.texto, true)
+    local y = py + 34 + h
+    local bx, by, bw = px + 14, py + ph - 58, pw - 28
     if lib then
       y = y + U.paragrafo(no.desc, px + 14, y, pw - 28, 14, cor.texto_fraco) + 8
-      if no.max > 1 then motor.texto("Nível " .. J.nivel(no.id) .. " de " .. no.max, px + 14, y, 14, cor.ouro) end
+      if no.max > 1 then motor.texto("Nível " .. J.nivel(no.id) .. " de " .. no.max, px + 14, y, 14, cor.ouro, "esquerda", true) end
     else
       local falta = {}
       for _, p in ipairs(no.pre) do
         if J.nivel(p) < 1 then falta[#falta + 1] = A.POR_ID[p].nome end
       end
-      U.paragrafo("Precisa de: " .. table.concat(falta, ", "), px + 14, y, pw - 28, 14, cor.texto_fraco)
+      y = y + U.paragrafo("Para liberar, compre: " .. table.concat(falta, ", "), px + 14, y, pw - 28, 14, cor.texto) + 8
+      motor.texto("Custo depois:", px + 14, y, 14, cor.texto_fraco)
+      U.preco(custo, px + 14 + motor.largura_texto("Custo depois:", 14) + 2, y, 14, cor.ouro)
     end
     if J.no_maximo(no) then
-      U.botao("comprar_no", px + 14, py + ph - 58, pw - 28, 46, "Já comprado", { ativo = false })
+      U.botao("comprar_no", bx, by, bw, 46, no.max > 1 and "Nível máximo" or "Já comprado", { ativo = false, cor_texto = cor.verde })
     elseif lib then
       local pode = J.pode_comprar_no(no)
-      local custo = J.custo_no(no)
-      U.botao("comprar_no", px + 14, py + ph - 58, pw - 28, 46, "Comprar por " .. fmt(custo), { ativo = pode, som = "compra", tam = 16 },
+      U.botao("comprar_no", bx, by, bw, 46, "Comprar", { preco = custo, ativo = pode, cor_texto = pode and cor.texto_ouro or cor.texto, som = "compra", tam = 16 },
         function() J.comprar_no(no.id) end)
       if not pode then
-        U.barra(px + 14, py + ph - 70, pw - 28, 6, J.estado.ouro / custo, cor.ouro_escuro)
+        motor.texto("Faltam " .. fmt(custo - J.estado.ouro) .. " de ouro", bx, by - 32, 13, cor.texto_fraco)
+        U.barra(bx, by - 12, bw, 6, J.estado.ouro / custo, cor.ouro_escuro)
       end
     else
-      U.botao("comprar_no", px + 14, py + ph - 58, pw - 28, 46, "Bloqueado", { ativo = false })
+      U.botao("comprar_no", bx, by, bw, 46, "Bloqueado", { ativo = false, icone = "cadeado" })
     end
     U.botao("fechar_no", px + pw - 44, py + 4, 40, 40, "x", { cor = "#3d291b", cor_texto = cor.texto, tam = 15 }, function() a.sel = nil end)
   end
@@ -284,11 +412,16 @@ end
 local function atalho_no(id, x, y, w)
   local no = A.POR_ID[id]
   if not J.no_liberado(no) then
-    U.botao("nó_" .. id, x, y, w, 40, "Bloqueado", { ativo = false, tam = 13 })
+    U.botao("nó_" .. id, x, y, w, 40, nil, { ativo = false })
+    local tw = motor.largura_texto("Bloqueado", 13, true)
+    U.cadeado(x + w / 2 - tw / 2 - 4, y + 11, cor.texto_fraco)
+    motor.texto("Bloqueado", x + w / 2 + 9, y + 3, 13, cor.texto_fraco, "centro", true)
+    U.rotulo_preco(nil, J.custo_no(no), x, y + 19, w, 20, 13, cor.texto)
   elseif J.no_maximo(no) then
     U.botao("nó_" .. id, x, y, w, 40, "Máximo", { ativo = false, tam = 13 })
   else
-    U.botao("nó_" .. id, x, y, w, 40, fmt(J.custo_no(no)), { ativo = J.pode_comprar_no(no), som = "compra", tam = 14 },
+    local pode = J.pode_comprar_no(no)
+    U.botao("nó_" .. id, x, y, w, 40, nil, { preco = J.custo_no(no), ativo = pode, cor_texto = pode and cor.texto_ouro or cor.texto, som = "compra", tam = 14 },
       function() J.comprar_no(id) end)
   end
 end
@@ -316,7 +449,7 @@ local function tela_missoes()
     motor.texto(r.nome, AREA.x + 28, y + 5, 14, lib and cor.texto_ouro or cor.texto_fraco, "centro", true)
     if lib then
       motor.texto(duracao_texto(J.duracao_rank(i)), AREA.x + 90, y + 6, 14, cor.texto)
-      motor.texto(fmt(J.pagamento_rank(i)), AREA.x + 200, y + 6, 14, cor.ouro, "esquerda", true)
+      U.preco(J.pagamento_rank(i), AREA.x + 192, y + 6, 14, cor.ouro)
       local esp = (J.mercadinho_aberto() and i <= J.ef("mercadinho")) and fmt(J.lucro_espolio(i)) or "-"
       motor.texto(esp, AREA.x + 330, y + 6, 14, cor.texto)
       motor.texto(fmt(e.feitas_rank[i] or 0), AREA.x + 450, y + 6, 14, cor.texto)
@@ -450,12 +583,13 @@ local function cartao_contratado(c, x, y, w)
     local custo = J.custo_investir(c, id)
     local px = bx + (i - 1) * 124
     motor.texto(d.nome .. " " .. (c[id] or 0), px + 60, y + 4, 13, cor.texto, "centro")
-    U.botao("investir_" .. c.id .. "_" .. id, px, y + 22, 118, 40, fmt(custo), { ativo = J.estado.ouro >= custo, tam = 14, som = "compra" },
+    local pode = J.estado.ouro >= custo
+    U.botao("investir_" .. c.id .. "_" .. id, px, y + 22, 118, 40, nil, { preco = custo, ativo = pode, cor_texto = pode and cor.texto_ouro or cor.texto, tam = 14, som = "compra" },
       function() J.investir(c, id) end)
   end
   if J.pode_promover(c) then
     local cp = J.custo_promover(c)
-    U.botao("promover_" .. c.id, bx, y + 64 - 2, 366, 20, "Virar herói: " .. fmt(cp), { ativo = J.estado.ouro >= cp, tam = 12, cor = "#7f8fe6", cor_texto = "#10131f", raio = 6, som = "compra" },
+    U.botao("promover_" .. c.id, bx - 210, y + 22, 202, 44, "Virar herói", { preco = cp, ativo = J.estado.ouro >= cp, tam = 14, cor = "#7f8fe6", cor_texto = "#10131f", som = "compra" },
       function() J.promover(c) end)
   end
 end
@@ -468,7 +602,7 @@ local function tela_aventureiros()
 
   local cheio = n >= cap
   local cc = J.custo_contratar()
-  U.botao("contratar", AREA.x + 8, AREA.y + 32, 200, 44, cheio and "Sem vagas" or ("Contratar: " .. fmt(cc)), { ativo = not cheio and e.ouro >= cc, som = "compra" },
+  U.botao("contratar", AREA.x + 8, AREA.y + 32, 200, 44, cheio and "Sem vagas" or "Contratar", { preco = not cheio and cc or nil, ativo = not cheio and e.ouro >= cc, som = "compra" },
     function() J.contratar() end)
 
   if J.ef("party") > 0 then
@@ -541,7 +675,7 @@ local function tela_invocacao()
     elseif i == e.invocados_feitos + 1 then
       motor.texto("Próximo chamado", x + 111, y + 30, 14, cor.texto_fraco, "centro")
       local custo = J.custo_invocar()
-      U.botao("invocar", x + 16, y + 66, 190, 50, "Invocar: " .. fmt(custo), { ativo = e.ouro >= custo, cor = e.ouro >= custo and "#9c78ff" or nil, cor_texto = "#120c20" },
+      U.botao("invocar", x + 16, y + 66, 190, 50, "Invocar", { preco = custo, ativo = e.ouro >= custo, cor = e.ouro >= custo and "#9c78ff" or nil, cor_texto = "#120c20" },
         function() J.invocar() end)
     else
       U.cadeado(x + 111, y + 72)
@@ -637,6 +771,7 @@ local function janela_config()
   else
     U.botao("apagar", cx, y + 330, 200, 46, "Apagar progresso", { cor = "#5a2a22", cor_texto = "#ffb0a2" }, function() T.confirmar = true end)
   end
+  motor.texto("Versão " .. (motor.versao or "dev"), cx, y + h - 34, 13, cor.texto_fraco)
   U.botao("sair", x + w - 230, y + h - 62, 200, 48, "Salvar e sair", { cor = cor.vermelho, cor_texto = "#ffffff" }, function()
     J.salvar()
     motor.sair()
@@ -741,7 +876,7 @@ function T.atualizar(dt)
   local roda = motor.roda()
   if roda ~= 0 and not T.modal then
     if T.aba == "taverna" then M.rolar(roda)
-    elseif T.aba == "arvore" then T.arv.zoom = util.limitar(T.arv.zoom + roda * 0.08, 0.45, 1.3)
+    elseif T.aba == "arvore" then T.arv.zoom = util.limitar(T.arv.zoom + roda * 0.08, ZOOM_MIN, ZOOM_MAX); T.arv.manual = true; limitar_arvore()
     elseif T.aba == "aventureiros" then T.rolagem.aventureiros = T.rolagem.aventureiros - roda * 40 end
   end
   if T.toque and motor.mouse_baixo() then
@@ -751,8 +886,10 @@ function T.atualizar(dt)
     if math.abs(mx - T.toque.x) + math.abs(my - T.toque.y) > 8 then T.toque.moveu = true end
     if T.aba == "arvore" then
       if T.toque.arrasta then
-        T.arv.x = util.limitar(T.arv.x + dx, -800, 800)
-        T.arv.y = util.limitar(T.arv.y + dy, -620, 620)
+        T.arv.x = T.arv.x + dx
+        T.arv.y = T.arv.y + dy
+        if T.toque.moveu then T.arv.manual = true end
+        limitar_arvore()
       end
     elseif T.aba == "taverna" then M.arrastar(dx, dy)
     elseif T.aba == "aventureiros" then T.rolagem.aventureiros = T.rolagem.aventureiros - dy end
@@ -761,16 +898,18 @@ end
 
 function T.desenhar()
   U.limpar()
+  local aba_atual = T.aba
   M.desenhar_cena()
   if T.aba == "taverna" then
     M.desenhar_baloes()
-  elseif T.aba == "arvore" then tela_arvore()
+  elseif T.aba == "arvore" then tela_arvore(T.aba_anterior ~= "arvore")
   elseif T.aba == "missoes" then tela_missoes()
   elseif T.aba == "mercadinho" then tela_mercadinho()
   elseif T.aba == "producao" then tela_producao()
   elseif T.aba == "aventureiros" then tela_aventureiros()
   elseif T.aba == "invocacao" then tela_invocacao()
   end
+  T.aba_anterior = aba_atual
   hud()
   barra_abas()
   dica()

@@ -42,7 +42,30 @@ function U.sobre(r)
   return util.dentro(mx, my, r) and z == nil
 end
 
--- botao(id, x, y, w, h, texto, { ativo, cor, cor_texto, tam, som, desativado })
+-- "Texto [moeda] 1.234" centralizado numa caixa; deixa claro que o número é ouro.
+function U.rotulo_preco(texto, valor, x, y, w, h, tam, c)
+  local num = util.formatar(valor)
+  local pre = texto or ""
+  local function largura(t)
+    local l = motor.largura_texto(num, t, true) + t * 1.1 + 4
+    if pre ~= "" then l = l + motor.largura_texto(pre, t, true) + 6 end
+    return l
+  end
+  while tam > 13 and largura(tam) > w - 10 do tam = tam - 1 end
+  local px = x + w / 2 - largura(tam) / 2
+  local ty = y + h / 2 - tam * 0.68
+  if pre ~= "" then
+    motor.texto(pre, px, ty, tam, c, "esquerda", true)
+    px = px + motor.largura_texto(pre, tam, true) + 6
+  end
+  local r = tam * 0.55
+  local my = y + h / 2 - 1
+  motor.circulo(px + r, my, r + 1, "#3a2410")
+  U.moeda(px + r, my, r)
+  motor.texto(num, px + r * 2 + 4, ty, tam, c, "esquerda", true)
+end
+
+-- botao(id, x, y, w, h, texto, { ativo, cor, cor_texto, tam, som, preco, icone })
 function U.botao(id, x, y, w, h, texto, o, fn)
   o = o or {}
   local ativo = o.ativo ~= false
@@ -53,9 +76,18 @@ function U.botao(id, x, y, w, h, texto, o, fn)
   motor.retangulo(x, y, w, h, fundo, o.raio or 10)
   if U.sobre(r) and ativo then motor.contorno(x, y, w, h, "#fff3c4", 2, o.raio or 10) end
   local tam = o.tam or 15
-  if texto then
-    while tam > 11 and motor.largura_texto(texto, tam, true) > w - 10 do tam = tam - 1 end
-    motor.texto(texto, x + w / 2, y + h / 2 - tam * 0.68, tam, frente, "centro", true)
+  if o.preco then
+    U.rotulo_preco(texto, o.preco, x, y, w, h, tam, frente)
+  elseif texto then
+    local extra = o.icone == "cadeado" and 22 or 0
+    while tam > 13 and motor.largura_texto(texto, tam, true) + extra > w - 10 do tam = tam - 1 end
+    if extra > 0 then
+      local tw = motor.largura_texto(texto, tam, true)
+      U.cadeado(x + w / 2 - (tw + extra) / 2 + 8, y + h / 2 - 2, frente)
+      motor.texto(texto, x + w / 2 + extra / 2, y + h / 2 - tam * 0.68, tam, frente, "centro", true)
+    else
+      motor.texto(texto, x + w / 2, y + h / 2 - tam * 0.68, tam, frente, "centro", true)
+    end
   end
   U.zona(id, r, function()
     if ativo then

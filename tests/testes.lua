@@ -40,6 +40,13 @@ local function libera(...)
   end
 end
 
+-- Formatação: 100 mi aparecia como "1 mi" e 120 mil como "12 mil"
+ok("100 mi", util.formatar(100e6) == "100 mi", util.formatar(100e6))
+ok("120 mil", util.formatar(120000) == "120 mil", util.formatar(120000))
+ok("1,5 bi", util.formatar(1.5e9) == "1,5 bi", util.formatar(1.5e9))
+ok("12.340 fica curto", util.formatar(12340) == "12,3 mil", util.formatar(12340))
+ok("9.999", util.formatar(9999) == "9.999", util.formatar(9999))
+
 -- Árvore -------------------------------------------------------------------------
 novo()
 local ids = {}

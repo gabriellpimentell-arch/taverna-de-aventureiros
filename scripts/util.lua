@@ -18,7 +18,7 @@ util.cores = {
   carta        = "#3d291b",
   carta_borda  = "#5c3f29",
   texto        = "#f6ead8",
-  texto_fraco  = "#bfa58a",
+  texto_fraco  = "#dcc8ae",
   ouro         = "#f2c14e",
   ouro_escuro  = "#b8862b",
   texto_ouro   = "#3a2410",   -- texto em cima de fundo dourado
@@ -36,7 +36,7 @@ end
 
 local function decimal(n, casas)
   local s = string.format("%." .. casas .. "f", n)
-  s = s:gsub("0+$", ""):gsub("%.$", "")
+  if casas > 0 then s = s:gsub("0+$", ""):gsub("%.$", "") end  -- nunca corta zeros de inteiros: 100 mi
   return (s:gsub("%.", ","))
 end
 
