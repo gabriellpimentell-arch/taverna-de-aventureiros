@@ -22,7 +22,7 @@ Tudo no jogo se faz com um toque (celular) ou um clique (desktop): não há pers
 - **Sistema**: configurações (música, efeitos, tela cheia, sombras, FPS), minimizar, estatísticas, créditos, salvar, apagar progresso com confirmação e sair. Esc abre e fecha o menu.
 - **Tela inicial**: continuar, novo jogo, jogos salvos (3 vagas) e 3 saves de teste: começo, metade e tudo 100%.
 - **Novidades**: quando algo importante pode ser liberado, o jogo pausa e mostra uma tela com os benefícios e o botão para liberar.
-- **Modo de edição**: F2 ou Configurações. Move, gira e sobe cada objeto, um a um, e ajusta o tamanho do salão; as posições valem para as regras e as colisões e continuam após as atualizações.
+- **Modo de edição** (F2 ou Configurações), no estilo do The Sims: tudo numa tela só. Puxe uma parede para mudar o tamanho do cômodo; toque em qualquer item para movê-lo, girá-lo ou subi-lo. O que não vem da árvore (decoração, por exemplo) pode ser adicionado e excluído; o que a árvore dá (mesas, por exemplo) só pode ser movido. O círculo mágico também se move. As posições valem para as regras e as colisões e continuam após as atualizações.
 - **Mesmo comportamento nas duas plataformas**: o motor traduz toque e clique para a mesma ação genérica, e o Lua nunca sabe qual foi.
 - **Botões grandes**: alvos de toque com pelo menos 48 px, pensando no polegar.
 - **Sem gestos difíceis**: nada de arrastar com precisão, pinça ou toque duplo como única forma de fazer algo. Rolagem de listas é o único arraste.
@@ -60,7 +60,7 @@ O ouro da taverna compra habilidades na árvore, que ampliam a taverna e liberam
 | Missões | Quem contratou a missão paga; a taverna só recebe quando o aventureiro volta com ela concluída, não quando ele a pega | Prateleira de missões |
 | Espólios | A taverna compra os espólios dos aventureiros e eles são revendidos sozinhos, com pouco lucro no início | Mercadinho |
 | Venda | Poções, armaduras e armas vendidas no mercadinho aumentam muito o lucro | Aba de venda |
-| Produção própria | O jardim produz os alimentos, o cozinheiro prepara a comida e a taverna faz as próprias bebidas | Plantação |
+| Produção própria | O jardim produz os alimentos, o cozinheiro prepara a comida na cozinha, o pomar aumenta as colheitas, a fazenda rende ouro por segundo e a taverna faz as próprias bebidas | Plantação |
 
 **Comemoração**: herói que volta de missão gasta mais que o normal na taverna, então cada missão cumprida gera um pico de renda.
 
@@ -105,7 +105,7 @@ O jogo começa simples e libera uma coisa de cada vez, para cada desbloqueio vir
 2. **Prateleira de missões**: começa no rank F, e os seguintes abrem pela árvore.
 3. **Mercadinho**: compra e revenda automática de espólios.
 4. **Aba de venda**: poções, armaduras e armas.
-5. **Produção própria**: jardim, cozinheiro e bebidas da casa.
+5. **Produção própria**: jardim, cozinha (só depois dela vem o cozinheiro), bebidas da casa, jardim de frutas e fazenda com vacas.
 6. **Aventureiros contratados**: contratação e investimento em armadura, arma e magia.
 7. **Parties**: grupos de 4 aventureiros vão juntos nas missões.
 8. **Heróis e propaganda**: um contratado evolui até virar herói, o que abre a propaganda.
@@ -135,6 +135,8 @@ O ritmo exato (quanto ouro para cada etapa) fica para o balanceamento, já nos s
 
 - Menestrel: a cada 12 missões, ele entra na taverna, conta uma história em uma faixa na tela e as missões rendem mais por 1 minuto.
 - Fazendeiro: cuida só do jardim e aumenta as colheitas. Cervejeiro: aparece junto com a cervejaria.
+- Cozinheiro: trabalha dentro da cozinha, indo do fogão à mesa de preparo. Vacas: passeiam na fazenda, de 1 a 8 conforme o nível.
+- Salas: as internas (cozinha, cervejaria, invocação) ficam em fila à direita do salão, todas com paredes da mesma altura. As externas (jardim, pomar, fazenda) ficam na frente, cercadas.
 - Personalidades: guerreiro e arqueiro na mesma mesa brigam; mago e clérigo geram bônus de consumo.
 - Tom: humor leve, para cada evento ser divertido de ler em poucos segundos.
 
