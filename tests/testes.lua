@@ -934,8 +934,10 @@ do
   -- soltar longe de tudo não joga o objeto para fora do mundo
   Ed.mover_para("mesa1", 500, -500)
   ok("arraste para fora fica na área", J.POS_MESAS[1].x <= 13.01 and J.POS_MESAS[1].z >= -5, J.POS_MESAS[1].x)
-  Ed.mover_para("jardim", 3, 9)
-  ok("jardim pode continuar lá fora", L.de("jardim").z + L.POR_ID.jardim.z == 9)
+  -- sala só vai para onde cabe: fora da taverna, o jardim vai; em cima dela, não
+  local jx, jz = L.pos_sala("jardim")
+  Ed.mover_para("jardim", L.POR_ID.jardim.x + L.desloc("jardim"), select(2, L.desloc("jardim")) + L.POR_ID.jardim.z + 2)
+  ok("jardim pode continuar lá fora", select(2, L.pos_sala("jardim")) >= jz + 2 - 0.5, select(2, L.pos_sala("jardim")))
   Ed.fechar()
   motor._layout = false
 
@@ -1389,7 +1391,7 @@ do
 
   -- fazendeiro e cervejeiro acompanham as áreas ---------------------------------
   limpa_layout(); tudo(); T.iniciar()
-  L.tamanho.frente = 10
+  L.mudar_tamanho("frente", 10)
   L.de("jardim").g = math.pi
   M.anim.jardim, M.anim.cerveja = 1, 1
   local enxada, avental
@@ -1728,6 +1730,7 @@ do
   -- qualquer item, de qualquer categoria, responde sem trocar de página
   for _, o in ipairs(L.OBJETOS) do
     Ed.sel, Ed.ultimo_toque = nil, nil
+    L.mudar_andar(L.andar_de(o.id))
     local x, y = centro(o.id)
     local achou = false
     for _ = 1, 15 do
@@ -1736,6 +1739,7 @@ do
     end
     ok("dá para selecionar " .. o.id, achou, Ed.sel)
   end
+  L.mudar_andar(0)
   -- o que está mais perto vence; pilar e sala não competem
   Ed.sel, Ed.ultimo_toque = nil, nil
   local px, py = centro("pilar3")
@@ -2235,6 +2239,7 @@ do
   ok("salas encostadas", bx0 == cx1 and ix0 == bx1)
   ok("sala com o fundo e a profundidade do salão", cz0 == za and cz1 == zb)
   J.previa = false
+  motor._layout = false
   novo()
   local x_so = sm("circulo")
   ok("sem as outras compradas não fica buraco", x_so == select(2, L.salao()), x_so)
@@ -2278,7 +2283,7 @@ do
     ok("sala tem mínimo: " .. id, x1 - x0 >= 3 and z1 - z0 >= 3 and z1 - z0 < 4, z1 - z0)
   end
   for _, o in ipairs(L.OBJETOS) do
-    if o.pai ~= "@leste" and o.cat ~= "Áreas" and o.cat ~= "Jardim" and o.cat ~= "Pomar" and o.cat ~= "Fazenda" then
+    if o.pai ~= "@leste" and o.cat ~= "Áreas" and o.cat ~= "Jardim" and o.cat ~= "Pomar" and o.cat ~= "Fazenda" and o.cat ~= "Quartos" and o.cat ~= "Guilda" then
       local dx, dz = L.desloc(o.id)
       local dentro = o.x + dx >= xa2 - 0.51 and o.z + dz >= za2 - 0.51 and o.z + dz <= zb2 + 0.56
       if o.cat == "Cozinha" or o.cat == "Cervejaria" or o.cat == "Círculo" then dentro = true end
@@ -2380,6 +2385,324 @@ end
 novo()
 ok("save antigo não tem mantimentos: serve como antes", J.estado.mantimentos == nil)
 ok("gerente existe", J.gerente ~= nil)
+-- Salas em blocos: posição, encaixe, portas, paredes e andares ------------------------------------
+do
+  local L, Ed, Mu = require("layout"), require("editor"), require("mundo")
+  local function zerar()
+    motor._layout = false
+    J.previa = false
+    novo()
+    J.sem_noticias = true
+  end
+  local function perto(a, b) return math.abs(a - b) < 0.001 end
+  local function abre(...)
+    for _, id in ipairs({ ... }) do libera(id) end
+  end
+
+  -- posição e primeira vaga
+  zerar()
+  abre("ala_leste", "cozinha", "cervejaria", "pomar")
+  local _, xb, za, zb = L.salao()
+  local xa = L.salao()
+  local cx, cz, ca = L.pos_sala("cozinha")
+  ok("primeira vaga: colada na ala leste", perto(cx, xb + 5.5) and perto(cz, za) and ca == 0, cx)
+  ok("segunda vaga: colada na anterior", perto((L.pos_sala("cervejaria")), cx + 5.5))
+  ok("externa na frente da taverna", perto((L.pos_sala("jardim")), xa) and perto(select(2, L.pos_sala("jardim")), 4.8))
+  local tx, tz = L.pos_sala("taverna")
+  ok("taverna tem posição", perto(tx, xa) and perto(tz, za))
+
+  -- encaixe: cada regra com o motivo em português
+  local function recusa(nome, trecho, ...)
+    local bom, motivo = L.encaixe_valido(...)
+    ok("recusa: " .. nome, not bom, motivo)
+    ok("motivo de " .. nome, type(motivo) == "string" and motivo:find(trecho, 1, true) ~= nil, motivo)
+  end
+  recusa("em cima da taverna", "em cima", "pomar", 0, 0, 0)
+  recusa("em cima de outra sala", "em cima", "pomar", cx, cz, 0)
+  recusa("interna solta", "encostar", "cervejaria", 40, 40, 0)
+  recusa("interna com pouca parede comum", "2 m", "cervejaria", xa - 5.5, za - 8.2)
+  recusa("externa no segundo andar", "construído", "jardim", 0, 30, 1)
+  recusa("andar que não existe", "construído", "cervejaria", 40, 0, -1)
+  recusa("externa longe demais", "Longe", "pomar", 100, 100, 0)
+  recusa("sala desconhecida", "desconhecida", "nada", 0, 0, 0)
+  ok("mover recusado não muda nada", not L.mover_sala("pomar", 0, 0) and L.pos_sala("pomar") ~= 0)
+
+  -- passo de 1 m: longe de parede, cai na grade da taverna
+  local bom, _, sx = L.encaixe_valido("pomar", xa - 10.3, 7, 0)
+  ok("passo de 1 m", bom and perto((sx - xa) % 1, 0), sx)
+  local _, _, _, ez = L.encaixe_valido("pomar", xa - 3, zb + 0.3, 0)
+  ok("a menos de meio metro, encosta", ez == zb or ez == 4.8, ez)
+
+  -- quatro lados: interna atrás, à esquerda e na frente; os filhos vão junto e a parede comum existe
+  local function dentro_da_sala(sala, filho)
+    local x0, x1, z0, z1 = L.sala_mundo(sala)
+    local o, dx, dz = L.POR_ID[filho], L.desloc(filho)
+    return o.x + dx >= x0 and o.x + dx <= x1 and o.z + dz >= z0 - 0.3 and o.z + dz <= z1
+  end
+  for _, lado in ipairs({ { "atrás", xa, za - 9.2 }, { "esquerda", xa - 5.5, za }, { "frente", xa + 7, zb } }) do
+    local nx, nz = lado[2], lado[3]
+    -- a cervejaria tem que sair da fileira sem a jardim atrapalhar
+    if lado[1] == "frente" then
+      assert(L.mover_sala("pomar", xa - 9, zb + 1))
+      assert(L.mover_sala("jardim", xa - 18, zb + 1))
+    end
+    local m1, m2 = L.mover_sala("cervejaria", nx, nz)
+    ok("cervejaria vai para " .. lado[1], m1, m2)
+    ok("filhos seguem " .. lado[1], dentro_da_sala("cervejaria", "tina") and dentro_da_sala("cervejaria", "bancada"))
+    local px, pz = L.pos_sala("cervejaria")
+    ok("posição salva " .. lado[1], perto(px, nx) and perto(pz, nz))
+    local tem_porta = false
+    for _, p in ipairs(L.portas(0)) do
+      if (p.dono == "cervejaria" or p.vizinho == "cervejaria") and p.c >= p.a and p.c <= p.b then tem_porta = true end
+    end
+    ok("porta nasce em " .. lado[1], tem_porta)
+    J.aplicar_obra(); desenhar()
+    Mu.atualizar(0.1)
+    local _, x1q, z0q, z1q = L.sala_mundo("cervejaria")
+    local x0q = L.sala_mundo("cervejaria")
+    local q = Mu.calcular_enquadramento(Mu.alvos())
+    local alc = math.max(x1q - x0q, z1q - z0q)
+    ok("enquadramento inclui a sala em " .. lado[1], q.largura >= x1q - x0q and q.fundo >= alc * 0.3, q.largura)
+    assert(L.mover_sala("cervejaria", select(2, L.salao()) + 11, za))
+  end
+
+  -- parede: sala atrás deixa o trecho baixo; sem nada atrás, continua alta
+  zerar()
+  abre("ala_leste", "cervejaria")
+  xa, xb, za, zb = L.salao()
+  ok("nada atrás: fundo alto", #L.trechos_baixos("taverna", "fundo") == 0)
+  assert(L.mover_sala("cervejaria", xa, za - 9.2))
+  ok("sala atrás: fundo baixo", L.parede_baixa("taverna", "fundo", xa + 2), L.parede_baixa("taverna", "fundo", xa + 2))
+  ok("só o trecho dela", not L.parede_baixa("taverna", "fundo", xb))
+  local alturas, velho = {}, rawget(motor, "peca")
+  rawset(motor, "peca", function(_, x, y, z, _, ey, _, _, c)
+    if c == "#4f3522" and x > xa + 0.5 and x < xa + 3 and math.abs(z - (za - 0.2)) < 0.05 then alturas[#alturas + 1] = ey end
+  end)
+  Mu.desenhar_cena()
+  rawset(motor, "peca", velho)
+  ok("desenha parede baixa de verdade", #alturas > 0 and math.max(table.unpack(alturas)) < 2, alturas[1])
+  J.aplicar_obra()
+
+  -- porta da rua: anda só por parede livre, foge quando coberta, e as rotas seguem
+  zerar()
+  abre("mesa", "ala_leste")
+  xa, xb, za, zb = L.salao()
+  local pl, pt = L.pos_porta()
+  ok("porta começa na parede de sempre", pl == "oeste" and perto(pt, 6.1), pt)
+  local ao, am = L.mover_porta("fundo", 3.5)
+  ok("porta recusa quadro de missões", not ao and am and am:find("Quadro", 1, true), am)
+  ao, am = L.mover_porta("oeste", 0.2)
+  ok("porta recusa canto", not ao)
+  L.de("prateleira").oculto = true
+  for _, c in ipairs({ { "fundo", 6.5 }, { "leste", 3 }, { "frente", 4 }, { "oeste", 6 } }) do
+    ao, am = L.mover_porta(c[1], c[2])
+    ok("porta na parede " .. c[1], ao, am)
+    J.aplicar_obra()
+    local nl = L.pos_porta()
+    ok("posição da porta " .. c[1], nl == c[1], nl)
+    ok("todo lugar tem rota com a porta em " .. c[1], J.lugares_sem_rota() == 0, J.lugares_sem_rota())
+    local sx0, sz0 = J.PORTA.x, J.PORTA.z
+    local dentro = sx0 >= xa and sx0 <= xb + 5.5 and sz0 >= za and sz0 <= zb
+    ok("J.PORTA acompanha em " .. c[1], dentro, sx0 .. "," .. sz0)
+  end
+  -- sala cobre a parede: a porta sai sozinha, para outro lugar livre
+  assert(L.mover_porta("oeste", 6))
+  L.de("prateleira").oculto = nil
+  J.aplicar_obra()
+  abre("cervejaria")
+  assert(L.mover_sala("cervejaria", xa - 5.5, za))
+  local fl = L.pos_porta()
+  ok("porta foge da sala que a cobre", fl ~= "oeste" or not L.porta_livre("oeste", 6), fl)
+  ok("lugar novo é livre", (function() local a, b = L.pos_porta(); return (L.porta_livre(a, b)) end)())
+  atualizar(0.1)
+  ok("o jogo percebe a porta nova sem expulsar ninguém", perto(J.PORTA.x, (L.t("porta", -6.4, 1.6))))
+
+  -- taverna: tudo vai junto; sala encostada não fica sem acesso
+  zerar()
+  abre("mesa", "balcao")
+  local mesa_x = J.POS_MESAS[1].x
+  xa, xb, za, zb = L.salao()
+  ok("taverna move sem nada aberto", L.mover_sala("taverna", xa + 3, za + 2))
+  J.aplicar_layout()
+  ok("mesa foi junto", perto(J.POS_MESAS[1].x, mesa_x + 3), J.POS_MESAS[1].x)
+  ok("quadro foi junto", perto(J.QUADRO.x, -2.6 + 3), J.QUADRO.x)
+  ok("porta foi junto", perto(J.PORTA.x, -6.4 + 3), J.PORTA.x)
+  ok("garçom em casa junto", #J.garcons == 0 or perto(J.garcons[1].casa, -0.35 + 3))
+  ok("rotas seguem com a taverna movida", J.lugares_sem_rota() == 0, J.lugares_sem_rota())
+  zerar()
+  abre("ala_leste", "cozinha")
+  xa, xb, za, zb = L.salao()
+  local mt, mm = L.mover_sala("taverna", xa - 30, za)
+  ok("taverna não abandona a sala", not mt and mm:find("sem acesso", 1, true), mm)
+  ok("sala do meio não sai e deixa a outra sem acesso", (function()
+    abre("cervejaria")
+    local a, b = L.mover_sala("cozinha", xa - 5.5, za)
+    return not a and b:find("sem acesso", 1, true)
+  end)())
+
+  -- gente de obra: fazendeiro, cervejeiro, cozinheiro e vacas seguem as salas
+  zerar()
+  abre("ala_leste", "cozinheiro", "fazendeiro", "fazenda", "cervejaria")
+  for _ = 1, 3 do J.estado.ouro = 1e20; J.comprar_no("fazenda") end
+  J.aplicar_obra()
+  xa, xb, za, zb = L.salao()
+  assert(L.mover_sala("fazenda", xb + 11, za - 6))
+  assert(L.mover_sala("pomar", xa - 16, za - 6))
+  assert(L.mover_sala("jardim", xa - 8, za - 6))
+  local mz, mo = L.mover_sala("circulo", xa - 5.5, za)
+  ok("círculo fechado não importa", mz or mo)
+  local fx0, fx1, fz0, fz1 = L.sala_mundo("fazenda")
+  Mu.iniciar()
+  local vacas_dentro, cozinheiro_dentro = true, true
+  for _ = 1, 150 do
+    Mu.atualizar(0.2)
+    for i, v in pairs(Mu.vacas) do
+      local wx, wz = L.t("fazenda", v.x, v.z)
+      if wx < fx0 or wx > fx1 or wz < fz0 or wz > fz1 then vacas_dentro = false end
+    end
+    local c = Mu.cozinheiro
+    if c then
+      local wx, wz = L.t("cozinheiro", c.x, c.z)
+      local ax, bx, az, bz = L.sala_mundo("cozinha")
+      if wx < ax or wx > bx or wz < az or wz > bz then cozinheiro_dentro = false end
+    end
+  end
+  ok("vacas ficam na fazenda movida", vacas_dentro)
+  ok("cozinheiro fica na cozinha", cozinheiro_dentro)
+  ok("desenha com tudo espalhado", pcall(Mu.desenhar_cena))
+
+  -- andares
+  zerar()
+  ok("sem o nó, um andar só", #L.andares() == 1)
+  ok("nó do segundo andar é filho de quartos", A.POR_ID.segundo_andar.pai == "quartos")
+  ok("nó do subsolo é filho do segundo", A.POR_ID.subsolo.pai == "segundo_andar")
+  ok("andar trancado não abre", not L.mudar_andar(1))
+  J.estado.ouro = 0
+  ok("sem botão com um andar", (function() U.limpar(); Mu.desenhar_botoes_andar(); return #U.zonas == 0 end)())
+  abre("subsolo", "ala_leste", "cozinha")
+  ok("nó abre os dois", #L.andares() == 3)
+  ok("botões com mais de um", (function() U.limpar(); Mu.desenhar_botoes_andar(); return #U.zonas == 3 and U.zonas[1].x < 80 end)())
+  ok("salas novas no segundo andar", select(3, L.pos_sala("quartos_sala")) == 1 and select(3, L.pos_sala("sala_guilda")) == 1)
+  ok("hall é a base do andar: quartos encostam nele", perto((L.pos_sala("quartos_sala")), select(2, L.salao())))
+  ok("quartos não descem", not L.encaixe_valido("quartos_sala", 40, 0, 0))
+  local vx, vz = L.vaga_sala("cozinha", -1)
+  local mb, mbm = L.mover_sala("cozinha", vx, vz, -1)
+  ok("cozinha desce para o subsolo", mb, mbm)
+  ok("filho sabe o andar", L.andar_de("fogao") == -1)
+
+  local pecas = 0
+  rawset(motor, "peca", function() pecas = pecas + 1 end)
+  local function conta_cena() pecas = 0; Mu.desenhar_cena(); return pecas end
+  local fim = {}
+  for _, n in ipairs({ 0, 1, -1 }) do
+    L.mudar_andar(n)
+    fim[n] = conta_cena()
+    ok("andar " .. n .. " desenha", fim[n] > 30, fim[n])
+  end
+  ok("cada andar tem o que é dele", fim[0] ~= fim[1] and fim[1] ~= fim[-1])
+  rawset(motor, "peca", velho)
+
+  -- pessoa de um andar só aparece nele
+  L.mudar_andar(0)
+  J.pessoas[#J.pessoas + 1] = { x = 0, y = 0, z = 0, giro = 0, fase = 0, t = 0, rota = {}, estado = "esperando", pedido = "bebida", tipo = J.TIPOS[1], pele = "#fff", andar = 1 }
+  local visivel = 0
+  rawset(motor, "peca", function() visivel = visivel + 1 end)
+  Mu.desenhar_cena()
+  local em_baixo = visivel
+  L.mudar_andar(1); visivel = 0
+  Mu.desenhar_cena()
+  rawset(motor, "peca", velho)
+  ok("cliente lá de cima só aparece lá", em_baixo < fim[0] + 1 and visivel > fim[1], visivel)
+  table.remove(J.pessoas)
+  L.mudar_andar(0)
+
+  -- andar some em outro save: volta ao térreo
+  L.mudar_andar(-1)
+  zerar()
+  ok("sem o andar, volta ao térreo", L.andar_ativo == 0)
+
+  -- salvar e carregar: tudo o que é bloco persiste
+  zerar()
+  abre("ala_leste", "cozinha", "subsolo")
+  xa, xb, za, zb = L.salao()
+  assert(L.mover_sala("jardim", xa - 9, zb + 1))
+  assert(L.mover_sala("cozinha", xa + 2, zb))
+  assert(L.mover_sala("taverna", xa + 1, za))
+  assert(L.mover_porta("frente", 11))
+  xa, xb, za, zb = L.salao()
+  local jx2, jz2 = L.pos_sala("jardim")
+  local px2, pz2 = L.pos_sala("cozinha")
+  L.salvar()
+  L.carregar()
+  ok("carrega posição", perto((L.pos_sala("jardim")), jx2) and perto(select(2, L.pos_sala("jardim")), jz2))
+  ok("carrega taverna", perto((L.salao()), xa))
+  ok("carrega porta", (L.pos_porta()) == "frente" and perto(select(2, L.pos_porta()), 11))
+  ok("texto copia blocos", L.texto():find("_salas", 1, true) ~= nil and L.texto():find("_porta", 1, true) ~= nil)
+  ok("carrega sala interna", perto((L.pos_sala("cozinha")), px2) or perto(select(2, L.pos_sala("cozinha")), pz2))
+  zerar()
+
+  -- layouts antigos: nada se perde
+  motor._layout = util.serializar({ jardim = { x = 2, z = 3, y = 0, g = 0 }, cozinha = { x = 1, z = 0, y = 0, g = 0 }, mesa1 = { x = 1, z = 1, y = 0, g = 0 },
+    porta = { x = 0, z = -1, y = 0, g = 0 }, _tamanho = { frente = 2, fundo = 1 } })
+  J.previa = false
+  novo()
+  abre("cozinha")
+  ok("antigo: mesa onde estava", perto(L.dados.mesa1.x, 1))
+  local aj, ajz = L.pos_sala("jardim")
+  local ax, _, _, az1 = L.salao()
+  ok("antigo: jardim continua deslocado", perto(aj, ax + 2), aj)
+  ok("antigo: jardim fora da taverna", ajz >= az1, ajz)
+  local _, _, kz0, kz1 = L.sala_mundo("cozinha")
+  ok("antigo: cozinha com a mesma profundidade do salão", perto(kz1 - kz0, 9.2 + 3), kz1 - kz0)
+  ok("antigo: conteúdo da cozinha deslocado", L.dados.cozinha.x == 1)
+  ok("antigo: porta no mesmo lugar", perto(select(2, L.desloc("porta")), -1) and (L.pos_porta()) == "oeste")
+  L.salvar()
+  local salvo = util.desserializar(motor._layout)
+  ok("antigo vira novo ao salvar", type(salvo._salas) == "table" and salvo._salas.jardim ~= nil and salvo.jardim == nil)
+
+  -- arquivo estragado não derruba
+  motor._layout = util.serializar({ _salas = { jardim = "x", cozinha = { x = "a", z = {} }, nada = { x = 1, z = 1 }, pomar = { x = 1 / 0, z = 0 / 0, andar = 9 } },
+    _taverna = "lixo", _porta = { lado = "nada", t = "x" } })
+  J.previa = false
+  novo()
+  ok("arquivo estragado: abre", pcall(Mu.desenhar_cena))
+  J.previa = true
+  ok("arquivo estragado: sala aberta tem lugar", type((L.pos_sala("jardim"))) == "number")
+  J.previa = false
+
+  -- editor: arrastar sala é fantasma, recusa volta e desfazer funciona
+  zerar()
+  abre("ala_leste", "cozinha")
+  T.f2(); atualizar(0.1); desenhar()
+  Ed.dica = false
+  local xc, _, zc = L.sala_mundo("cozinha")
+  local x1c, _, z1c = select(2, L.sala_mundo("cozinha")), nil, select(4, L.sala_mundo("cozinha"))
+  local ax0 = L.pos_sala("cozinha")
+  local tx0, ty0 = motor.projetar(xc + 0.8, 0, zc + 1.5)
+  Ed.sel = "cozinha"
+  motor._mouse = { tx0, ty0 }; motor._baixo = true
+  Ed.tocar(tx0, ty0)
+  motor._mouse = { tx0 - 500, ty0 }
+  atualizar(0.05); desenhar()
+  ok("sala não anda até soltar", L.pos_sala("cozinha") == ax0)
+  ok("arrastar sala mostra fantasma", Ed.arrasto and Ed.arrasto.fantasma ~= nil)
+  ok("arrastar para cima da taverna: vermelho", Ed.arrasto and Ed.arrasto.fantasma and Ed.arrasto.fantasma.ok == false)
+  motor._baixo = false
+  Ed.soltar()
+  ok("soltar em vermelho: não muda", L.pos_sala("cozinha") == ax0)
+  ok("soltar em vermelho: sem desfazer", #Ed.desfazer == 0, #Ed.desfazer)
+  local ai, aj2 = L.pos_sala("cozinha")
+  ok("subir sala: nada sem o andar", not L.encaixe_valido("cozinha", ai, aj2, 1))
+  Ed.mover_para("porta", 4, select(4, L.salao()) - 0.2)
+  -- na edição o pomar aparece ali, cobrindo a frente: a porta fica e o motivo aparece
+  ok("porta arrastada para parede coberta avisa", (L.pos_porta()) == "oeste" and Ed.mensagem and Ed.mensagem:find("coberta", 1, true), Ed.mensagem)
+  local dl = L.pos_porta()
+  Ed.voltar()
+  ok("desfazer sem pilha não quebra", true)
+  ok("porta continua", (L.pos_porta()) == dl)
+  Ed.fechar()
+  zerar()
+end
 
 -- Jogo completo: robô chega ao final ---------------------------------------------------------------
 if arg[3] ~= "rapido" then

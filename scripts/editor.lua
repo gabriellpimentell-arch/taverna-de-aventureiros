@@ -22,6 +22,7 @@ do
   for _, lista in ipairs({ internas, externas }) do
     for _, b in ipairs(lista) do SALAS[b.id] = true end
   end
+  SALAS.taverna = true
 end
 
 -- Medidas do toque: no celular (S24 FE deitado) 60 de tela virtual são cerca de 8 mm
@@ -116,6 +117,7 @@ E.contorno = contorno
 
 -- sala ainda fechada não existe na cena, nem o que está dentro dela
 local function fechado(o)
+  if not L.no_andar_ativo(o.id) then return true end
   local sala = SALAS[o.id] and o.id
   local p = o
   while not sala and p and p.pai and p.pai:sub(1, 1) ~= "@" do
@@ -227,7 +229,7 @@ local function guardar()
   for id, d in pairs(L.dados) do dados[id] = { x = d.x, z = d.z, y = d.y, g = d.g, oculto = d.oculto, orig = d.orig } end
   local tamanho = {}
   for k, v in pairs(L.tamanho) do tamanho[k] = v end
-  E.desfazer[#E.desfazer + 1] = { dados = dados, _tamanho = tamanho, _extras = L.lista_extras() }
+  E.desfazer[#E.desfazer + 1] = { dados = dados, _tamanho = tamanho, _extras = L.lista_extras(), blocos = L.estado_blocos() }
   if #E.desfazer > MAX_DESFAZER then table.remove(E.desfazer, 1) end
 end
 
@@ -243,6 +245,7 @@ function E.voltar()
   for _, x in ipairs(u._extras) do L.adicionar(x.tipo, x.x, x.z, x.id) end
   L.dados = u.dados
   L.tamanho = u._tamanho
+  L.definir_blocos(u.blocos)
   if E.sel and (not L.POR_ID[E.sel] or L.oculto(E.sel)) then E.sel = nil end
   mudou()
   J.aplicar_visual()
@@ -290,6 +293,22 @@ end
 -- Mover, excluir, adicionar -----------------------------------------------------------
 
 function E.mover_para(id, x, z)
+  if id == "porta" then
+    -- a porta anda pelas paredes livres: solta longe, vai para a parede mais perto
+    local ok, motivo = L.mover_porta(L.porta_mais_perto(x, z))
+    if not ok then msg(motivo) end
+    J.aplicar_visual()
+    return
+  end
+  if SALAS[id] then
+    -- x e z são o centro do objeto: mover a sala é levar o canto dela pelo mesmo tanto
+    local o, dx, dz = L.POR_ID[id], L.desloc(id)
+    local px, pz = L.pos_sala(id)
+    local ok, motivo = L.mover_sala(id, px + x - (o.x + dx), pz + z - (o.z + dz))
+    if not ok then msg(motivo) end
+    J.aplicar_visual()
+    return
+  end
   if E.grade then
     x = math.floor(x * 4 + 0.5) / 4
     z = math.floor(z * 4 + 0.5) / 4
@@ -403,12 +422,21 @@ local function comecar_arrasto(id, x, y, cands, era_sel, sel_antes)
   local ax, az = L.desloc(id)
   E.arrasto = { id = id, ox = (gx or 0) - (o.x + ax), oz = (gz or 0) - (o.z + az), moveu = false, sx = x, sy = y,
     cands = cands, era_sel = era_sel, sel_antes = sel_antes }
+  if SALAS[id] then
+    local px, pz = L.pos_sala(id)
+    E.arrasto.sala, E.arrasto.ox, E.arrasto.oz = true, (gx or 0) - px, (gz or 0) - pz
+  end
   congelar_camera()
 end
 
 function E.tocar(x, y)
   E.painel, E.confirmar, E.dica = nil, false, false
   local cands = E.candidatos(x, y)
+  -- a taverna inteira só responde depois de escolhida no painel Mais
+  if E.sel == "taverna" then
+    local h = contorno(L.POR_ID.taverna)
+    if h and medir(h, x, y) == 0 then cands[#cands + 1] = "taverna" end
+  end
   local a = alca_em(x, y)
   if a then
     local gx, gz = motor.chao(x, y)
@@ -466,7 +494,19 @@ function E.soltar(cancelado)
   local a = E.arrasto
   if a then
     E.arrasto = nil
-    if a.moveu then mudou()
+    if a.sala and a.moveu then
+      -- sala só muda ao soltar: até lá anda o fantasma, verde ou vermelho
+      local f = a.fantasma
+      local ok, motivo = false, nil
+      if f and not cancelado then ok, motivo = L.mover_sala(a.id, f.x, f.z) end
+      if ok then
+        mudou()
+        J.aplicar_visual()
+      else
+        table.remove(E.desfazer)
+        if motivo then msg(motivo) end
+      end
+    elseif a.moveu then mudou()
     elseif cancelado then E.sel = a.sel_antes   -- virou pinça: o dedo não queria escolher nada
     else escolher(a, a.sx, a.sy) end
   end
@@ -511,7 +551,12 @@ function E.atualizar(dt)
       if math.abs(mx - a.sx) + math.abs(my - a.sy) > saiu_do_toque() then a.saiu = true end
       if gx and a.saiu then
         if not a.moveu then guardar() end
-        E.mover_para(a.id, gx - a.ox, gz - a.oz)
+        if a.sala then
+          local ok, motivo, sx, sz = L.encaixe_valido(a.id, gx - a.ox, gz - a.oz)
+          a.fantasma = { x = sx or gx - a.ox, z = sz or gz - a.oz, ok = ok, motivo = motivo }
+        else
+          E.mover_para(a.id, gx - a.ox, gz - a.oz)
+        end
         a.moveu = true
       end
     else
@@ -587,6 +632,28 @@ local function medida(p)
   return string.format("%s: %+d m", p.nome, v)
 end
 
+-- fantasma da sala arrastada: mostra onde ela cairia e, em vermelho, por que não dá
+local function desenhar_fantasma(a)
+  local f = a.fantasma
+  if not f then return end
+  local x0, x1, z0, z1 = L.sala_mundo(a.id)
+  local w, d = x1 - x0, z1 - z0
+  local c = f.ok and "#5abf7c" or "#e0533f"
+  local p = {}
+  for _, q in ipairs({ { f.x, f.z }, { f.x + w, f.z }, { f.x + w, f.z + d }, { f.x, f.z + d } }) do
+    local sx, sy = motor.projetar(q[1], 0.05, q[2])
+    if not sx then return end
+    p[#p + 1] = { sx, sy }
+  end
+  motor.triangulo(p[1][1], p[1][2], p[2][1], p[2][2], p[3][1], p[3][2], c .. "55")
+  motor.triangulo(p[1][1], p[1][2], p[3][1], p[3][2], p[4][1], p[4][2], c .. "55")
+  for i, q in ipairs(p) do
+    local n = p[i % 4 + 1]
+    motor.linha(q[1], q[2], n[1], n[2], 3, c)
+  end
+  if not f.ok and f.motivo then etiqueta(f.motivo, (p[1][1] + p[3][1]) / 2, math.min(p[1][2], p[2][2]), false) end
+end
+
 local function desenhar_cena_editor()
   local alcas = E.alcas()
   local mx, my = motor.mouse()
@@ -608,6 +675,7 @@ local function desenhar_cena_editor()
     if sob and sob ~= E.sel and not U.achar(mx, my) then destacar(sob, false) end
   end
   if E.sel and L.POR_ID[E.sel] then destacar(E.sel, true) end
+  if E.arrasto and E.arrasto.sala then desenhar_fantasma(E.arrasto) end
 end
 
 -- Painéis -----------------------------------------------------------------------------
@@ -624,7 +692,7 @@ end
 local function painel_mais()
   local a = alvo()
   local x, y, w = 8, topo_tela() + 6, 280
-  local linhas = 4 + (E.sel and 1 or 0)
+  local linhas = 5 + (E.sel and 1 or 0)
   local passo = a + 6
   U.painel(x, y, w, linhas * passo + 12, "#21150ef5")
   U.zona("editor_fundo_mais", { x = x, y = y, w = w, h = linhas * passo + 12 })
@@ -638,6 +706,12 @@ local function painel_mais()
   U.botao("editor_copiar", bx, by, bw, a, "Copiar posições", ESC, function()
     motor.copiar(L.texto())
     msg("Copiado! Cole na conversa para virar oficial.")
+  end)
+  by = by + passo
+  U.botao("editor_taverna", bx, by, bw, a, "Mover a taverna inteira", ESC, function()
+    L.mudar_andar(0)
+    E.sel, E.painel = "taverna", nil
+    msg("Arraste a taverna para o novo lugar.")
   end)
   by = by + passo
   if E.sel then
@@ -723,6 +797,9 @@ local function barra_item(meio_x, meio_w)
   local bw, gap = 88, 6
   local sala = sala_de(E.sel)
   local n = sala and 5 or 4
+  -- sala interna que pode trocar de andar: subir e descer passam a valer para ela inteira
+  local andar_sel
+  if SALAS[E.sel] and E.sel ~= "taverna" then andar_sel = select(3, L.pos_sala(E.sel)) end
   local nome_w = meio_w - n * (bw + gap) - 8
   U.painel(meio_x, y, meio_w, a, "#21150ef0")
   U.zona("editor_fundo_barra", { x = meio_x, y = y, w = meio_w, h = a })
@@ -740,9 +817,26 @@ local function barra_item(meio_x, meio_w)
   x = x + bw + gap
   local d = L.dados[E.sel]
   local yo = d and d.y or 0
-  U.botao("editor_subir", x, y + 2, bw, a - 4, "Subir", estilo(yo < 6), function() acao(function(k) k.y = k.y + 0.1 end) end)
-  x = x + bw + gap
-  U.botao("editor_descer", x, y + 2, bw, a - 4, "Descer", estilo(yo > -1), function() acao(function(k) k.y = k.y - 0.1 end) end)
+  if andar_sel then
+    -- leva a sala para a primeira vaga do outro andar e vai junto com ela
+    local function trocar(novo)
+      local vx, vz = L.vaga_sala(E.sel, novo)
+      local ok, motivo = L.encaixe_valido(E.sel, vx or 0, vz or 0, novo)
+      if not ok then msg(motivo) return end
+      guardar()
+      L.mover_sala(E.sel, vx, vz, novo)
+      L.mudar_andar(novo)
+      mudou()
+      J.aplicar_visual()
+    end
+    U.botao("editor_andar_cima", x, y + 2, bw, a - 4, "Andar +", estilo(L.andar_existe(andar_sel + 1)), function() if L.andar_existe(andar_sel + 1) then trocar(andar_sel + 1) end end)
+    x = x + bw + gap
+    U.botao("editor_andar_baixo", x, y + 2, bw, a - 4, "Andar -", estilo(L.andar_existe(andar_sel - 1)), function() if L.andar_existe(andar_sel - 1) then trocar(andar_sel - 1) end end)
+  else
+    U.botao("editor_subir", x, y + 2, bw, a - 4, "Subir", estilo(yo < 6), function() acao(function(k) k.y = k.y + 0.1 end) end)
+    x = x + bw + gap
+    U.botao("editor_descer", x, y + 2, bw, a - 4, "Descer", estilo(yo > -1), function() acao(function(k) k.y = k.y - 0.1 end) end)
+  end
   x = x + bw + gap
   if L.removivel(E.sel) then
     U.botao("editor_excluir", x, y + 2, bw, a - 4, "Excluir", { cor = "#5a2a22", cor_texto = "#ffb0a2", tam = 14 }, function() E.excluir(E.sel) end)
@@ -785,6 +879,7 @@ function E.desenhar()
   U.botao("editor_desfazer", 8, fundo_tela(), canto, a, "Desfazer (" .. #E.desfazer .. ")", estilo(#E.desfazer > 0), function() E.voltar() end)
   U.botao("editor_adicionar", 952 - canto, fundo_tela(), canto, a, "Adicionar", ESC, function() alternar("adicionar") end)
   if E.sel then barra_item(8 + canto + 8, 960 - 2 * (8 + canto + 8)) end
+  M.desenhar_botoes_andar()
 
   if E.painel == "mais" then painel_mais()
   elseif E.painel == "adicionar" then painel_adicionar()

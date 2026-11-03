@@ -182,7 +182,7 @@ end
 
 -- no modo de edição tudo aparece, para dar para mover até o que ainda não foi comprado
 local PREVIA = { a_cozinha = 1, a_pomar = 1, a_fazenda = 1, frutas = 6, vacas = 8, a_leste = 1, a_jardim = 1, a_cerveja = 1, a_circulo = 1, mesas = 7, balcao = 1, cozinheiro = 1, bardo = 1,
-  prateleira = 1, mercadinho = 8, canteiros = 10, venda = 1, pocoes = 1, armaduras = 1, armas = 1 }
+  prateleira = 1, mercadinho = 8, canteiros = 10, venda = 1, pocoes = 1, armaduras = 1, armas = 1, a_segundo_andar = 1, a_subsolo = 1 }
 
 function J.ef(k)
   if J.previa and PREVIA[k] then return PREVIA[k] end
@@ -404,7 +404,8 @@ function J.ajustar_equipe()
   for i = #J.garcons + 1, n do
     -- ficam ao lado do balcão, longe de quem está sentado
     local c = CASAS_GARCOM[(i - 1) % #CASAS_GARCOM + 1]
-    J.garcons[i] = { x = c[1], z = c[2], casa = c[1], casa_z = c[2], giro = 0, fase = 0, estado = "parada", recarga = 1 + i * 0.5, rota = {} }
+    local ox, oz = L.origem.x, L.origem.z
+    J.garcons[i] = { x = c[1] + ox, z = c[2] + oz, casa = c[1] + ox, casa_z = c[2] + oz, giro = 0, fase = 0, estado = "parada", recarga = 1 + i * 0.5, rota = {} }
   end
   if #J.lugares < J.num_mesas() * 2 + (J.ef("balcao") > 0 and 4 or 0) then J.reconstruir_lugares() end
   J.montar_mapa()
@@ -556,10 +557,39 @@ function J.aplicar_layout()
   J.pessoas = {}
   J.reconstruir_lugares()
   J.montar_mapa()
-  for _, g in ipairs(J.garcons or {}) do
+  J.versao_layout, J.origem_x, J.origem_z = L.versao, L.origem.x, L.origem.z
+  for i, g in ipairs(J.garcons or {}) do
+    local c = CASAS_GARCOM[(i - 1) % #CASAS_GARCOM + 1]
+    g.casa, g.casa_z = c[1] + L.origem.x, c[2] + L.origem.z
     g.x, g.z, g.estado, g.rota, g.alvo, g.levando, g.andando = g.casa, g.casa_z, "parada", {}, nil, false, false
     g.fantasma, g.sem_rota, g.preso = nil, nil, 0
   end
+end
+
+-- Salas ou porta mudaram com o jogo rodando: ninguém é expulso. Sentados e quem anda acompanham a
+-- taverna, o mapa e as rotas são refeitos, e quem ficou dentro de um móvel sai no próximo passo.
+function J.aplicar_obra()
+  local dx, dz = L.origem.x - (J.origem_x or 0), L.origem.z - (J.origem_z or 0)
+  J.versao_layout, J.origem_x, J.origem_z = L.versao, L.origem.x, L.origem.z
+  for _, l in ipairs(J.lugares or {}) do l.x, l.z = l.x + dx, l.z + dz end
+  local function leva(p)
+    p.x, p.z = p.x + dx, p.z + dz
+    if p.destino_x then p.destino_x, p.destino_z = p.destino_x + dx, p.destino_z + dz end
+    for _, r in ipairs(p.rota or {}) do r.x, r.z = r.x + dx, r.z + dz end
+    for _, r in ipairs(p.vao or {}) do r.x, r.z = r.x + dx, r.z + dz end
+  end
+  for _, p in ipairs(J.pessoas or {}) do leva(p) end
+  for i, g in ipairs(J.garcons or {}) do
+    leva(g)
+    local c = CASAS_GARCOM[(i - 1) % #CASAS_GARCOM + 1]
+    g.casa, g.casa_z = c[1] + L.origem.x, c[2] + L.origem.z
+  end
+  for _, m in ipairs(POS_MESAS) do m.x, m.z = L.t(m.id, m.bx, m.bz) end
+  J.PORTA.x, J.PORTA.z = L.t("porta", -6.4, 1.6)
+  J.QUADRO.x, J.QUADRO.z = L.t("quadro", -2.6, -3.7)
+  J.BARRACA.x, J.BARRACA.z = L.t("barraca", 9.3, -1.0)
+  J.reconstruir_lugares()
+  J.montar_mapa()
 end
 
 function J.ocupados()
@@ -864,7 +894,7 @@ end
 
 -- Onde parar para atender: com a mesa ou o balcão girados, o lado de sempre pode estar dentro do móvel
 local function ponto_de_servir(g, p)
-  local dz = p.z < J.RUA_Z and 0.72 or -0.72
+  local dz = select(2, L.base("porta", p.x, p.z)) < J.RUA_Z and 0.72 or -0.72
   for _, o in ipairs({ { 0, dz }, { 0, -dz }, { 0.72, 0 }, { -0.72, 0 } }) do
     local x, z = p.x + o[1], p.z + o[2]
     if not Cam.bloqueado(x, z) and Cam.rota(g.x, g.z, x, z) then return x, z end
@@ -1530,6 +1560,7 @@ end
 function J.atualizar(dt)
   local e = J.estado
   if J.offline or J.editando then return end
+  if J.versao_layout ~= L.versao then J.aplicar_obra() end
   -- notícia na tela: tudo espera o jogador ler
   if J.noticia then return end
   -- depois do final o mundo para: nada de ouro, sons ou tempo correndo atrás da tela final

@@ -65,7 +65,7 @@ function M.iniciar()
   M.fazendeiro = { x = -5.7, z = 6.35, giro = 0, fase = 0, t = 0, i = 1 }
   M.cozinheiro = nil
   M.vacas = {}
-  M.anim = { leste = 0, jardim = 0, cerveja = 0, circulo = 0, cozinha = 0, pomar = 0, fazenda = 0 }
+  M.anim = { leste = 0, jardim = 0, cerveja = 0, circulo = 0, cozinha = 0, pomar = 0, fazenda = 0, quartos = 0, guilda = 0 }
   local a = M.alvos()
   for k, v in pairs(a) do M.anim[k] = v end
   M.quadro = M.calcular_enquadramento(M.anim)
@@ -81,20 +81,32 @@ function M.alvos()
     cozinha = aberta("cozinha"),
     pomar = aberta("pomar"),
     fazenda = aberta("fazenda"),
+    quartos = aberta("quartos_sala"),
+    guilda = aberta("sala_guilda"),
   }
 end
+
+-- sala -> chave em M.anim
+local ANIM_DE = { jardim = "jardim", pomar = "pomar", fazenda = "fazenda", cozinha = "cozinha", cervejaria = "cerveja",
+  circulo = "circulo", quartos_sala = "quartos", sala_guilda = "guilda" }
 
 -- a câmera recua conforme as áreas abrem, para sempre caber tudo
 function M.calcular_enquadramento(a)
   local xa, xb, za, zb = L.salao()
   local xmin, zmin = xa - 0.4, za - 0.4
-  local xmax = xb + util.lerp(0.2, 5.7, a.leste)
+  local ativo = L.andar_ativo
+  local xmax = xb + (ativo == 0 and util.lerp(0.2, 5.7, a.leste) or 0.2)
   local zmax = zb + 0.2
-  -- cada sala aberta entra no quadro com o tamanho e a posição que tem agora
-  for id, k in pairs({ jardim = a.jardim, pomar = a.pomar, fazenda = a.fazenda, cozinha = a.cozinha, cervejaria = a.cerveja, circulo = a.circulo }) do
-    local _, sx, _, sz = L.sala_mundo(id)
-    xmax = math.max(xmax, util.lerp(xb + 0.2, sx + 0.2, k))
-    zmax = math.max(zmax, util.lerp(zb + 0.2, sz + 0.6, k))
+  -- cada sala aberta deste andar entra no quadro com o tamanho e a posição que tem agora, em qualquer lado
+  for id, chave in pairs(ANIM_DE) do
+    if L.andar_de(id) == ativo then
+      local k = a[chave] or 0
+      local sx0, sx, sz0, sz = L.sala_mundo(id)
+      xmax = math.max(xmax, util.lerp(xb + 0.2, sx + 0.2, k))
+      zmax = math.max(zmax, util.lerp(zb + 0.2, sz + 0.6, k))
+      xmin = math.min(xmin, util.lerp(xa - 0.4, sx0 - 0.4, k))
+      zmin = math.min(zmin, util.lerp(za - 0.4, sz0 - 0.4, k))
+    end
   end
   local cx, cz = (xmin + xmax) / 2, (zmin + zmax) / 2
   -- a fileira de salas é larga e rasa: aproveita melhor a tela do que o salão sozinho
@@ -156,7 +168,7 @@ local function piso(x0, x1, z0, z1, a, b, e, gasto)
     local l = math.min(0.8, z1 - z)
     local c = i % 2 == 0 and a or b
     -- as tábuas por onde todos andam ficam mais gastas
-    if gasto and math.abs(z + l / 2 - J.PORTA.z) < 0.8 then c = gasto end
+    if gasto and L.pos_porta() ~= "fundo" and L.pos_porta() ~= "frente" and math.abs(z + l / 2 - J.PORTA.z) < 0.8 then c = gasto end
     caixa((x0 + x1) / 2, -0.3, z + l / 2, x1 - x0, 0.3 * e, l - 0.03, c)
     z = z + 0.8
     i = i + 1
@@ -212,6 +224,161 @@ local function carga(x, z)
   peca("esfera", x - 0.72, 0.54, z + 0.1, 0.18, 0.18, 0.18, 0, "#a8946c")
 end
 
+-- Paredes ------------------------------------------------------------------------------
+-- Todas as paredes passam por aqui: trechos com sala atrás ficam baixos (corte estilo casa de
+-- bonecas), e as portas geradas abrem vão onde o dono da parede encosta em outra sala.
+local ALT_PAREDE = 4.2     -- igual à do salão: todas as paredes da taverna têm esta altura
+local ESP_PAREDE = 0.4
+local ALT_PORTA, LARG_PORTA = 2.5, 1.4
+local ALT_BAIXA = 1.1
+
+local function andar_do_bloco(id)
+  if id == "taverna" then return 0 elseif id == "hall_cima" then return 1 elseif id == "hall_baixo" then return -1 end
+  return L.andar_de(id)
+end
+
+-- pedaços da parede de a até b: { s, e, baixa, vao }
+local function cortes(id, lado, a, b)
+  local eixo = lado == "fundo" and "x" or "z"
+  local baixos, vaos, marcas = L.trechos_baixos(id, lado), {}, { a, b }
+  local x0, _, z0 = L.sala_mundo(id)
+  local plano = lado == "fundo" and z0 or x0
+  for _, p in ipairs(L.portas(andar_do_bloco(id))) do
+    if p.dono == id and p.eixo == eixo and math.abs(p.plano - plano) < 0.05 then
+      vaos[#vaos + 1] = p
+      marcas[#marcas + 1] = p.c - LARG_PORTA / 2
+      marcas[#marcas + 1] = p.c + LARG_PORTA / 2
+    end
+  end
+  for _, t in ipairs(baixos) do
+    marcas[#marcas + 1] = t.a
+    marcas[#marcas + 1] = t.b
+  end
+  table.sort(marcas)
+  local r, ant = {}, a
+  for _, m in ipairs(marcas) do
+    m = util.limitar(m, a, b)
+    if m > ant + 0.005 then
+      local meio = (ant + m) / 2
+      local baixa, vao = false, nil
+      for _, t in ipairs(baixos) do if meio >= t.a and meio <= t.b then baixa = true end end
+      for _, p in ipairs(vaos) do if math.abs(meio - p.c) < LARG_PORTA / 2 then vao = p end end
+      r[#r + 1] = { s = ant, e = m, baixa = baixa, vao = vao }
+      ant = m
+    end
+  end
+  return r, vaos
+end
+
+-- trechos inteiros, sem vão e altos: onde dá para pregar coisa na parede
+local function trechos_altos(id, lado, a, b)
+  local r = {}
+  for _, c in ipairs(cortes(id, lado, a, b)) do
+    if not c.baixa and not c.vao then r[#r + 1] = c end
+  end
+  return r
+end
+
+-- a porta aberta, com batentes e soleira; em parede baixa não há verga nem folha
+local function detalhe_porta(eixo, f, c, o, baixa, cores)
+  local function bx(u, y, v, eu, ey, ev, cor_b, g)
+    if eixo == "x" then caixa(c + u, y, f + v, eu, ey, ev, cor_b, g)
+    else caixa(f + v, y, c + u, ev, ey, eu, cor_b, g) end
+  end
+  local lg = LARG_PORTA
+  local alt = baixa and ALT_BAIXA or ALT_PORTA
+  bx(0, 0, 0, lg, 0.04, ESP_PAREDE + 0.1, cores.rodape)
+  for s = -1, 1, 2 do bx(s * (lg / 2 + 0.06), 0, 0.04, 0.12, alt * o, 0.12, cores.viga) end
+  if baixa then return end
+  bx(0, ALT_PORTA * o, 0.04, lg + 0.24, 0.16, 0.12, cores.viga)
+  -- folha aberta para dentro do cômodo
+  local ang, lf = 1.2, lg - 0.05
+  local si, co = math.sin(ang), math.cos(ang)
+  if eixo == "z" then
+    caixa(f + 0.03 + lf / 2 * si, 0.02, c - lg / 2 + 0.02 + lf / 2 * co, 0.06, (ALT_PORTA - 0.08) * o, lf, cores.folha, ang)
+    caixa(f + 0.03 + lf * 0.85 * si + 0.05 * co, 1.0 * o, c - lg / 2 + lf * 0.85 * co, 0.08, 0.14, 0.14, cores.acento, ang)
+  else
+    caixa(c - lg / 2 + 0.02 + lf / 2 * co, 0.02, f + 0.03 + lf / 2 * si, lf, (ALT_PORTA - 0.08) * o, 0.06, cores.folha, -ang)
+    caixa(c - lg / 2 + lf * 0.85 * co, 1.0 * o, f + 0.03 + lf * 0.85 * si + 0.05 * co, 0.14, 0.14, 0.08, cores.acento, -ang)
+  end
+end
+
+-- id: bloco dono; lado: "fundo" (corre em x, em z = plano) ou "oeste" (corre em z, em x = plano);
+-- dentro: a espessura fica para dentro do cômodo. cores: parede, viga, rodape, folha, acento.
+local function parede(id, lado, a, b, plano, o, cores, dentro, vigas)
+  local eixo = lado == "fundo" and "x" or "z"
+  local e = ESP_PAREDE
+  local meio_esp = dentro and plano + e / 2 or plano - e / 2
+  local f = dentro and plano + e or plano   -- a face que dá para o cômodo
+  local function reta(s, t, y, h, ep, cf, c)
+    if eixo == "x" then caixa((s + t) / 2, y, cf, t - s, h, ep, c)
+    else caixa(cf, y, (s + t) / 2, ep, h, t - s, c) end
+  end
+  local segs, vaos = cortes(id, lado, a, b)
+  local h = ALT_PAREDE * o
+  for _, c in ipairs(segs) do
+    if c.vao then
+      if not c.baixa then reta(c.s, c.e, ALT_PORTA * o, (ALT_PAREDE - ALT_PORTA) * o, e, meio_esp, cores.parede) end
+    elseif c.baixa then
+      reta(c.s, c.e, 0, ALT_BAIXA * o, e, meio_esp, cores.parede)
+      reta(c.s, c.e, ALT_BAIXA * o, 0.07, e + 0.08, meio_esp, cores.viga)
+    else
+      reta(c.s, c.e, 0, h, e, meio_esp, cores.parede)
+      reta(c.s, c.e, 3.75 * o, 0.26, 0.2, f + 0.08, cores.viga)
+    end
+    if not c.vao then reta(c.s, c.e, 0, 0.75 * o, 0.08, f + 0.02, cores.rodape) end
+  end
+  if vigas then
+    local p = a + vigas.ini
+    while p < b - 0.1 do
+      local alto = true
+      for _, c in ipairs(segs) do
+        if p >= c.s and p <= c.e and (c.baixa or c.vao) then alto = false end
+      end
+      for _, v in ipairs(vaos) do
+        if math.abs(p - v.c) < LARG_PORTA / 2 + 0.2 then alto = false end
+      end
+      if alto then
+        if eixo == "x" then caixa(p, 0, f + 0.05, 0.26, h, 0.2, cores.viga)
+        else caixa(f + 0.05, 0, p, 0.2, h, 0.26, cores.viga) end
+      end
+      p = p + vigas.passo
+    end
+  end
+  for _, v in ipairs(vaos) do
+    local baixa = false
+    for _, c in ipairs(segs) do
+      if c.vao == v and c.baixa then baixa = true end
+    end
+    detalhe_porta(eixo, f, v.c, o, baixa, cores)
+  end
+end
+
+-- A parede atrás deste objeto sumiu ou virou vão? Quadro e flâmula não ficam voando.
+local function parede_sumiu(bloco, lado, id, meia)
+  local ob = L.POR_ID[id]
+  local dx, dz = L.desloc(id)
+  local c = lado == "fundo" and ob.x + dx or ob.z + dz
+  local x0, x1, z0, z1 = L.sala_mundo(bloco)
+  local a, b = lado == "fundo" and x0 or z0, lado == "fundo" and x1 or z1
+  for _, t in ipairs(cortes(bloco, lado, a, b)) do
+    if (t.baixa or t.vao) and c + (meia or 0.3) >= t.s and c - (meia or 0.3) <= t.e then return true end
+  end
+  return false
+end
+
+-- porta da rua perto deste ponto da parede esquerda: a janela não fica atrás dela
+local function atras_da_porta(lado, id)
+  local l, t = L.pos_porta()
+  if l ~= lado then return false end
+  local ob = L.POR_ID[id]
+  local dx, dz = L.desloc(id)
+  local _, _, z0 = L.sala_mundo("taverna")
+  local x0 = L.sala_mundo("taverna")
+  local c = lado == "oeste" and ob.z + dz - z0 or ob.x + dx - x0
+  return math.abs(c - t) < 1.5
+end
+
 local CIRC_X, CIRC_Z = 25.95, 0.1   -- centro de origem do círculo de invocação
 local PORTA_GIRO = 1.75   -- pouco mais de 90 graus: as folhas abertas não escondem quem passa
 
@@ -221,21 +388,29 @@ local function salao()
   local cx, cz, lx, lz = (xa + xb) / 2, (za + zb) / 2, xb - xa, zb - za
   piso(xa, xb, za, zb, PISO_A, PISO_B, 1, CORREDOR)
   caixa(cx, -0.95, cz, lx + 0.6, 0.65, lz + 0.7, "#2a1b12")
-  caixa(cx, 0, za - 0.2, lx + 0.4, 4.2, 0.4, PAREDE)
-  caixa(xa - 0.2, 0, cz, 0.4, 4.2, lz + 0.7, "#47301f")
   -- o rodapé vira pedra clara quando a taverna chega à fase de guilda
   local guilda = M.anim.circulo > 0
   local rodape = guilda and PEDRA_CLARA or "#2f1e13"
-  caixa(cx, 0, za + 0.02, lx, 0.75, 0.08, rodape)
-  caixa(xa + 0.02, 0, cz, 0.08, 0.75, lz + 0.5, rodape)
-
-  for x = xa + 0.5, xb, 3 do caixa(x, 0, za + 0.05, 0.26, 4.2, 0.2, VIGA) end
-  for z = za + 1.5, zb, 2.5 do caixa(xa + 0.05, 0, z, 0.2, 4.2, 0.26, VIGA) end
-  caixa(cx, 3.75, za + 0.08, lx, 0.26, 0.2, VIGA)
+  local cores = { parede = PAREDE, viga = VIGA, rodape = rodape, folha = MAD_MED, acento = OURO }
+  parede("taverna", "fundo", xa - 0.4, xb, za, 1, cores, false, { ini = 0.9, passo = 3 })
+  cores.parede = "#47301f"
+  parede("taverna", "oeste", za, zb + 0.35, xa, 1, cores, false, { ini = 1.5, passo = 2.5 })
 
   grupo("porta")
   -- porta (o corredor termina nela) com lampião, porque a parede esquerda fica na sombra
   local pz = 1.6
+  -- parede baixa ou lado sem parede: a porta precisa de um pedaço de parede para ficar de pé
+  local lado_p, t_p = L.pos_porta()
+  local sem_parede = lado_p == "leste" or lado_p == "frente"
+  if not sem_parede then
+    local xp0, _, zp0 = L.sala_mundo("taverna")
+    sem_parede = L.parede_baixa("taverna", lado_p, (lado_p == "oeste" and zp0 or xp0) + t_p)
+  end
+  if sem_parede then
+    caixa(-6.7, 0, pz - 1.15, 0.4, 2.9, 0.8, "#47301f")
+    caixa(-6.7, 0, pz + 1.15, 0.4, 2.9, 0.8, "#47301f")
+    caixa(-6.7, 2.5, pz, 0.4, 0.4, 1.5, "#47301f")
+  end
   caixa(-6.47, 0, pz, 0.12, 2.5, 1.5, "#20140c")
   caixa(-6.42, 2.5, pz, 0.24, 0.2, 1.8, VIGA)
   -- cada folha gira na própria dobradiça, para dentro do salão
@@ -248,8 +423,10 @@ local function salao()
   grupo("lampiao_porta")
   caixa(-6.34, 2.6, 2.6, 0.3, 0.08, 0.08, FERRO)
   brilho("esfera", -6.18, 2.48, 2.6, 0.24, 0.32, 0.24, VELA, 1.6)
-  janela("janela1", -1.27)
-  janela("janela2", 3.7)
+  for i, jz in ipairs({ -1.27, 3.7 }) do
+    local id = "janela" .. i
+    if not parede_sumiu("taverna", "oeste", id, 0.7) and not atras_da_porta("oeste", id) then janela(id, jz) end
+  end
   grupo("vassoura")
   -- vassoura encostada ao lado da porta
   peca("cilindro", -6.25, 0.1, 2.75, 0.07, 1.5, 0.07, 0, MAD_MED, -0.12)
@@ -289,6 +466,11 @@ local function salao()
   -- quadro de missões: cada papel some quando alguém o pega
   grupo("quadro")
   local qx = -2.6
+  -- parede baixa atrás: o quadro fica sobre dois pés
+  if parede_sumiu("taverna", "fundo", "quadro", 1.3) then
+    caixa(qx - 1.2, 0, -4.42, 0.12, 3.15, 0.12, MAD_ESC)
+    caixa(qx + 1.2, 0, -4.42, 0.12, 3.15, 0.12, MAD_ESC)
+  end
   caixa(qx, 1.45, -4.42, 2.6, 1.7, 0.1, MAD_ESC)
   caixa(qx, 1.55, -4.36, 2.3, 1.5, 0.05, "#a87e4f")
   caixa(qx, 3.15, -4.3, 2.9, 0.12, 0.34, MAD_ESC)
@@ -324,6 +506,9 @@ local function salao()
     cilindro(x, 1.37, bz + 0.22, 0.18, 0.05, ESPUMA)
   end
   grupo("prateleira")
+  if parede_sumiu("taverna", "fundo", "prateleira", 2.7) then
+    for _, sx in ipairs({ -2.6, 0, 2.6 }) do caixa(bx + sx, 0, -4.32, 0.14, 2.2, 0.4, MAD_ESC) end
+  end
   caixa(bx, 2.1, -4.32, 5.4, 0.1, 0.5, MAD_ESC)
   caixa(bx, 1.25, -4.32, 5.4, 0.1, 0.5, MAD_ESC)
   local garrafas = { "#3f8d4f", "#a13b3b", "#3c68a8", "#d0a23e", "#7a4a9c", "#3f8d4f", "#a13b3b", "#d0a23e" }
@@ -349,13 +534,22 @@ local function salao()
     caixa(-4.0, 1.5, -4.46, 1.0, 1.9, 0.08, "#3a2415")
   end
 
+  -- alçapão com degraus para o subsolo
+  grupo("alcapao")
+  if L.andar_existe(-1) then
+    caixa(-0.2, 0, -3.85, 1.3, 0.04, 1, VIGA)
+    for i = 0, 3 do caixa(-0.2, 0.03, -4.2 + i * 0.24, 1.08, 0.02, 0.2, i < 2 and "#20140c" or "#3a2415") end
+    caixa(-0.84, 0, -3.85, 0.08, 0.7, 0.08, MAD_ESC)
+    caixa(0.44, 0, -3.85, 0.08, 0.7, 0.08, MAD_ESC)
+  end
+
   grupo(nil)
   -- decoração: flâmulas na parede
   local d = math.min(J.nivel("decoracao") + (J.nivel("conforto") > 0 and 1 or 0), 5)
   for i = 1, d do
     local x = -5.5 + (i - 1) * 3 + 1.5
     -- a última flâmula fica na ala leste: só aparece quando a parede dela existe
-    if x < 6.5 or M.anim.leste > 0.9 or L.tamanho.dir >= 3 then
+    if (x < 6.5 or M.anim.leste > 0.9 or L.tamanho.dir >= 3) and not parede_sumiu("taverna", "fundo", "flamula" .. i) then
       grupo("flamula" .. i)
       local pano = guilda and AZUL_GUILDA or (i % 2 == 0 and "#3d5a8a" or TAPETE)
       x = -4 + (i - 1) * 3
@@ -367,9 +561,11 @@ local function salao()
 
   -- lampiões
   for i, x in ipairs({ -4.5, -0.6 }) do
-    grupo("lampiao" .. i)
-    caixa(x, 2.6, -4.4, 0.08, 0.08, 0.3, FERRO)
-    brilho("esfera", x, 2.48, -4.2, 0.24, 0.32, 0.24, VELA, 1.6)
+    if not parede_sumiu("taverna", "fundo", "lampiao" .. i) then
+      grupo("lampiao" .. i)
+      caixa(x, 2.6, -4.4, 0.08, 0.08, 0.3, FERRO)
+      brilho("esfera", x, 2.48, -4.2, 0.24, 0.32, 0.24, VELA, 1.6)
+    end
   end
 
   for i = 1, math.min(J.num_mesas(), 6) do
@@ -395,8 +591,7 @@ local function ala_leste(e)
   local _, xb, za, zb = L.salao()
   piso(xb, xb + 5.5, za, zb, "#7a5a3a", "#715335", o, "#8c6a46")
   caixa(xb + 2.75, -0.95, (za + zb) / 2, 5.7, 0.65, zb - za + 0.7, "#2a1b12")
-  c2(xb + 2.75, 0, za - 0.2, 5.5, 4.2, 0.4, PAREDE)
-  for x = xb + 1, xb + 5.5, 3 do c2(x, 0, za + 0.05, 0.26, 4.2, 0.2, VIGA) end
+  parede("taverna", "fundo", xb, xb + 5.5, za, o, { parede = PAREDE, viga = VIGA, rodape = "#2f1e13", folha = MAD_MED, acento = OURO }, false, { ini = 1, passo = 3 })
 
   if J.mercadinho_aberto() then
     grupo("barraca")
@@ -451,10 +646,6 @@ end
 
 -- Cômodos ------------------------------------------------------------------------------
 
-local ALT_PAREDE = 4.2     -- igual à do salão: todas as paredes da taverna têm esta altura
-local ESP_PAREDE = 0.4
-local ALT_PORTA, LARG_PORTA = 2.5, 1.4
-
 -- piso em lajes sobre a base; as lajes crescem com a sala para não pesar no desenho
 local function lajes(x0, x1, z0, z1, c1, c2, o)
   local w, d = x1 - x0, z1 - z0
@@ -469,50 +660,22 @@ local function lajes(x0, x1, z0, z1, c1, c2, o)
   end
 end
 
--- a porta fica sobre o salão (ou a ala leste) mesmo quando as salas vizinhas crescem e empurram esta
-local function porta_x(id, desejado, x0, x1, l)
-  local dx = L.desloc(id)
-  local xa, xb = L.salao()
-  if M.anim.leste > 0.5 then xb = xb + 5.5 end
-  local a = math.max(x0 + 0.4, xa - dx + 0.3) + l / 2
-  local b = math.min(x1 - 0.4, xb - dx - 0.3) - l / 2
-  if a > b then return desejado end
-  return util.limitar(desejado, a, b)
+-- Sala interna, em corte de casa de bonecas como o salão: parede de fundo e parede esquerda;
+-- sem parede de frente nem direita. As portas vêm de L.portas: nunca são fixas.
+local function casca_sala(id, x0, x1, z0, z1, o, c)
+  lajes(x0, x1, z0, z1, c.piso1, c.piso2, o)
+  local cores = { parede = c.parede, viga = c.viga, rodape = c.rodape, folha = c.folha, acento = c.acento }
+  parede(id, "fundo", x0, x1, z0, o, cores, false, { ini = 1.5, passo = 3 })
+  cores.parede = c.parede_lado
+  parede(id, "oeste", z0, z1, x0, o, cores, true, { ini = 1.5, passo = 2.5 })
 end
 
--- Sala interna, em corte de casa de bonecas como o salão: parede de fundo e parede esquerda
--- com porta para a sala vizinha; sem parede de frente nem direita.
-local function casca_sala(x0, x1, z0, z1, o, c)
-  local cx, w = (x0 + x1) / 2, x1 - x0
-  local h, e = ALT_PAREDE * o, ESP_PAREDE
-  lajes(x0, x1, z0, z1, c.piso1, c.piso2, o)
-  -- fundo
-  caixa(cx, 0, z0 - e / 2, w, h, e, c.parede)
-  caixa(cx, 0, z0 + 0.02, w, 0.75 * o, 0.08, c.rodape)
-  for x = x0 + 1.5, x1 - 0.2, 3 do caixa(x, 0, z0 + 0.05, 0.26, h, 0.2, c.viga) end
-  caixa(cx, 3.75 * o, z0 + 0.08, w, 0.26, 0.2, c.viga)
-  -- esquerda: porta sempre na mesma altura da sala, longe do fundo onde ficam as coisas altas
-  local d = z1 - z0
-  local zm = z0 + util.limitar(d * 0.55, LARG_PORTA / 2 + 0.3, d - LARG_PORTA / 2 - 0.3)
-  local xp = x0 + e / 2
-  local za, zb = zm - LARG_PORTA / 2, zm + LARG_PORTA / 2
-  caixa(xp, 0, (z0 - e + za) / 2, e, h, za - z0 + e, c.parede_lado)
-  caixa(xp, 0, (zb + z1) / 2, e, h, z1 - zb, c.parede_lado)
-  caixa(xp, ALT_PORTA * o, zm, e, (ALT_PAREDE - ALT_PORTA) * o, LARG_PORTA, c.parede_lado)
-  for z = z0 + 1.5, z1 - 0.2, 2.5 do
-    if math.abs(z - zm) > LARG_PORTA / 2 + 0.2 then caixa(x0 + e + 0.05, 0, z, 0.2, h, 0.26, c.viga) end
+-- faixa pregada na parede do fundo: só nos trechos que continuam altos
+local function faixa_fundo(id, x0, x1, z0, y, h, ez, c, luz)
+  for _, t in ipairs(trechos_altos(id, "fundo", x0, x1)) do
+    if luz then brilho("caixa", (t.s + t.e) / 2, y, z0, t.e - t.s, h, ez, c, luz)
+    else caixa((t.s + t.e) / 2, y, z0, t.e - t.s, h, ez, c) end
   end
-  caixa(x0 + e + 0.08, 3.75 * o, (z0 + z1) / 2, 0.2, 0.26, d, c.viga)
-  caixa(x0 + e + 0.02, 0, (z0 + z1) / 2, 0.08, 0.75 * o, d, c.rodape)
-  -- batentes, verga, soleira e folha aberta para dentro da sala
-  caixa(xp, 0, zm, e + 0.1, 0.04, LARG_PORTA, c.rodape)
-  for s = -1, 1, 2 do caixa(x0 + e + 0.04, 0, zm + s * (LARG_PORTA / 2 + 0.06), 0.12, ALT_PORTA * o, 0.12, c.viga) end
-  caixa(x0 + e + 0.04, ALT_PORTA * o, zm, 0.12, 0.16, LARG_PORTA + 0.24, c.viga)
-  local ang, lf = 1.2, LARG_PORTA - 0.05
-  local si, co = math.sin(ang), math.cos(ang)
-  local hx = x0 + e + 0.03
-  caixa(hx + lf / 2 * si, 0.02, za + 0.02 + lf / 2 * co, 0.06, (ALT_PORTA - 0.08) * o, lf, c.folha, ang)
-  caixa(hx + lf * 0.85 * si + 0.05 * co, 1.0 * o, za + lf * 0.85 * co, 0.08, 0.14, 0.14, c.acento, ang)
 end
 
 local function cerca_trecho(x0, z0, x1, z1, o)
@@ -528,19 +691,61 @@ local function cerca_trecho(x0, z0, x1, z1, o)
   end
 end
 
--- Porteira aberta na cerca do fundo, que dá para a frente da taverna, e caminho de pedras
-local function porteira(xd, z, l, o)
-  for s = -1, 1, 2 do caixa(xd + s * (l / 2 + 0.08), 0, z, 0.16, 0.95 * o, 0.16, MAD_ESC) end
-  local hx = xd - l / 2
-  for _, y in ipairs({ 0.22, 0.56 }) do caixa(hx + 0.08, y * o, z + l / 2, 0.06, 0.1, l, TAMPO) end
-  caixa(hx + 0.08, 0, z + l, 0.1, 0.72 * o, 0.1, MAD_ESC)
-  -- soleira de pedra emendando no piso do salão, depois as pedras pela grama
-  caixa(xd, 0, z - 0.1, l + 0.2, 0.05, 0.4, PEDRA)
-  local pz, i = z + 0.45, 0
-  while i < 5 do
-    cilindro(xd + (i % 2 == 0 and 0.08 or -0.1), 0, pz, 0.48 + (i % 3) * 0.04, 0.03, i % 2 == 0 and PEDRA_CLARA or "#8f8a7e")
-    pz, i = pz + 0.55, i + 1
+-- Porteira aberta na cerca, olhando para a taverna, com soleira e caminho de pedras para dentro.
+-- lado: "fundo" (z0), "frente" (z1), "esquerda" (x0) ou "direita" (x1); f: linha da cerca; c: centro.
+local function porteira(lado, f, c, l, o)
+  local em_x = lado == "fundo" or lado == "frente"
+  local dentro = (lado == "fundo" or lado == "esquerda") and 1 or -1
+  local function ponto(u, v)
+    if em_x then return c + u, f + v * dentro end
+    return f + v * dentro, c + u
   end
+  local function bx(u, y, v, eu, ey, ev, cor_b)
+    local x, z = ponto(u, v)
+    if em_x then caixa(x, y, z, eu, ey, ev, cor_b) else caixa(x, y, z, ev, ey, eu, cor_b) end
+  end
+  for s = -1, 1, 2 do bx(s * (l / 2 + 0.08), 0, 0, 0.16, 0.95 * o, 0.16, MAD_ESC) end
+  for _, y in ipairs({ 0.22, 0.56 }) do bx(-l / 2 + 0.08, y * o, l / 2, 0.06, 0.1, l, TAMPO) end
+  bx(-l / 2 + 0.08, 0, l, 0.1, 0.72 * o, 0.1, MAD_ESC)
+  -- soleira de pedra, depois as pedras pela grama
+  bx(0, 0, -0.1, l + 0.2, 0.05, 0.4, PEDRA)
+  local v, i = 0.45, 0
+  while i < 5 do
+    local x, z = ponto(i % 2 == 0 and 0.08 or -0.1, v)
+    cilindro(x, 0, z, 0.48 + (i % 3) * 0.04, 0.03, i % 2 == 0 and PEDRA_CLARA or "#8f8a7e")
+    v, i = v + 0.55, i + 1
+  end
+end
+
+-- Cerca baixa nos quatro lados, com a porteira no lado da taverna. desejado: onde ela fica
+-- se a taverna estiver na frente da cerca do fundo, como sempre foi.
+local function cerca_com_porteira(id, x0, x1, z0, z1, o, desejado)
+  local l = 1.3
+  local lado, a, b = L.lado_porteira(id)
+  local dx, dz = L.desloc(id)
+  local zf, zt, xe, xd = z0 + 0.15, z1 - 0.15, x0 + 0.12, x1 - 0.12
+  local em_x = lado == "fundo" or lado == "frente"
+  local c
+  if em_x then c = util.limitar(desejado, a - dx, math.max(a, b) - dx)
+  else c = util.limitar((z0 + z1) / 2, a - dz, math.max(a, b) - dz) end
+  local function com_vao(lin, ...)
+    if lin then
+      cerca_trecho(xe, ..., c - l / 2 - 0.08, ..., o)
+      cerca_trecho(c + l / 2 + 0.08, ..., xd, ..., o)
+    end
+  end
+  if lado == "fundo" then com_vao(true, zf) else cerca_trecho(xe, zf, xd, zf, o) end
+  if lado == "frente" then com_vao(true, zt) else cerca_trecho(xe, zt, xd, zt, o) end
+  if lado == "esquerda" then
+    cerca_trecho(xe, zf, xe, c - l / 2 - 0.08, o)
+    cerca_trecho(xe, c + l / 2 + 0.08, xe, zt, o)
+  else cerca_trecho(xe, zf, xe, zt, o) end
+  if lado == "direita" then
+    cerca_trecho(xd, zf, xd, c - l / 2 - 0.08, o)
+    cerca_trecho(xd, c + l / 2 + 0.08, xd, zt, o)
+  else cerca_trecho(xd, zf, xd, zt, o) end
+  local f = (lado == "fundo" and zf) or (lado == "frente" and zt) or (lado == "esquerda" and xe) or xd
+  porteira(lado, f, c, l, o)
 end
 
 -- Área ao ar livre: grama, cerca baixa nos quatro lados e porteira no lado da taverna
@@ -553,16 +758,7 @@ local function area_externa(id, x0, x1, z0, z1, o, g1, g2, gc)
       cone(x0 + 0.3 + (k * 37 % 97) / 97 * (w - 0.6), 0, z0 + 0.5 + (k * 61 % 89) / 89 * (d - 0.9), 0.12, 0.17, gc)
     end
   end
-  local l = 1.3
-  local xd = porta_x(id, x0 + math.min(2, (x1 - x0) / 2), x0, x1, l)
-  local zf = z0 + 0.15
-  cerca_trecho(x0 + 0.12, zf, xd - l / 2 - 0.08, zf, o)
-  cerca_trecho(xd + l / 2 + 0.08, zf, x1 - 0.12, zf, o)
-  cerca_trecho(x0 + 0.12, z1 - 0.15, x1 - 0.12, z1 - 0.15, o)
-  cerca_trecho(x0 + 0.12, zf, x0 + 0.12, z1 - 0.15, o)
-  cerca_trecho(x1 - 0.12, zf, x1 - 0.12, z1 - 0.15, o)
-  porteira(xd, zf, l, o)
-  return xd
+  cerca_com_porteira(id, x0, x1, z0, z1, o, x0 + math.min(2, (x1 - x0) / 2))
 end
 
 local function jardim(e)
@@ -571,9 +767,6 @@ local function jardim(e)
   local x0, x1, z0, z1 = L.sala("jardim")
   -- lado de fora: grama, cerca baixa e porteira, sem parede
   lajes(x0, x1, z0, z1, "#5b8f44", "#558a40", o)
-  local l = 1.3
-  local xd = porta_x("jardim", x1 - 1.1, x0, x1, l)
-  local zf = z0 + 0.15
   if e > 0.9 then
     -- tufos e florzinhas soltas, sempre nos mesmos lugares
     local w, d = x1 - x0, z1 - z0
@@ -585,12 +778,7 @@ local function jardim(e)
   end
   -- cerca em volta do que é lado de fora
   grupo("cerca")
-  cerca_trecho(x0 + 0.12, zf, xd - l / 2 - 0.08, zf, o)
-  cerca_trecho(xd + l / 2 + 0.08, zf, x1 - 0.12, zf, o)
-  cerca_trecho(x0 + 0.12, z1 - 0.15, x1 - 0.12, z1 - 0.15, o)
-  cerca_trecho(x0 + 0.12, zf, x0 + 0.12, z1 - 0.15, o)
-  cerca_trecho(x1 - 0.12, zf, x1 - 0.12, z1 - 0.15, o)
-  porteira(xd, zf, l, o)
+  cerca_com_porteira("jardim", x0, x1, z0, z1, o, x1 - 1.1)
   -- moitas e abóboras na faixa livre diante da cerca
   if e > 0.9 then
     grupo("moita1")
@@ -987,10 +1175,10 @@ local function cozinha(e)
   if e <= 0 then return end
   local o = e + math.sin(e * math.pi) * 0.12
   local x0, x1, z0, z1 = L.sala_mundo("cozinha")
-  casca_sala(x0, x1, z0, z1, o, { piso1 = "#6e675c", piso2 = "#645d53", parede = PAREDE, parede_lado = "#47301f", rodape = "#2b2523",
+  casca_sala("cozinha", x0, x1, z0, z1, o, { piso1 = "#6e675c", piso2 = "#645d53", parede = PAREDE, parede_lado = "#47301f", rodape = "#2b2523",
     viga = VIGA, folha = MAD_MED, acento = OURO })
   -- faixa de azulejo atrás do fogão: é a cor que diz "cozinha"
-  caixa((x0 + x1) / 2, 0.75 * o, z0 + 0.03, x1 - x0, 1.0 * o, 0.06, "#c9bda6")
+  faixa_fundo("cozinha", x0, x1, z0 + 0.03, 0.75 * o, 1.0 * o, 0.06, "#c9bda6")
   -- fogão a lenha
   grupo("fogao")
   local x, z = 14, -3.95
@@ -1003,15 +1191,18 @@ local function cozinha(e)
   local mexendo = M.cozinheiro and M.cozinheiro.fazendo == "fogao"
   if mexendo then cilindro(x + 0.25, 0.93 * o, z + 0.17, 0.54, 0.05, FERRO)
   else cilindro(x - 0.3, 1.23 * o, z, 0.54, 0.05, FERRO) end
-  cilindro(x + 0.45, 0.93 * o, z - 0.2, 0.26, 3.27 * o, FERRO)
+  -- a chaminé sai pela parede: com a parede baixa ela só vai até onde não esconde nada
+  cilindro(x + 0.45, 0.93 * o, z - 0.2, 0.26, (parede_sumiu("cozinha", "fundo", "fogao") and 0.5 or 3.27) * o, FERRO)
   -- panelas penduradas na parede
   grupo("panelas")
   x, z = 16, -4.32
-  caixa(x, 2.5 * o, z, 2, 0.08, 0.08, FERRO)
-  for i, dx in ipairs({ -0.6, 0, 0.6 }) do
-    local d = 0.28 + i * 0.06
-    caixa(x + dx, 2.25 * o, z, 0.08, 0.25, 0.08, FERRO)
-    cilindro(x + dx, (2.25 - d * 0.7) * o, z, d, d * 0.7, COBRE)
+  if not parede_sumiu("cozinha", "fundo", "panelas", 1) then
+    caixa(x, 2.5 * o, z, 2, 0.08, 0.08, FERRO)
+    for i, dx in ipairs({ -0.6, 0, 0.6 }) do
+      local d = 0.28 + i * 0.06
+      caixa(x + dx, 2.25 * o, z, 0.08, 0.25, 0.08, FERRO)
+      cilindro(x + dx, (2.25 - d * 0.7) * o, z, d, d * 0.7, COBRE)
+    end
   end
   -- mesa de preparo no meio
   grupo("mesa_preparo")
@@ -1036,10 +1227,10 @@ local function cervejaria(e)
   local o = e + math.sin(e * math.pi) * 0.12
   local x0, x1, z0, z1 = L.sala_mundo("cervejaria")
   -- cômodo de pedra com detalhes de cobre
-  casca_sala(x0, x1, z0, z1, o, { piso1 = PEDRA, piso2 = "#635f5a", parede = PEDRA_ESC, parede_lado = "#46423f", rodape = PEDRA_CLARA,
+  casca_sala("cervejaria", x0, x1, z0, z1, o, { piso1 = PEDRA, piso2 = "#635f5a", parede = PEDRA_ESC, parede_lado = "#46423f", rodape = PEDRA_CLARA,
     viga = "#3a3634", folha = "#5b3a22", acento = COBRE_CLARO })
   -- cano de cobre correndo pela parede do fundo
-  caixa((x0 + x1) / 2, 2.6 * o, z0 + 0.06, x1 - x0 - 0.1, 0.08, 0.08, COBRE)
+  faixa_fundo("cervejaria", x0 + 0.05, x1 - 0.05, z0 + 0.06, 2.6 * o, 0.08, 0.08, COBRE)
   -- tina de cobre com domo, cano e fogo embaixo
   local tx, tz = 19, -3.2
   grupo("tina")
@@ -1088,9 +1279,9 @@ local function circulo(e)
   local o = e
   local x0, x1, z0, z1 = L.sala_mundo("circulo")
   -- cômodo de pedra escura com a magia escapando pela parede
-  casca_sala(x0, x1, z0, z1, o, { piso1 = "#39344e", piso2 = "#322d46", parede = "#2c2838", parede_lado = "#322e40", rodape = "#54497a",
+  casca_sala("circulo", x0, x1, z0, z1, o, { piso1 = "#39344e", piso2 = "#322d46", parede = "#2c2838", parede_lado = "#322e40", rodape = "#54497a",
     viga = "#1f1c29", folha = "#2a2030", acento = VIOLETA })
-  brilho("caixa", (x0 + x1) / 2, 1.05 * o, z0 + 0.03, x1 - x0, 0.05, 0.05, VIOLETA, 1.2)
+  faixa_fundo("circulo", x0, x1, z0 + 0.03, 1.05 * o, 0.05, 0.05, VIOLETA, 1.2)
   -- o círculo em si é um objeto: anda no editor, os pilares acompanham
   grupo("circulo")
   local cx, cz = CIRC_X, CIRC_Z
@@ -1113,6 +1304,155 @@ local function circulo(e)
     local px, pz = cx + math.cos(a) * 2.35, cz + math.sin(a) * 1.75
     caixa(px, 0, pz, 0.36, 0.3 * e, 0.36, PEDRA)
     peca("cone", px, 0.3 * e, pz, 0.3, 0.5 * e, 0.3, 0, CIANO, 0, 0, 1.3)
+  end
+end
+
+-- Andares ------------------------------------------------------------------------------
+
+local function cama(x, z, cobre)
+  caixa(x, 0, z, 1.25, 0.32, 2.1, MAD_ESC)
+  caixa(x, 0.32, z + 0.03, 1.13, 0.16, 1.98, PERGAMINHO)
+  caixa(x, 0.46, z + 0.32, 1.17, 0.06, 1.38, cobre)
+  caixa(x, 0.48, z - 0.72, 0.8, 0.12, 0.42, ESPUMA)
+  caixa(x, 0, z - 1.03, 1.25, 1.05, 0.1, MAD_MED)
+end
+
+local function quartos_sala(e)
+  if e <= 0 then return end
+  local o = e + math.sin(e * math.pi) * 0.12
+  local x0, x1, z0, z1 = L.sala_mundo("quartos_sala")
+  casca_sala("quartos_sala", x0, x1, z0, z1, o, { piso1 = "#7a5a3a", piso2 = "#715335", parede = PAREDE, parede_lado = "#47301f",
+    rodape = "#2f1e13", viga = VIGA, folha = MAD_MED, acento = OURO })
+  for i = 1, 4 do
+    grupo("cama" .. i)
+    local b = L.POR_ID["cama" .. i]
+    cama(b.x, b.z, ({ TAPETE, "#3d5a8a", "#3d5a8a", TAPETE })[i])
+  end
+  grupo("bau_quartos")
+  local b = L.POR_ID.bau_quartos
+  caixa(b.x, 0, b.z, 1, 0.5, 0.6, MAD_MED)
+  caixa(b.x, 0.5, b.z, 1.04, 0.1, 0.64, TAMPO)
+  caixa(b.x, 0.28, b.z + 0.31, 0.16, 0.2, 0.03, OURO)
+  grupo(nil)
+end
+
+local function sala_guilda(e)
+  if e <= 0 then return end
+  local o = e + math.sin(e * math.pi) * 0.12
+  local x0, x1, z0, z1 = L.sala_mundo("sala_guilda")
+  casca_sala("sala_guilda", x0, x1, z0, z1, o, { piso1 = "#6e675c", piso2 = "#645d53", parede = "#3a3f55", parede_lado = "#333749",
+    rodape = PEDRA_CLARA, viga = "#23263a", folha = MAD_ESC, acento = OURO })
+  -- estandarte: é a cor que diz "guilda"
+  if not L.parede_baixa("sala_guilda", "fundo", (x0 + x1) / 2) then
+    caixa((x0 + x1) / 2, 1.5 * o, z0 + 0.06, 1, 1.9 * o, 0.05, AZUL_GUILDA)
+    caixa((x0 + x1) / 2, 3.4 * o, z0 + 0.09, 1.1, 0.08, 0.05, OURO)
+  end
+  grupo("tapete_guilda")
+  tapete(53, 0, 3, 2)
+  grupo("mesa_guilda")
+  local x, z = 53, -1.9
+  for _, q in ipairs({ { -1, -0.4 }, { 1, -0.4 }, { -1, 0.4 }, { 1, 0.4 } }) do caixa(x + q[1], 0, z + q[2], 0.14, 0.75, 0.14, MAD_ESC) end
+  caixa(x, 0.75, z, 2.3, 0.1, 1.05, TAMPO)
+  caixa(x - 0.5, 0.85, z, 0.6, 0.03, 0.4, PERGAMINHO)
+  caixa(x + 0.1, 0.85, z + 0.1, 0.44, 0.03, 0.32, "#e6d3a8")
+  cilindro(x + 0.75, 0.85, z - 0.15, 0.18, 0.2, VIGA)
+  vela(x + 0.75, 1.05, z - 0.15, 0.1)
+  grupo("cadeira_guilda")
+  x, z = 53, -3
+  for _, q in ipairs({ { -0.3, -0.3 }, { 0.3, -0.3 }, { -0.3, 0.3 }, { 0.3, 0.3 } }) do caixa(x + q[1], 0, z + q[2], 0.1, 0.45, 0.1, MAD_ESC) end
+  caixa(x, 0.45, z, 0.72, 0.1, 0.72, AZUL_GUILDA)
+  caixa(x, 0.55, z - 0.32, 0.72, 0.85, 0.1, MAD_MED)
+  grupo("estante_guilda")
+  x, z = 51.6, -4.15
+  caixa(x, 0, z, 1.7, 2.4, 0.5, MAD_ESC)
+  local livros = { "#a13b3b", "#3c68a8", "#3f8d4f", "#d0a23e", "#7a4a9c" }
+  for k = 0, 2 do
+    caixa(x, 0.5 + k * 0.7, z + 0.2, 1.5, 0.06, 0.12, TAMPO)
+    for i = 0, 4 do caixa(x - 0.6 + i * 0.3, 0.56 + k * 0.7, z + 0.2, 0.2, 0.38, 0.1, livros[(i + k) % 5 + 1]) end
+  end
+  grupo(nil)
+end
+
+-- escada encostada no fundo: sobe degrau a degrau; `desce` escurece, como um vão no piso
+local function escada(x, z, desce, c1, c2)
+  if desce then
+    caixa(x, 0, z, 2.6, 0.03, 1.5, VIGA)
+    for i = 0, 5 do
+      caixa(x - 1.1 + i * 0.44, 0.025, z, 0.4, 0.02, 1.22, ({ "#21170e", "#33251a", "#4a3626", "#624a33", "#7c6043", "#967855" })[i + 1])
+    end
+    caixa(x, 0, z - 0.72, 2.6, 0.75, 0.07, MAD_ESC)
+    caixa(x, 0, z + 0.72, 2.6, 0.75, 0.07, MAD_ESC)
+  else
+    for i = 0, 7 do caixa(x - 1.12 + i * 0.32, 0, z, 0.34, 0.2 + i * 0.3, 1.3, i % 2 == 0 and c1 or c2) end
+    caixa(x + 1.45, 0, z, 0.5, 2.6, 1.5, "#161009")
+    caixa(x + 1.45, 2.6, z, 0.6, 0.12, 1.6, VIGA)
+  end
+end
+
+-- Hall dos andares extras: do tamanho do salão, com escada e piso próprios. Subsolo: pedra, sem janela.
+local function hall(andar)
+  local xa, xb, za, zb = L.salao()
+  local id = andar == 1 and "hall_cima" or "hall_baixo"
+  if andar == 1 then
+    piso(xa, xb, za, zb, "#7a5a3a", "#715335")
+    caixa((xa + xb) / 2, -0.95, (za + zb) / 2, xb - xa + 0.6, 0.65, zb - za + 0.7, "#2a1b12")
+    local cores = { parede = PAREDE, viga = VIGA, rodape = "#2f1e13", folha = MAD_MED, acento = OURO }
+    parede(id, "fundo", xa - 0.4, xb, za, 1, cores, false, { ini = 0.9, passo = 3 })
+    cores.parede = "#47301f"
+    parede(id, "oeste", za, zb + 0.35, xa, 1, cores, false, { ini = 1.5, passo = 2.5 })
+    -- janelas acesas: lá em cima entra luz
+    for k = 0, 2 do
+      local jz = za + 2 + k * (zb - za - 4) / 2
+      if not L.parede_baixa(id, "oeste", jz) then
+        caixa(xa + 0.04, 1.5, jz, 0.08, 1.5, 1.2, VIGA)
+        brilho("caixa", xa + 0.09, 2.25, jz, 0.04, 1.26, 0.96, "#ffc96b", 1.3)
+        caixa(xa + 0.12, 2.2, jz, 0.03, 0.08, 0.96, VIGA)
+      end
+    end
+    grupo("escada_cima")
+    escada(-4.3, -3.6, true)
+    grupo("tapete_cima")
+    tapete(0, 0.1, 5.6, 1.8)
+    grupo(nil)
+  else
+    lajes(xa, xb, za, zb, PEDRA_ESC, "#46423f", 1)
+    local cores = { parede = "#3a3634", viga = "#2a2725", rodape = "#2b2523", folha = "#3a2415", acento = FERRO }
+    parede(id, "fundo", xa - 0.4, xb, za, 1, cores, false, { ini = 0.9, passo = 3 })
+    cores.parede = "#33302e"
+    parede(id, "oeste", za, zb + 0.35, xa, 1, cores, false, { ini = 1.5, passo = 2.5 })
+    -- tochas: a única luz do subsolo
+    for k = 0, 2 do
+      local tx = xa + 2 + k * (xb - xa - 4) / 2
+      if not L.parede_baixa(id, "fundo", tx) then
+        caixa(tx, 2.3, za + 0.12, 0.08, 0.5, 0.08, FERRO)
+        brilho("cone", tx, 2.8, za + 0.14, 0.24, 0.4, 0.24, FOGO, 1.3)
+      end
+    end
+    grupo("escada_baixo")
+    escada(-4.3, -3.6, false, PEDRA, "#635f5a")
+    grupo("barris_baixo")
+    barril(4.8, -3.6, 1)
+    barril(5.75, -3.5, 0.9)
+    barril(5.25, -2.75, 0.8)
+    grupo(nil)
+  end
+end
+
+-- Botões de andar na borda esquerda, só quando há mais de um andar
+function M.desenhar_botoes_andar()
+  local lista = L.andares()
+  if #lista < 2 then return end
+  local a = U.celular() and 60 or 46
+  local y = (540 - #lista * (a + 6)) / 2
+  local curto = { [1] = "2º", [0] = "T", [-1] = "S" }
+  for _, n in ipairs(lista) do
+    local ativo = n == L.andar_ativo
+    U.botao("andar_" .. n, 8, y, a, a, curto[n], { cor = ativo and cor.ouro or "#21150ee8", cor_texto = ativo and cor.texto_ouro or cor.texto, tam = 18 }, function()
+      L.mudar_andar(n)
+      local E = package.loaded["editor"]
+      if E then E.sel = nil end
+    end)
+    y = y + a + 6
   end
 end
 
@@ -1325,7 +1665,7 @@ local function equipe_fixa()
     end
   end
   grupo("cozinheiro")
-  if J.ef("cozinheiro") > 0 then
+  if J.ef("cozinheiro") > 0 and L.andar_de("cozinha") == L.andar_ativo then
     local c = M.cozinheiro
     local x, z, giro = 14, -2.5, math.pi
     if c and not c.parado then x, z, giro = c.x, c.z, c.giro end
@@ -1348,7 +1688,7 @@ local function equipe_fixa()
     end
   end
   grupo("bardo")
-  if J.ef("bardo") > 0 then
+  if J.ef("bardo") > 0 and L.andar_ativo == 0 then
     local b = math.sin(M.tempo * 5) * 0.03
     M.boneco({ x = -5.1, z = -1.25, y = b + 0.03, giro = 0.9, fase = 0, pele = "#c68a5a", tipo = T_BARDO, chapeu = "#3e5a4b" })
     peca("esfera", -4.85, 0.8, -1.0, 0.3, 0.42, 0.14, 0.9, "#a5703f")
@@ -1407,47 +1747,76 @@ function M.desenhar_cena()
   local t = M.tempo
   local f = 1 + math.sin(t * 9) * 0.1 + math.sin(t * 23) * 0.07
   local fx, fz = L.t("lareira", -5.3, -3.2)
-  motor.cena_luz(1, fx, 1.1, fz, 2.1 * f, 1.0 * f, 0.36 * f, 7.5)
-  local lmx, lmz = L.t("lampiao2", -0.6, -3.0)
-  motor.cena_luz(2, lmx, 2.6, lmz, 1.15, 0.8, 0.42, 8)
-  motor.cena_luz(3, 3.0, 2.4, -3.0, 0.75, 0.5, 0.26, 5.5)
+  local ativo = L.andar_ativo
+  if ativo == 0 then
+    motor.cena_luz(1, fx, 1.1, fz, 2.1 * f, 1.0 * f, 0.36 * f, 7.5)
+    local lmx, lmz = L.t("lampiao2", -0.6, -3.0)
+    motor.cena_luz(2, lmx, 2.6, lmz, 1.15, 0.8, 0.42, 8)
+    motor.cena_luz(3, 3.0 + L.origem.x, 2.4, -3.0 + L.origem.z, 0.75, 0.5, 0.26, 5.5)
+  else
+    -- lá em cima janelas claras; no subsolo só as tochas, mais fracas e tremendo
+    local xa, xb, za, zb = L.salao()
+    local k = ativo == 1 and 1 or 0.7 * f
+    motor.cena_luz(1, xa + 3, 2.4, za + 2, 1.5 * k, 1.05 * k, 0.55 * k, 8.5)
+    motor.cena_luz(2, (xa + xb) / 2, 2.6, (za + zb) / 2, 1.2 * k, 0.85 * k, 0.45 * k, 9)
+    motor.cena_luz(3, xb - 3, 2.4, za + 2, 1.2 * k, 0.85 * k, 0.45 * k, 8)
+  end
   local c = a.circulo
-  if c > 0 then
+  if c > 0 and L.andar_de("circulo") == ativo then
     local cirx, cirz = L.t("circulo", CIRC_X, CIRC_Z)
     motor.cena_luz(4, cirx, 1.2, cirz, 0.9 * c, 0.6 * c, 1.5 * c, 6)
-  else
+  elseif ativo == 0 then
     local l = a.leste
     local brx, brz = L.t("barraca", 9.3, -1.4)
     motor.cena_luz(4, brx, 2.2, brz, 0.95 * l, 0.66 * l, 0.36 * l, 6.5)
+  else
+    local sala = ativo == 1 and "quartos_sala" or nil
+    if sala then
+      local x0, x1, z0, z1 = L.sala_mundo(sala)
+      motor.cena_luz(4, (x0 + x1) / 2, 2.4, (z0 + z1) / 2, 1.1, 0.8, 0.42, 8)
+    else
+      motor.cena_luz(4, 0, 2.4, 0, 0, 0, 0, 1)
+    end
   end
 
-  salao()
-  extras()
-  ala_leste(a.leste)
-  grupo("jardim")
-  jardim(a.jardim)
-  grupo("pomar")
-  pomar(a.pomar)
-  grupo("fazenda")
-  fazenda(a.fazenda)
-  grupo(nil)
-  cozinha(a.cozinha)
-  grupo(nil)
-  cervejaria(a.cerveja)
-  grupo(nil)
-  circulo(a.circulo)
+  if ativo == 0 then
+    salao()
+    extras()
+    ala_leste(a.leste)
+    grupo("jardim")
+    jardim(a.jardim)
+    grupo("pomar")
+    pomar(a.pomar)
+    grupo("fazenda")
+    fazenda(a.fazenda)
+    grupo(nil)
+  else
+    hall(ativo)
+  end
+  -- salas internas aceitam qualquer andar: só a do andar ativo aparece
+  for _, s in ipairs({ { "cozinha", cozinha, a.cozinha }, { "cervejaria", cervejaria, a.cerveja }, { "circulo", circulo, a.circulo },
+    { "quartos_sala", quartos_sala, a.quartos }, { "sala_guilda", sala_guilda, a.guilda } }) do
+    if L.andar_de(s[1]) == ativo then
+      grupo(nil)
+      s[2](s[3])
+    end
+  end
   grupo(nil)
 
   for _, p in ipairs(J.pessoas) do
-    -- do lado de fora da parede ninguém é desenhado: a pessoa surge já dentro do vão
-    if not J.fora_da_porta(p) then M.boneco(p) end
-    if p.estado == "brigando" then poeira_briga(p) end
+    -- gente de outro andar não aparece; do lado de fora da parede também não: surge já dentro do vão
+    if (p.andar or 0) == ativo then
+      if not J.fora_da_porta(p) then M.boneco(p) end
+      if p.estado == "brigando" then poeira_briga(p) end
+    end
   end
-  for _, g in ipairs(J.garcons) do garcom(g) end
+  for _, g in ipairs(J.garcons) do
+    if (g.andar or 0) == ativo then garcom(g) end
+  end
   equipe_fixa()
 
   -- os invocados ficam em volta do círculo quando não estão em missão
-  if a.circulo > 0.9 then
+  if a.circulo > 0.9 and L.andar_de("circulo") == ativo then
     local i = 0
     for _, ch in ipairs(J.estado.contratados) do
       if ch.invocado and not ch.em_missao and not ch.na_final then
@@ -1471,7 +1840,9 @@ end
 
 function M.desenhar_baloes()
   local e = util.limitar(1 / M.quadro.escala * M.zoom, 0.72, 1.1)
+  local ativo = L.andar_ativo
   for _, p in ipairs(J.pessoas) do
+    if (p.andar or 0) ~= ativo then goto proxima end
     if p.estado == "menestrel_canta" then
       local x, y = M.posicao_balao(p)
       if x then
@@ -1514,10 +1885,11 @@ function M.desenhar_baloes()
         end
       end
     end
+    ::proxima::
   end
   for _, f in ipairs(J.efeitos) do
     local x, y = motor.projetar(f.x, f.y, f.z)
-    if x then
+    if x and (f.andar or 0) == ativo then
       local q = f.vida / 1.1
       motor.opacidade(1 - q * q)
       motor.texto(f.texto, x + 1, y - q * 44 + 2, f.tam, "#00000088", "centro", true)
@@ -1531,7 +1903,7 @@ end
 function M.tocar(x, y)
   local melhor, md = nil, 42
   for _, p in ipairs(J.pessoas) do
-    if p.estado == "esperando" or p.estado == "brigando" then
+    if (p.andar or 0) == L.andar_ativo and (p.estado == "esperando" or p.estado == "brigando") then
       local sx, sy = M.posicao_balao(p)
       if sx then
         local d = util.distancia(x, y, sx, sy)
