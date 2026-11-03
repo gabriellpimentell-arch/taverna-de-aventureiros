@@ -20,7 +20,8 @@ Tudo no jogo se faz com um toque (celular) ou um clique (desktop): não há pers
 
 - **Uma ação, um toque**: servir, contratar, comprar habilidade, coletar ouro.
 - **Sistema**: configurações (música, efeitos, tela cheia, sombras, FPS), minimizar, estatísticas, créditos, salvar, apagar progresso com confirmação e sair. Esc abre e fecha o menu.
-- **Modo de edição**: F2 ou Configurações. Move, gira e sobe objetos; as posições valem para as regras e as colisões e continuam após as atualizações.
+- **Novidades**: quando algo importante pode ser liberado, o jogo pausa e mostra uma tela com os benefícios e o botão para liberar.
+- **Modo de edição**: F2 ou Configurações. Move, gira e sobe cada objeto, um a um, e ajusta o tamanho do salão; as posições valem para as regras e as colisões e continuam após as atualizações.
 - **Mesmo comportamento nas duas plataformas**: o motor traduz toque e clique para a mesma ação genérica, e o Lua nunca sabe qual foi.
 - **Botões grandes**: alvos de toque com pelo menos 48 px, pensando no polegar.
 - **Sem gestos difíceis**: nada de arrastar com precisão, pinça ou toque duplo como única forma de fazer algo. Rolagem de listas é o único arraste.
@@ -131,7 +132,8 @@ O ritmo exato (quanto ouro para cada etapa) fica para o balanceamento, já nos s
 
 **Eventos e personalidades**:
 
-- Histórias e fofocas: a cada 12 missões, um relato aumenta o pagamento das missões por 1 minuto.
+- Menestrel: a cada 12 missões, ele entra na taverna, conta uma história em uma faixa na tela e as missões rendem mais por 1 minuto.
+- Fazendeiro: cuida só do jardim e aumenta as colheitas. Cervejeiro: aparece junto com a cervejaria.
 - Personalidades: guerreiro e arqueiro na mesma mesa brigam; mago e clérigo geram bônus de consumo.
 - Tom: humor leve, para cada evento ser divertido de ler em poucos segundos.
 

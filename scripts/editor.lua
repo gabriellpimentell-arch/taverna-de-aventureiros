@@ -72,13 +72,11 @@ local function acao(fn)
 end
 
 function E.mover_para(id, x, z)
-  local o, d = L.POR_ID[id], L.de(id)
   if E.grade then
     x = math.floor(x * 4 + 0.5) / 4
     z = math.floor(z * 4 + 0.5) / 4
   end
-  local ax, az = L.desloc(id)
-  d.x, d.z = x - o.x - (ax - d.x), z - o.z - (az - d.z)
+  L.colocar(id, x, z)
   L.limitar(id)
   J.aplicar_visual()
 end
@@ -109,10 +107,12 @@ function E.tocar(x, y)
   else
     E.sel = nil
     E.arrasto = nil
+    E.pan = { x = x, y = y }   -- arrastar o chão vazio move a câmera (com zoom)
   end
 end
 
 function E.soltar()
+  E.pan = nil
   if E.arrasto then
     if E.arrasto.moveu then mudou() else table.remove(E.desfazer) end
     E.arrasto = nil
@@ -137,6 +137,13 @@ function E.atualizar(dt)
   elseif E.arrasto then
     -- soltou com o mouse fora da janela
     E.soltar()
+  end
+  if E.pan and motor.mouse_baixo() then
+    local px, py = motor.mouse()
+    M.arrastar(px - E.pan.x, py - E.pan.y)
+    E.pan.x, E.pan.y = px, py
+  elseif E.pan then
+    E.pan = nil
   end
   local r = motor.roda()
   if r ~= 0 then

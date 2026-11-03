@@ -27,21 +27,36 @@ function Cam.montar(limites, obstaculos)
   for iz = 0, NZ - 1 do
     for ix = 0, NX - 1 do
       local x, z = centro(ix, iz)
-      local b = x < limites[1] or x > limites[2] or z < limites[3] or z > limites[4]
-      if not b then
-        for i = 1, #obstaculos do
-          local o = obstaculos[i]
+      bloq[idx(ix, iz)] = x < limites[1] or x > limites[2] or z < limites[3] or z > limites[4]
+    end
+  end
+  -- cada obstáculo só olha os quadradinhos em volta dele: um salão enorme continua rápido
+  for i = 1, #obstaculos do
+    local o = obstaculos[i]
+    local cx, cz, alcance
+    if o.r then
+      cx, cz, alcance = o.x, o.z, o.r + RAIO
+    else
+      local ax, az = o.ex / 2 + RAIO, o.ez / 2 + RAIO
+      cx, cz = o.mundo(o.id, o.x, o.z)
+      alcance = math.sqrt(ax * ax + az * az)
+    end
+    local i0, k0 = celula(cx - alcance, cz - alcance)
+    local i1, k1 = celula(cx + alcance, cz + alcance)
+    for iz = math.max(0, k0), math.min(NZ - 1, k1) do
+      for ix = math.max(0, i0), math.min(NX - 1, i1) do
+        local n = idx(ix, iz)
+        if not bloq[n] then
+          local x, z = centro(ix, iz)
           if o.r then
-            local dx, dz = x - o.x, z - o.z
-            local r = o.r + RAIO
-            if dx * dx + dz * dz < r * r then b = true break end
+            local dx, dz = x - cx, z - cz
+            bloq[n] = dx * dx + dz * dz < alcance * alcance
           else
             local bx, bz = o.base(o.id, x, z)
-            if math.abs(bx - o.x) < o.ex / 2 + RAIO and math.abs(bz - o.z) < o.ez / 2 + RAIO then b = true break end
+            bloq[n] = math.abs(bx - o.x) < o.ex / 2 + RAIO and math.abs(bz - o.z) < o.ez / 2 + RAIO
           end
         end
       end
-      bloq[idx(ix, iz)] = b
     end
   end
 end
@@ -142,7 +157,7 @@ function Cam.rota(sx, sz, gx, gz)
         if marca[n] ~= geracao or c < custo[n] then
           marca[n], custo[n], veio[n] = geracao, c, at
           local hx, hz = math.abs(nx - gi), math.abs(nz - gk)
-          pus(n, c + math.max(hx, hz) + 0.414 * math.min(hx, hz))
+          pus(n, c + (math.max(hx, hz) + 0.414 * math.min(hx, hz)) * 1.001)
         end
       end
     end
@@ -153,8 +168,13 @@ function Cam.rota(sx, sz, gx, gz)
   while at do
     local iz = (at - 1) // NX
     local x, z = centro(at - 1 - iz * NX, iz)
-    table.insert(pontos, 1, { x = x, z = z })
+    pontos[#pontos + 1] = { x = x, z = z }
     at = veio[at]
+  end
+  -- estava do destino para o início
+  for a = 1, #pontos // 2 do
+    local c = #pontos - a + 1
+    pontos[a], pontos[c] = pontos[c], pontos[a]
   end
   pontos[#pontos] = { x = gx, z = gz }
 

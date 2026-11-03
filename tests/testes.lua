@@ -1130,6 +1130,311 @@ do
   novo()
 end
 
+-- Notícias que pausam, menestrel, filhos no layout, salão grande e congestionamento --------------
+do
+  local L, Ed, M, Cam = require("layout"), require("editor"), require("mundo"), require("caminhos")
+  local function limpa_layout() motor._layout = false; novo() end
+  local function tudo()
+    for _ = 1, 40 do for _, no in ipairs(A.NOS) do J.estado.ouro = 1e40; J.comprar_no(no.id) end end
+  end
+
+  -- notícias -----------------------------------------------------------------
+  limpa_layout()
+  for _, n in ipairs(J.NOTICIAS) do ok("notícia aponta para nó que existe", A.POR_ID[n.id] ~= nil, n.id) end
+  J.noticia = J.NOTICIAS[1]; J.banner = { titulo = "x", texto = "y", vida = 0, duracao = 8 }
+  J.apagar_progresso(); T.iniciar()
+  ok("apagar progresso limpa notícia e faixa", J.noticia == nil and J.banner == nil)
+
+  -- a fofoca número 12 apagava notícia, faixa e o medidor de travados
+  novo()
+  J.noticia = nil
+  J.media_travados = 5; J.travados = 2
+  J.fofoca_conta = C.fofoca_a_cada - 1
+  J.estado.missoes[1] = { rank = 1, resta = 0.01 }
+  J.atualizar(0.1)
+  ok("menestrel não zera o medidor de travados", J.fofoca_conta == 0 and J.media_travados > 4, J.media_travados)
+
+  -- save antigo, sem o campo notícias, com muito ouro: nada de fila de janelas
+  for _, ruim in ipairs({ false, "x" }) do
+    J.estado.ouro = 1e12; J.estado.noticias = ruim or nil
+    motor._save = util.serializar(J.estado)
+    iniciar(); T.iniciar()
+    J.sem_noticias = false
+    local t0 = J.estado.tempo
+    for _ = 1, 30 do atualizar(0.1) end
+    ok("save antigo não abre notícia do que já podia comprar", J.noticia == nil and J.estado.tempo > t0, J.noticia and J.noticia.id)
+    J.sem_noticias = true
+    J.estado.ouro = 1e12
+  end
+
+  -- pausa: nunca trava; fecha em qualquer aba, e o editor não a perde
+  novo()
+  J.sem_noticias = false
+  J.estado.ouro = 100
+  for _ = 1, 10 do J.atualizar(0.1) end
+  ok("notícia abriu", J.noticia ~= nil)
+  local t0 = J.estado.tempo
+  for _, aba in ipairs({ "arvore", "missoes", "mercadinho", "producao", "aventureiros", "invocacao", "taverna" }) do
+    T.aba = aba; quadros(2)
+    ok("notícia continua na aba " .. aba, J.noticia ~= nil and J.estado.tempo == t0)
+  end
+  T.aba = "arvore"; desenhar()
+  local z0 = T.arv.zoom
+  motor._roda = 3; atualizar(0.1)
+  ok("roda não mexe atrás da notícia", T.arv.zoom == z0)
+  T.aba = "taverna"; desenhar()
+  T.f2(); quadros(2); T.f2(); quadros(1)
+  ok("editor não perde a notícia", J.noticia ~= nil and not Ed.ativo)
+  ok("notícia fecha depois do editor", U.apertar("noticia_depois") and J.noticia == nil)
+  J.sem_noticias = true
+  quadros(3)
+  ok("jogo volta a correr", J.estado.tempo > t0)
+
+  -- a notícia que nasce no instante do final não fica por cima da tela final
+  novo()
+  J.sem_noticias = false
+  J.estado.ouro = 1e6; J.relogio_noticia = 0.5; J.estado.final_resta = 0.01
+  J.atualizar(0.1)
+  ok("fim limpa a notícia", J.estado.fim and J.noticia == nil)
+  J.sem_noticias = true
+
+  -- robô com notícias ligadas não pode ficar parado para sempre
+  novo()
+  J.sem_noticias = false
+  require("robo").jogar(0.05, 0.25)
+  ok("robô fecha as notícias e o tempo corre", J.estado.tempo > 170, J.estado.tempo)
+  J.sem_noticias = true
+
+  -- menestrel ---------------------------------------------------------------
+  local function menestrel()
+    for _, p in ipairs(J.pessoas) do if p.menestrel then return p end end
+  end
+  novo()
+  J.chamar_menestrel()
+  J.salvar()
+  ok("menestrel não vai para o save", not motor._save:find("menestrel", 1, true) and not motor._save:find("historia", 1, true))
+  J.apagar_progresso(); T.iniciar()
+  ok("apagar progresso tira o menestrel", menestrel() == nil and #J.pessoas == 0)
+  quadros(3)
+  J.buff = 0
+  J.chamar_menestrel()
+  J.aplicar_layout()
+  ok("aplicar layout não perde a história", menestrel() == nil and J.buff > 0, J.buff)
+
+  -- porta lotada: ele entra mesmo assim; lugar dele em cima de uma mesa: atravessa e sai
+  novo()
+  libera("mesa", "mesa", "mesa")
+  for _ = 1, 4 do
+    local c = J.novo_cliente(); J.relogio_chegada = 0
+    if c then c.x, c.z, c.rota = J.PORTA.x, J.PORTA.z, {} end
+  end
+  J.buff = 0
+  L.de("palco").x = L.POR_ID.mesa1.x - L.POR_ID.palco.x
+  J.montar_mapa()
+  J.chamar_menestrel()
+  local cantou
+  for _ = 1, 400 do
+    J.atualizar(0.1)
+    local m = menestrel()
+    if m and m.estado == "menestrel_canta" then cantou = true end
+    if cantou and not m then break end
+  end
+  ok("menestrel canta e sai mesmo sem caminho", cantou and menestrel() == nil and J.buff ~= 0, J.buff)
+  L.dados.palco = nil
+
+  -- salão enorme: ele chega ao palco em vez de cantar no meio do caminho
+  L.tamanho.oeste = 40
+  J.aplicar_layout()
+  J.chamar_menestrel()
+  local m = menestrel()
+  for _ = 1, 400 do
+    J.atualizar(0.1)
+    if m.estado == "menestrel_canta" then break end
+  end
+  ok("menestrel chega ao palco num salão enorme", m.estado == "menestrel_canta" and util.distancia(m.x, m.z, -1.65, 0.2) < 1.5, m.x)
+  L.tamanho.oeste = 0
+  J.aplicar_layout()
+
+  -- objetos filhos ------------------------------------------------------------
+  limpa_layout()
+  local function perto(a, b, c, e) return math.abs(a - c) < 0.001 and math.abs(b - e) < 0.001 end
+  T.f2(); quadros(1)
+  Ed.sel = "balcao"
+  L.de("balcao").g = math.pi / 2
+  L.dados.balcao.y = 1
+  local g = L.dados.balcao.g
+  local x1, z1 = L.t("caneca1", 1.05, -1.98)
+  local x2, z2 = L.t("balcao", 1.05, -1.98)
+  ok("caneca gira junto com o balcão", perto(x1, z1, x2, z2), x1 .. "," .. x2)
+  ok("filho soma o giro e a altura", math.abs(L.giro("caneca1") - g) < 0.001 and L.altura("barrilete") == 1)
+  local alto
+  local velho = motor.peca
+  motor.peca = function(f, _, y, _, _, ey, _, _, c) if c == "#e8a33d" and ey == 0.2 and y > 2 then alto = true end end
+  desenhar()
+  motor.peca = velho
+  ok("caneca sobe junto com o balcão", alto)
+  -- arrastar o filho com o pai girado
+  Ed.grade = false
+  Ed.mover_para("caneca2", 2, 0)
+  local dx, dz = L.desloc("caneca2")
+  ok("mover filho de pai girado vai ao ponto pedido", perto(L.POR_ID.caneca2.x + dx, L.POR_ID.caneca2.z + dz, 2, 0), dx)
+  -- mover o pai leva o filho
+  local a0 = L.desloc("caneca2")
+  L.dados.balcao.x = L.dados.balcao.x + 1
+  ok("filho acompanha o pai", math.abs(L.desloc("caneca2") - a0 - 1) < 0.001)
+  L.dados.balcao.y = 0
+  -- desfazer e restaurar
+  local giro_antes = L.dados.balcao.g
+  Ed.sel = "balcao"; desenhar()
+  U.apertar("editor_girar_mais"); desenhar()
+  ok("giro mudou", L.dados.balcao.g ~= giro_antes)
+  U.apertar("editor_desfazer"); desenhar()
+  ok("desfazer devolve o giro", L.dados.balcao.g == giro_antes)
+  Ed.sel = "caneca2"; desenhar()
+  U.apertar("editor_restaurar"); desenhar()
+  ok("restaurar um filho deixa o pai como está", L.dados.caneca2 == nil and L.dados.balcao ~= nil)
+  T.esc()
+  limpa_layout()
+
+  -- layout antigo: ids que sumiram viram os novos; lixo é ignorado
+  motor._layout = util.serializar({
+    barris_fundo = { x = 1, z = 0.5, y = 0, g = 0 }, barris_frente = { x = 0.5, z = 0, y = 0.2, g = 0 },
+    garrafas = { x = -1, z = 0, y = 0, g = 0 }, nao_existe = { x = 3, z = 3 }, mesa1 = "texto", balcao = { x = 1 },
+  })
+  novo()
+  local bx, bz = L.desloc("barril1")
+  ok("layout antigo: barris do fundo continuam movidos", perto(bx, bz, 1, 0.5), bx)
+  ok("layout antigo: barris da frente também", (L.desloc("barril5")) == 0.5 and L.altura("barril4") == 0.2)
+  ok("layout antigo: prateleira e garrafas juntas", (L.desloc("prateleira")) == -1 and (L.desloc("garrafa3")) == -1)
+  ok("layout antigo: lixo ignorado", L.dados.nao_existe == nil and L.dados.mesa1 == nil and L.dados.balcao.x == 1)
+  L.salvar()
+  ok("layout novo não guarda nomes velhos", not motor._layout:find("barris_fundo", 1, true))
+  quadros(2)
+  -- um barril editado à mão vale mais que o grupo antigo
+  motor._layout = util.serializar({ barris_fundo = { x = 1, z = 0, y = 0, g = 0 }, barril2 = { x = -0.5, z = 0, y = 0, g = 0 } })
+  L.carregar()
+  ok("posição nova tem prioridade sobre a antiga", (L.desloc("barril2")) == -0.5 and (L.desloc("barril1")) == 1)
+  -- pai longe e filho no limite: a ordem de leitura do arquivo não pode mudar o resultado
+  motor._layout = util.serializar({ jardim = { x = 0, z = 3, y = 0, g = 0 }, canteiros = { x = 0, z = 2, y = 0, g = 0 } })
+  L.carregar()
+  local _, cz = L.desloc("canteiros")
+  ok("filho é limitado já contando o pai", L.POR_ID.canteiros.z + cz <= 4.7 + 5.3 + 0.001, cz)
+  limpa_layout()
+
+  -- tamanho do salão -----------------------------------------------------------
+  T.f2(); quadros(1)
+  L.mudar_tamanho("dir", 20)
+  Ed.grade = false
+  Ed.mover_para("mesa1", 24, 0.2)
+  L.mudar_tamanho("dir", -20)
+  ok("encolher traz de volta quem ficou de fora", L.POR_ID.mesa1.x + (L.desloc("mesa1")) <= 6.5 + 6.5 + 0.001, (L.desloc("mesa1")))
+  L.restaurar()
+  T.esc()
+  L.tamanho.fundo = 10
+  local _, cozz = L.desloc("cozinheiro")
+  local _, fogz = L.desloc("fogao")
+  ok("cozinheiro acompanha o fogão quando o fundo cresce", math.abs((fogz - cozz) - (0 - (L.dados.cozinheiro and L.dados.cozinheiro.z or 0))) < 0.001, cozz)
+  L.tamanho.fundo = 0
+
+  -- a grade dos caminhos é a mesma de antes, mas sem olhar o salão inteiro por obstáculo
+  local caixa = { id = "mesa2", x = 0.3, z = 0.2, ex = 2, ez = 0.6, base = L.base, mundo = L.t }
+  L.de("mesa2").g = 0.7
+  local circ = { x = -3, z = 2, r = 0.9 }
+  Cam.montar({ -6, 6, -4, 4 }, { caixa, circ })
+  local diferente = 0
+  for x = -5.875, 5.875, 0.25 do
+    for z = -3.875, 3.875, 0.25 do
+      local bx2, bz2 = L.base("mesa2", x, z)
+      local dentro = (math.abs(bx2 - 0.3) < 1.3 and math.abs(bz2 - 0.2) < 0.6) or util.distancia(x, z, -3, 2) < 1.2
+      if Cam.bloqueado(x, z) ~= dentro then diferente = diferente + 1 end
+    end
+  end
+  ok("grade rápida marca os mesmos quadradinhos", diferente == 0, diferente)
+  L.dados.mesa2 = nil
+  novo(); tudo()
+  L.tamanho.dir, L.tamanho.oeste, L.tamanho.fundo, L.tamanho.frente = 40, 40, 40, 40
+  local contas, base_velha = 0, L.base
+  L.base = function(...) contas = contas + 1; return base_velha(...) end
+  J.montar_mapa()
+  L.base = base_velha
+  ok("montar o mapa de um salão enorme é barato", contas < 20000, contas)
+  ok("ninguém fica sem rota no salão enorme", J.lugares_sem_rota() == 0)
+  ok("camera cabe no salão enorme", M.calcular_enquadramento(M.anim).escala > 5)
+  -- com +40 m a câmera fica a mais de 170 m: o limite fixo de 200 m cortava metade do salão
+  local fonte = io.open(raiz .. "/src/cena3d.h")
+  if fonte then
+    local txt = fonte:read("a"); fonte:close()
+    ok("limite de visão acompanha a câmera", not txt:find("0.5, 200.0)", 1, true))
+  end
+  M.rolar(5); M.arrastar(10000, 10000)
+  ok("pan fica dentro do limite", math.abs(M.pan_x) <= M.quadro.largura * 0.65 + 0.001)
+  M.rolar(-20)
+  ok("voltar o zoom centraliza", M.pan_x == 0 and M.pan_z == 0)
+  L.tamanho.dir, L.tamanho.oeste, L.tamanho.fundo, L.tamanho.frente = 0, 0, 0, 0
+  J.aplicar_layout()
+
+  -- fazendeiro e cervejeiro acompanham as áreas ---------------------------------
+  limpa_layout(); tudo(); T.iniciar()
+  L.tamanho.frente = 10
+  L.de("jardim").g = math.pi
+  M.anim.jardim, M.anim.cerveja = 1, 1
+  local enxada, avental
+  motor.peca = function(_, x, _, z, ex, ey, _, _, c)
+    if c == "#7b4a26" and ey == 1.3 then enxada = { x, z } end
+    if c == "#efe2c4" and ex == 0.42 then avental = { x, z } end
+  end
+  local indices = {}
+  for _ = 1, 200 do
+    desenhar(); M.atualizar(0.1)
+    indices[M.fazendeiro.i] = true
+  end
+  motor.peca = velho
+  local n_i = 0
+  for _ in pairs(indices) do n_i = n_i + 1 end
+  ok("fazendeiro passa por vários canteiros", n_i >= 2, n_i)
+  ok("fazendeiro acompanha o jardim", enxada and util.distancia(enxada[1], enxada[2], -3, 16.75) < 4.5, enxada and enxada[2])
+  ok("cervejeiro acompanha a cervejaria", avental and util.distancia(avental[1], avental[2], 3.5, 16.75) < 3, avental and avental[2])
+  L.restaurar()
+  limpa_layout()
+
+  -- congestionamento ------------------------------------------------------------
+  novo(); tudo(); J.aplicar_layout()
+  for i = 1, #J.lugares do
+    for k = i + 1, #J.lugares do
+      local a, b = J.lugares[i], J.lugares[k]
+      ok("bancos não se sobrepõem", util.distancia(a.x, a.z, b.x, b.z) >= Cam.DISTANCIA, i .. "-" .. k)
+    end
+  end
+  for _ = 1, 3000 do J.atualizar(0.1) end
+  ok("taverna cheia quase não pede socorro", J.socorros <= 5, J.socorros)
+  ok("taverna cheia quase não trava", J.media_travados < 3, J.media_travados)
+
+  -- quem está sentado perto da porta não fecha a entrada
+  novo()
+  libera("mesa", "mesa", "mesa")
+  for _ = 1, 3 do
+    local p = J.novo_cliente(); J.relogio_chegada = 0
+    p.x, p.z, p.sentado, p.andando, p.estado = J.PORTA.x + 0.5, J.PORTA.z, true, false, "esperando"
+  end
+  ok("sentados não lotam a porta", not J.porta_lotada())
+  -- três estátuas na porta seguram a chegada só por alguns segundos
+  novo()
+  libera("mesa", "mesa", "mesa")
+  local estatuas = {}
+  for i = 1, 3 do
+    local p = J.novo_cliente(); J.relogio_chegada = 0
+    estatuas[i] = p
+  end
+  local entrou
+  for i = 1, 150 do
+    for _, p in ipairs(estatuas) do p.x, p.z, p.andando, p.t = J.PORTA.x + 0.3, J.PORTA.z, true, 0 end
+    J.atualizar(0.1)
+    if #J.pessoas > 3 then entrou = i break end
+  end
+  ok("porta lotada não impede a chegada para sempre", entrou ~= nil and entrou <= 120, entrou)
+  limpa_layout()
+end
+
 -- Jogo completo: robô chega ao final ---------------------------------------------------------------
 if arg[3] ~= "rapido" then
   novo()

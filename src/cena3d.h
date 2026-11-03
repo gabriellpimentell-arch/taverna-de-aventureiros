@@ -18,6 +18,7 @@
 #include "raymath.h"
 #include "rlgl.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstring>
 #include <vector>
@@ -178,7 +179,9 @@ static void preparar() {
 static Matrix matrizVista() { return MatrixLookAt(E.camPos, E.camAlvo, Vector3{0, 1, 0}); }
 
 static Matrix matrizProjecao(float largura, float altura) {
-    return MatrixPerspective(E.fov * DEG2RAD, largura / altura, 0.5, 200.0);
+    // a câmera recua com o tamanho da taverna: o limite de visão precisa recuar junto
+    float d = Vector3Distance(E.camPos, E.camAlvo);
+    return MatrixPerspective(E.fov * DEG2RAD, largura / altura, 0.5, std::max(200.0f, d * 3.0f));
 }
 
 // Desenha a cena na área (x, y, w, h) da tela, em pixels, contando de cima.

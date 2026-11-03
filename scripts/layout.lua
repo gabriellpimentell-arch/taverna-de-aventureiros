@@ -19,7 +19,7 @@ local function ob(id, nome, x, z, cat, pai)
   L.POR_ID[id] = o
 end
 
-local MESAS = { { -3.6, 0.2 }, { 0.3, 0.2 }, { 4.2, 0.2 }, { -3.6, 3.4 }, { 0.3, 3.4 }, { 4.2, 3.4 }, { 8.0, 3.4 }, { 10.7, 3.4 } }
+local MESAS = { { -3.6, 0.2 }, { 0.3, 0.2 }, { 4.2, 0.2 }, { -3.6, 3.4 }, { 0.3, 3.4 }, { 4.2, 3.4 }, { 7.5, 3.4 }, { 10.7, 3.4 } } -- mesas 7 e 8 afastadas: bancos a menos de um corpo de distância travavam quem chegava
 for i, m in ipairs(MESAS) do
   ob("mesa" .. i, "Mesa " .. i, m[1], m[2], "Móveis", i >= 7 and "@leste" or nil)
 end
@@ -40,7 +40,7 @@ ob("barrilete", "Barrilete com torneira", 4.95, -2.3, "Balcão", "balcao")
 ob("caneca1", "Caneca 1", 1.05, -1.98, "Balcão", "balcao")
 ob("caneca2", "Caneca 2", 4.15, -1.98, "Balcão", "balcao")
 ob("fogao", "Fogão", 0.95, -3.55, "Balcão", "@fundo")
-ob("cozinheiro", "Cozinheiro", 0.95, -2.75, "Balcão")
+ob("cozinheiro", "Cozinheiro", 0.95, -2.75, "Balcão", "@fundo")
 ob("prateleira", "Prateleiras", 3.05, -4.32, "Balcão", "@fundo")
 for i = 1, 8 do
   ob("garrafa" .. i, "Garrafa " .. i, 0.65 + (i - 1) * 0.68, -4.3, "Balcão", "prateleira")
@@ -125,11 +125,27 @@ function L.desloc(id)
   local x, z = 0, 0
   if d then x, z = d.x, d.z end
   if o and o.pai then
-    local px, pz
-    if o.pai:sub(1, 1) == "@" then px, pz = ancora(o.pai) else px, pz = L.desloc(o.pai) end
-    x, z = x + px, z + pz
+    if o.pai:sub(1, 1) == "@" then
+      local px, pz = ancora(o.pai)
+      return x + px, z + pz
+    end
+    -- preso a outro objeto: gira e sobe junto com ele
+    local wx, wz = L.t(o.pai, o.x + x, o.z + z)
+    return wx - o.x, wz - o.z
   end
   return x, z
+end
+
+-- põe o centro do objeto em um ponto do mundo, seja quem for que o carrega
+function L.colocar(id, x, z)
+  local o, d = L.POR_ID[id], L.de(id)
+  if o.pai and o.pai:sub(1, 1) ~= "@" then
+    x, z = L.base(o.pai, x, z)
+  elseif o.pai then
+    local px, pz = ancora(o.pai)
+    x, z = x - px, z - pz
+  end
+  d.x, d.z = x - o.x, z - o.z
 end
 
 -- nada sai da área do jogo; fora dela ninguém consegue chegar e o objeto some da tela
@@ -138,16 +154,43 @@ function L.limitar(id)
   if not d then return end
   local xa, xb, za, zb = L.salao()
   local dx, dz = L.desloc(id)
-  local base_x, base_z = dx - d.x, dz - d.z
   local externo = o.cat == "Áreas" or o.cat == "Jardim" or o.cat == "Cervejaria" or o.cat == "Círculo"
-  d.x = util.limitar(d.x, xa - 0.5 - o.x - base_x, xb + 6.5 - o.x - base_x)
-  d.z = util.limitar(d.z, za - 0.5 - o.z - base_z, zb + (externo and 5.3 or 0.55) - o.z - base_z)
+  local wx, wz = o.x + dx, o.z + dz
+  local x = util.limitar(wx, xa - 0.5, xb + 6.5)
+  local z = util.limitar(wz, za - 0.5, zb + (externo and 5.3 or 0.55))
+  if x ~= wx or z ~= wz then L.colocar(id, x, z) end
   d.y = util.limitar(d.y, -1, 6)
 end
 
 function L.mudar_tamanho(lado, delta)
   local s = L.tamanho
   s[lado] = util.limitar((s[lado] or 0) + delta, 0, L.TAMANHO_MAX)
+  -- encolheu: o que estava no espaço que sumiu volta para dentro
+  for _, o in ipairs(L.OBJETOS) do L.limitar(o.id) end
+end
+
+-- nomes de versões antigas: um grupo virou vários objetos, e o que o jogador moveu continua movido
+local ANTIGOS = {
+  garrafas = { x = 3.05, z = -4.3, "prateleira" },
+  barris_fundo = { x = 5.2, z = -3.5, "barril1", "barril2", "barril3" },
+  barris_frente = { x = -5.2, z = 4.0, "barril4", "barril5" },
+}
+
+local function migrar(t)
+  for velho, g in pairs(ANTIGOS) do
+    local d = t[velho]
+    if type(d) == "table" then
+      local dg = numero(d.g)
+      local co, si = math.cos(dg), math.sin(dg)
+      for _, id in ipairs(g) do
+        if t[id] == nil then
+          local o = L.POR_ID[id]
+          local rx, rz = o.x - g.x, o.z - g.z
+          L.dados[id] = { x = numero(d.x) + g.x + rx * co + rz * si - o.x, z = numero(d.z) + g.z - rx * si + rz * co - o.z, y = numero(d.y), g = dg }
+        end
+      end
+    end
+  end
 end
 
 local function aplicar_tabela(t)
@@ -157,12 +200,14 @@ local function aplicar_tabela(t)
       L.tamanho[lado] = util.limitar(math.floor(numero(t._tamanho[lado])), 0, L.TAMANHO_MAX)
     end
   end
+  migrar(t)
   for id, d in pairs(t) do
     if L.POR_ID[id] and type(d) == "table" then
       L.dados[id] = { x = numero(d.x), z = numero(d.z), y = numero(d.y), g = numero(d.g) }
-      L.limitar(id)
     end
   end
+  -- só depois de ler tudo: o limite de um objeto depende de onde está quem o carrega
+  for _, o in ipairs(L.OBJETOS) do L.limitar(o.id) end
 end
 
 -- as posições oficiais vêm primeiro; as editadas neste computador têm prioridade
@@ -212,26 +257,36 @@ function L.de(id)
   return d
 end
 
+-- giro e altura somam os de quem carrega o objeto
+function L.giro(id)
+  local o, d = L.POR_ID[id], L.dados[id]
+  local g = d and d.g or 0
+  if o and o.pai and o.pai:sub(1, 1) ~= "@" then g = g + L.giro(o.pai) end
+  return g
+end
+
+function L.altura(id)
+  local o, d = L.POR_ID[id], L.dados[id]
+  local y = d and d.y or 0
+  if o and o.pai and o.pai:sub(1, 1) ~= "@" then y = y + L.altura(o.pai) end
+  return y
+end
+
 -- posição base -> posição no mundo, girando em volta do centro do objeto
 function L.t(id, x, z)
-  local o, d = L.POR_ID[id], L.dados[id]
+  local o = L.POR_ID[id]
   local dx, dz = L.desloc(id)
-  local g = d and d.g or 0
+  local g = L.giro(id)
   local co, si = math.cos(g), math.sin(g)
   local rx, rz = x - o.x, z - o.z
   return o.x + dx + rx * co + rz * si, o.z + dz - rx * si + rz * co
 end
 
-function L.giro(id)
-  local d = L.dados[id]
-  return d and d.g or 0
-end
-
 -- ponto do mundo -> posição base (usado nas colisões com caixas giradas)
 function L.base(id, x, z)
-  local o, d = L.POR_ID[id], L.dados[id]
+  local o = L.POR_ID[id]
   local dx, dz = L.desloc(id)
-  local g = d and d.g or 0
+  local g = L.giro(id)
   local co, si = math.cos(g), math.sin(g)
   local rx, rz = x - o.x - dx, z - o.z - dz
   return o.x + rx * co - rz * si, o.z + rx * si + rz * co

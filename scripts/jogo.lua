@@ -116,6 +116,8 @@ function J.chamar_menestrel()
   local x, z = L.t("palco", -1.65, 0.2)
   J.pessoas[#J.pessoas + 1] = p
   J.caminho(p, x, z)
+  -- num salão enorme a caminhada é longa; o limite só existe para ele não ficar preso
+  p.limite_palco = math.max(15, 3 * util.distancia(p.x, p.z, x, z) / C.velocidade_pessoa)
   J.flutuar(J.PORTA.x + 0.8, 2.5, J.PORTA.z, "Um menestrel chegou!", util.cores.verde, 18)
 end
 
@@ -313,7 +315,7 @@ function J.montar_mapa()
     obs[#obs + 1] = { x = wx, z = wz, r = r }
   end
   local function caixa(id, x, z, ex, ez)
-    obs[#obs + 1] = { id = id, x = x, z = z, ex = ex, ez = ez, base = L.base }
+    obs[#obs + 1] = { id = id, x = x, z = z, ex = ex, ez = ez, base = L.base, mundo = L.t }
   end
   for i = 1, J.num_mesas() do
     local m = POS_MESAS[i]
@@ -380,6 +382,10 @@ function J.aplicar_layout()
   J.QUADRO.x, J.QUADRO.z = L.t("quadro", -2.6, -3.7)
   J.BARRACA.x, J.BARRACA.z = L.t("barraca", 9.3, -1.0)
   for _, l in ipairs(J.lugares or {}) do l.dono = nil end
+  -- o menestrel que ainda não tinha cantado não leva a história embora
+  for _, p in ipairs(J.pessoas) do
+    if p.estado == "menestrel_indo" then J.comecar_historia(p.historia) end
+  end
   J.pessoas = {}
   J.reconstruir_lugares()
   J.montar_mapa()
@@ -434,13 +440,14 @@ end
 function J.porta_lotada()
   local n = 0
   for _, p in ipairs(J.pessoas) do
-    if util.distancia(p.x, p.z, J.PORTA.x, J.PORTA.z) < 2.2 then n = n + 1 end
+    -- quem está sentado perto da porta não atrapalha a entrada
+    if p.andando and not p.sentado and util.distancia(p.x, p.z, J.PORTA.x, J.PORTA.z) < 2.2 then n = n + 1 end
   end
   return n >= 3
 end
 
 function J.novo_cliente()
-  if J.porta_lotada() then return nil end
+  if J.porta_lotada() and (J.espera_porta or 0) < 6 then return nil end
   local lugar = lugar_livre()
   if not lugar then return nil end
   -- no começo só gente comum e alguns aventureiros; depois mais aventureiros
@@ -622,7 +629,7 @@ local function atualizar_pessoa(p, dt)
       rota_saida(p)
     end
   elseif p.estado == "menestrel_indo" then
-    if seguir_rota(p, dt, C.velocidade_pessoa) or p.t > 15 then
+    if seguir_rota(p, dt, C.velocidade_pessoa) or p.t > (p.limite_palco or 15) then
       p.estado, p.t, p.andando = "menestrel_canta", 0, false
       p.fantasma = nil
       p.giro = 0
@@ -765,7 +772,6 @@ local function concluir_missao(m)
   J.fofoca_conta = (J.fofoca_conta or 0) + 1
   if J.fofoca_conta >= C.fofoca_a_cada then
     J.fofoca_conta = 0
-  J.noticia, J.banner, J.travados, J.media_travados = nil, nil, 0, 0
     J.chamar_menestrel()
   end
 
@@ -1194,6 +1200,8 @@ function J.iniciar()
   J.relogio_salvar = 0
   J.fofoca_conta = 0
   J.sem_caminho, J.socorros, J.relogio_preso = 0, 0, 0
+  J.noticia, J.banner, J.travados, J.media_travados = nil, nil, 0, 0
+  J.espera_porta = 0
   L.carregar()
   J.carregar()
   recalcular()
@@ -1256,7 +1264,11 @@ function J.atualizar(dt)
 
   if not e.fim then
     J.relogio_chegada = math.min(J.relogio_chegada + dt, J.intervalo_chegada())
-    if J.relogio_chegada >= J.intervalo_chegada() and J.novo_cliente() then J.relogio_chegada = 0 end
+    if J.relogio_chegada >= J.intervalo_chegada() then
+      -- a porta pode segurar a chegada por alguns segundos, nunca para sempre
+      if J.novo_cliente() then J.relogio_chegada, J.espera_porta = 0, 0
+      elseif J.porta_lotada() then J.espera_porta = (J.espera_porta or 0) + dt end
+    end
   end
 
   for _, p in ipairs(J.pessoas) do atualizar_pessoa(p, dt) end
@@ -1286,6 +1298,7 @@ function J.atualizar(dt)
     if e.final_resta <= 0 then
       e.final_resta = nil
       e.fim = true
+      J.noticia = nil
       for _, c in ipairs(e.contratados) do c.na_final = nil end
       J.som("invocar")
       J.salvar()
@@ -1425,6 +1438,13 @@ function J.carregar()
     if not e.final_resta then c.na_final = nil end
   end
   J.estado = e
+  -- save de antes das notícias: o que já dava para comprar não vira uma fila de janelas
+  if type(dados.noticias) ~= "table" then
+    for _, n in ipairs(J.NOTICIAS) do
+      local no = A.POR_ID[n.id]
+      if J.nivel(n.id) == 0 and J.no_liberado(no) and e.ouro >= J.custo_no(no) then e.noticias[n.id] = true end
+    end
+  end
 end
 
 function J.calcular_offline()

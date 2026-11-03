@@ -69,6 +69,8 @@ function R.jogar(limite_horas, passo, marcos)
   passo = passo or 0.25
   local t, marcado = 0, {}
   while not J.estado.fim and t < limite_horas * 3600 do
+    -- notícia pausa o jogo: o robô fecha a janela, como uma pessoa faria
+    if J.noticia then J.noticia = nil end
     J.atualizar(passo)
     t = t + passo
     -- serve um cliente de vez em quando, como uma pessoa faria

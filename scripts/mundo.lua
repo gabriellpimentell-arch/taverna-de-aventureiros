@@ -17,10 +17,9 @@ local L = require("layout")
 local G = nil
 local function grupo(id)
   if not id then G = nil return end
-  local d = L.dados[id]
   local o = L.POR_ID[id]
   local x, z = L.desloc(id)
-  local y, g = d and d.y or 0, d and d.g or 0
+  local y, g = L.altura(id), L.giro(id)
   if x == 0 and z == 0 and y == 0 and g == 0 then G = nil return end
   G = { px = o.x, pz = o.z, x = x, z = z, y = y, g = g, co = math.cos(g), si = math.sin(g) }
 end
@@ -533,7 +532,9 @@ local function cervejaria(e)
   M.boneco({ x = bx, z = bz, giro = math.abs(d) > 0.2 and (d > 0 and math.pi / 2 or -math.pi / 2) or math.pi, fase = M.tempo,
     andando = math.abs(d) > 0.2, pele = "#e0ac7e", chapeu = "#7a3a3a",
     tipo = { nome = "comum", corpo = "#8a5a33", perna = "#3f2f22", braco = "#7b4f2c" } })
-  caixa(bx, 0.45, bz + 0.26, 0.42, 0.5, 0.03, "#efe2c4")
+  -- o avental vira junto com ele
+  local gc = math.abs(d) > 0.2 and (d > 0 and math.pi / 2 or -math.pi / 2) or math.pi
+  caixa(bx + math.sin(gc) * 0.26, 0.45, bz + math.cos(gc) * 0.26, 0.42, 0.5, 0.03, "#efe2c4", gc)
 end
 
 local function circulo(e)

@@ -1008,7 +1008,7 @@ function T.atualizar(dt)
 
   -- roda do mouse e arrastar
   local roda = motor.roda()
-  local bloqueado = T.modal or J.offline or J.estado.fim
+  local bloqueado = T.modal or J.offline or J.estado.fim or J.noticia
   if roda ~= 0 and not bloqueado then
     if T.aba == "taverna" then M.rolar(roda)
     elseif T.aba == "arvore" then T.arv.zoom = util.limitar(T.arv.zoom + roda * 0.08, ZOOM_MIN, ZOOM_MAX); T.arv.manual = true; limitar_arvore()
