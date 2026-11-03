@@ -827,18 +827,86 @@ local function janela_creditos()
   U.botao("creditos_voltar", x + w / 2 - 80, y + h - 62, 160, 44, "Voltar", {}, function() T.modal = "config" end)
 end
 
+-- Cor e desenho de cada tipo de novidade (só aparência)
+local function icone_pessoa(x, y)
+  motor.circulo(x, y - 9, 8, "#fff6e6")
+  motor.retangulo(x - 12, y + 1, 24, 15, "#fff6e6", 7)
+end
+local function icone_estrela(x, y)
+  for i = 0, 4 do
+    local a = -math.pi / 2 + i * 2 * math.pi / 5
+    local ax, ay = x + math.cos(a) * 19, y + math.sin(a) * 19
+    local bx, by = x + math.cos(a - 0.63) * 8, y + math.sin(a - 0.63) * 8
+    local cx, cy = x + math.cos(a + 0.63) * 8, y + math.sin(a + 0.63) * 8
+    motor.triangulo(ax, ay, bx, by, cx, cy, "#fff6e6")
+    motor.triangulo(ax, ay, cx, cy, bx, by, "#fff6e6")
+  end
+  motor.circulo(x, y, 8, "#fff6e6")
+end
+local function icone_casa(x, y)
+  motor.triangulo(x + 18, y - 2, x - 18, y - 2, x, y - 18, "#fff6e6")
+  motor.triangulo(x - 18, y - 2, x + 18, y - 2, x, y - 18, "#fff6e6")
+  motor.retangulo(x - 12, y - 2, 24, 17, "#fff6e6", 2)
+end
+local function icone_planta(x, y)
+  motor.linha(x, y + 15, x, y - 6, 4, "#fff6e6")
+  motor.circulo(x - 8, y - 2, 7, "#fff6e6")
+  motor.circulo(x + 8, y - 2, 7, "#fff6e6")
+  motor.circulo(x, y - 11, 7, "#fff6e6")
+end
+local function icone_moeda(x, y) U.moeda(x, y, 18) end
+local function icone_caneca(x, y) U.caneca(x - 2, y, 1.1) end
+local function icone_coxa(x, y) U.coxa(x, y, 1) end
+
+local TEMAS_NOTICIA = {
+  obra = { c = "#e0964a", icone = icone_casa },
+  gente = { c = "#6fb1e4", icone = icone_pessoa },
+  comida = { c = "#7cc765", icone = icone_planta },
+  comercio = { c = cor.ouro, icone = icone_moeda },
+  fama = { c = "#ee7d5c", icone = icone_estrela },
+  magia = { c = "#b892f0", icone = icone_estrela },
+}
+local TEMA_POR_ID = {
+  mesa = "obra", prateleira = "obra", ala_leste = "obra",
+  garcom = "gente", bardo = "gente", recrutador = "gente",
+  jardim = "comida", fazendeiro = "comida", cozinheiro = "comida", cervejaria = "comida",
+  mercadinho = "comercio", venda = "comercio",
+  party = "fama", heroi = "fama", propaganda = "fama",
+  invocacao = "magia",
+}
+local ICONE_POR_ID = { cozinheiro = icone_coxa, cervejaria = icone_caneca }
+
 -- Notícia: o jogo para para contar que algo importante pode ser liberado
 local function janela_noticia()
   local n = J.noticia
   if not n then return end
   bloquear()
   local x, y, w, h = 210, 96, 540, 330
-  U.painel(x, y, w, h, cor.carta, cor.ouro)
+  local rank = n.id and n.id:match("^rank_(%a+)$")
+  local tema = TEMAS_NOTICIA[n.final and "magia" or (rank and "fama") or TEMA_POR_ID[n.id]] or TEMAS_NOTICIA.comercio
+  U.painel(x, y, w, h, cor.carta, tema.c)
   U.zona("janela", { x = x, y = y, w = w, h = h })
-  motor.retangulo(x + 2, y + 2, w - 4, 34, cor.ouro, 10)
-  motor.texto("NOVIDADE NA TAVERNA", x + w / 2, y + 9, 15, cor.texto_ouro, "centro", true)
-  motor.texto(n.titulo, x + w / 2, y + 54, 28, cor.texto, "centro", true)
-  U.paragrafo(n.texto, x + 34, y + 104, w - 68, 17, cor.texto, false, "centro")
+  motor.retangulo(x + 2, y + 2, w - 4, 34, tema.c, 10)
+  motor.texto("NOVIDADE NA TAVERNA", x + w / 2, y + 9, 15, "#2a1608", "centro", true)
+  -- ícone com raios girando ao lado do título
+  local tam = 28
+  while tam > 20 and motor.largura_texto(n.titulo, tam, true) > w - 130 do tam = tam - 1 end
+  local tw = motor.largura_texto(n.titulo, tam, true)
+  local ix, iy = x + w / 2 - (tw + 74) / 2 + 28, y + 80
+  local giro = motor.tempo() * 0.8
+  for i = 0, 7 do
+    local a = giro + i * math.pi / 4
+    motor.linha(ix + math.cos(a) * 32, iy + math.sin(a) * 32, ix + math.cos(a) * 39, iy + math.sin(a) * 39, 3, tema.c)
+  end
+  motor.circulo(ix, iy, 28, tema.c)
+  motor.circulo(ix, iy, 24, "#00000040")
+  if rank then
+    motor.texto(rank:upper(), ix, iy - 16, 24, "#fff6e6", "centro", true)
+  else
+    (ICONE_POR_ID[n.id] or tema.icone)(ix, iy)
+  end
+  motor.texto(n.titulo, ix + 46, iy - tam * 0.68, tam, cor.texto, "esquerda", true)
+  U.paragrafo(n.texto, x + 34, y + 128, w - 68, 18, cor.texto, false, "centro")
   if n.final then
     U.botao("noticia_ver", x + 60, y + h - 76, 240, 54, "Ver a missão", { tam = 16 }, function()
       J.noticia = nil
@@ -849,7 +917,9 @@ local function janela_noticia()
   end
   local no = A.POR_ID[n.id]
   local custo = J.custo_no(no)
-  motor.texto("Custa " .. fmt(custo) .. " de ouro", x + w / 2, y + h - 108, 15, cor.ouro, "centro", true)
+  local rotulo_custo = "Custa " .. fmt(custo) .. " de ouro"
+  U.moeda(x + w / 2 - motor.largura_texto(rotulo_custo, 15, true) / 2 - 14, y + h - 98, 9)
+  motor.texto(rotulo_custo, x + w / 2, y + h - 108, 15, cor.ouro, "centro", true)
   U.botao("noticia_abrir", x + 60, y + h - 76, 240, 54, "Liberar agora", { tam = 17, som = "compra" }, function()
     J.comprar_no(n.id)
     J.noticia = nil
@@ -864,7 +934,9 @@ local function banner_menestrel()
   local entrada = util.limitar(b.vida / 0.4, 0, 1)
   local saida = util.limitar((b.duracao - b.vida) / 0.5, 0, 1)
   motor.opacidade(math.min(entrada, saida))
-  local x, y, w, h = 150, 58 - (1 - util.suave(entrada)) * 24, 660, 84
+  -- entra de baixo para não passar sobre o objetivo; desce se o painel de FPS estiver ligado
+  local base = J.estado.opcoes.fps and 104 or 58
+  local x, y, w, h = 150, base + (1 - util.suave(entrada)) * 12, 660, 84
   motor.retangulo(x, y + 3, w, h, cor.sombra, 14)
   U.painel(x, y, w, h, "#3a2415f8", "#c0562f")
   motor.circulo(x + 40, y + h / 2, 26, "#c0562f")

@@ -251,9 +251,12 @@ local function seletor_categoria()
       end
     end
   end
-  U.botao("editor_cat_ant", LISTA.x + 6, LISTA.y + 6, 36, 34, "<", { cor = "#4a3627", cor_texto = cor.texto, tam = 15 }, function() trocar(-1) end)
-  U.botao("editor_cat_prox", LISTA.x + LISTA.w - 42, LISTA.y + 6, 36, 34, ">", { cor = "#4a3627", cor_texto = cor.texto, tam = 15 }, function() trocar(1) end)
-  motor.texto(E.cat, LISTA.x + LISTA.w / 2, LISTA.y + 15, 13, cor.ouro, "centro", true)
+  U.botao("editor_cat_ant", LISTA.x + 4, LISTA.y + 4, 40, 40, "<", { cor = "#4a3627", cor_texto = cor.texto, tam = 15 }, function() trocar(-1) end)
+  U.botao("editor_cat_prox", LISTA.x + LISTA.w - 44, LISTA.y + 4, 40, 40, ">", { cor = "#4a3627", cor_texto = cor.texto, tam = 15 }, function() trocar(1) end)
+  motor.texto(E.cat, LISTA.x + LISTA.w / 2, LISTA.y + 5, 13, cor.ouro, "centro", true)
+  local pos = 1
+  for i, c in ipairs(L.CATEGORIAS) do if c == E.cat then pos = i end end
+  motor.texto(pos .. " de " .. #L.CATEGORIAS, LISTA.x + LISTA.w / 2, LISTA.y + 24, 13, cor.texto_fraco, "centro")
   return w
 end
 
@@ -265,16 +268,21 @@ local function desenhar_tamanho()
   y = y + 20
   for _, l in ipairs(LADOS) do
     local lado = l[1]
-    motor.texto(l[2] .. ": +" .. L.tamanho[lado] .. " m", LISTA.x + 10, y, 13, cor.texto)
+    local tam_lado = L.tamanho[lado]
+    motor.texto(l[2] .. ": +" .. tam_lado .. " m", LISTA.x + 10, y, 13, tam_lado > 0 and cor.ouro or cor.texto, "esquerda", tam_lado > 0)
+    if tam_lado >= L.TAMANHO_MAX then motor.texto("máx", LISTA.x + LISTA.w - 10, y, 13, cor.ouro, "direita", true) end
     local bw = (LISTA.w - 18) / 2
+    local function estilo(ativo)
+      return { ativo = ativo, cor = ativo and "#4a3627" or "#2a2019", cor_texto = ativo and cor.texto or cor.texto_fraco, tam = 15 }
+    end
     local function muda(delta)
       guardar()
       L.mudar_tamanho(lado, delta)
       mudou()
       J.aplicar_visual()
     end
-    U.botao("editor_tam_menos_" .. lado, LISTA.x + 6, y + 18, bw, 40, "-1", { ativo = L.tamanho[lado] > 0, cor = "#4a3627", cor_texto = cor.texto, tam = 15 }, function() muda(-1) end)
-    U.botao("editor_tam_mais_" .. lado, LISTA.x + 12 + bw, y + 18, bw, 40, "+1", { ativo = L.tamanho[lado] < L.TAMANHO_MAX, cor = "#4a3627", cor_texto = cor.texto, tam = 15 }, function() muda(1) end)
+    U.botao("editor_tam_menos_" .. lado, LISTA.x + 6, y + 18, bw, 40, "-1 m", estilo(tam_lado > 0), function() muda(-1) end)
+    U.botao("editor_tam_mais_" .. lado, LISTA.x + 12 + bw, y + 18, bw, 40, "+1 m", estilo(tam_lado < L.TAMANHO_MAX), function() muda(1) end)
     y = y + 66
   end
   U.paragrafo("As paredes acompanham. Depois, ligue \"FPS e fluxo\" nas Configurações para medir.", LISTA.x + 10, y + 2, LISTA.w - 20, 13, cor.texto_fraco)
