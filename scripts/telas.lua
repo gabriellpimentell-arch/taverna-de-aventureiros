@@ -365,8 +365,9 @@ local function tela_arvore(entrando)
   motor.recorte()
 
   -- instruções e ajuda
-  motor.retangulo(14, 64, 250, 28, "#21150ee8", 8)
-  motor.texto("Arraste para navegar  •  Roda: zoom", 24, 69, 13, cor.texto_fraco)
+  local ajuda = U.celular() and "Arraste para navegar  •  Pinça: zoom" or "Arraste para navegar  •  Roda: zoom"
+  motor.retangulo(14, 64, math.max(250, motor.largura_texto(ajuda, 13) + 20), 28, "#21150ee8", 8)
+  motor.texto(ajuda, 24, 69, 13, cor.texto_fraco)
   U.botao("arvore_centro", 14, 96, 104, 40, "Centralizar", { cor = "#3d291b", cor_texto = cor.texto, tam = 13 },
     enquadrar_arvore)
 
@@ -758,14 +759,16 @@ local function janela_config()
   if motor.plataforma == "desktop" then
     alternador("tela_cheia", "Tela cheia (F11)", cx, y + 156, motor.tela_cheia(), function() motor.alternar_tela_cheia() end)
   end
-  alternador("sombras", "Sombras (mais leve sem)", cx, y + 204, o.sombras, function() o.sombras = not o.sombras; T.aplicar_opcoes() end)
-  alternador("mostrar_fps", "FPS e fluxo de pessoas", cx, y + 252, o.fps, function() o.fps = not o.fps end)
+  -- sem a linha de tela cheia, as opções sobem para não deixar um buraco
+  local ya = motor.plataforma == "desktop" and y + 204 or y + 156
+  alternador("sombras", "Sombras (mais leve sem)", cx, ya, o.sombras, function() o.sombras = not o.sombras; T.aplicar_opcoes() end)
+  alternador("mostrar_fps", "FPS e fluxo de pessoas", cx, ya + 48, o.fps, function() o.fps = not o.fps end)
 
   local bx = x + w - 230
   U.botao("minimizar2", bx, y + 60, 200, 44, "Minimizar", { cor = "#4a3627", cor_texto = cor.texto }, function() motor.minimizar() end)
   U.botao("estatisticas", bx, y + 112, 200, 44, "Estatísticas", { cor = "#4a3627", cor_texto = cor.texto }, function() T.modal = "stats" end)
   U.botao("creditos", bx, y + 164, 200, 44, "Créditos", { cor = "#4a3627", cor_texto = cor.texto }, function() T.modal = "creditos" end)
-  U.botao("editar", bx, y + 268, 200, 44, "Modo de edição (F2)", { cor = "#57b0c2", cor_texto = "#0d1f24" }, function() T.f2() end)
+  U.botao("editar", bx, y + 268, 200, 44, motor.plataforma == "desktop" and "Modo de edição (F2)" or "Modo de edição", { cor = "#57b0c2", cor_texto = "#0d1f24" }, function() T.f2() end)
   U.botao("salvar", bx, y + 216, 200, 44, "Salvar agora", { cor = "#4a3627", cor_texto = cor.texto }, function()
     J.salvar()
     J.avisar("Progresso salvo!", 2)
@@ -1150,7 +1153,8 @@ function T.atualizar(dt)
     local mx, my = motor.mouse()
     local dx, dy = mx - T.toque.ux, my - T.toque.uy
     T.toque.ux, T.toque.uy = mx, my
-    if math.abs(mx - T.toque.x) + math.abs(my - T.toque.y) > 8 then T.toque.moveu = true end
+    -- o dedo treme mais que o mouse: folga maior para um toque não virar arraste
+    if math.abs(mx - T.toque.x) + math.abs(my - T.toque.y) > (U.celular() and 14 or 8) then T.toque.moveu = true end
     if T.aba == "arvore" then
       if T.toque.arrasta then
         T.arv.x = T.arv.x + dx

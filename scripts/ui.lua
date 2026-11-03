@@ -8,11 +8,33 @@ local cor = util.cores
 
 local U = { zonas = {} }
 
+-- No celular (6,7"): nenhum texto abaixo de 14 px e nenhum alvo de toque abaixo de
+-- 44 px. Texto e medida mudam juntos, então o que se ajusta à largura continua certo.
+local TEXTO_MIN, ALVO_MIN = 14, 44
+local function celular() return motor.plataforma == "android" end
+U.celular = celular
+
+local texto_motor, largura_motor = motor.texto, motor.largura_texto
+function motor.texto(t, x, y, tam, ...)
+  if tam and tam < TEXTO_MIN and celular() then tam = TEXTO_MIN end
+  return texto_motor(t, x, y, tam, ...)
+end
+function motor.largura_texto(t, tam, ...)
+  if tam and tam < TEXTO_MIN and celular() then tam = TEXTO_MIN end
+  return largura_motor(t, tam, ...)
+end
+
 function U.limpar() U.zonas = {} end
 
 -- area: { x, y, w, h }. solto = true dispara ao soltar sem arrastar (usado na árvore).
 function U.zona(id, r, fn, solto)
-  U.zonas[#U.zonas + 1] = { id = id, x = r.x, y = r.y, w = r.w, h = r.h, fn = fn, solto = solto }
+  local x, y, w, h = r.x, r.y, r.w, r.h
+  if celular() then
+    -- o desenho não muda; só a área que aceita o dedo cresce em volta do centro
+    if w < ALVO_MIN then x, w = x - (ALVO_MIN - w) / 2, ALVO_MIN end
+    if h < ALVO_MIN then y, h = y - (ALVO_MIN - h) / 2, ALVO_MIN end
+  end
+  U.zonas[#U.zonas + 1] = { id = id, x = x, y = y, w = w, h = h, fn = fn, solto = solto }
 end
 
 function U.achar(x, y)
@@ -35,8 +57,10 @@ function U.apertar(id)
   return false
 end
 
+-- No PC, o mouse em cima do botão. No toque não existe "em cima": o contorno
+-- aparece enquanto o dedo aperta, como resposta ao toque.
 function U.sobre(r)
-  if motor.plataforma ~= "desktop" then return false end
+  if motor.plataforma ~= "desktop" and not motor.mouse_baixo() then return false end
   local mx, my = motor.mouse()
   local z = U.achar(mx, my)
   return util.dentro(mx, my, r) and z == nil

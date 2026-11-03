@@ -15,8 +15,8 @@ local E = { ativo = false }
 
 local LISTA = { x = 8, y = 56, w = 158, h = 448 }
 local ACOES = { x = 810, y = 56, w = 142, h = 440 }
-local ITEM = 40       -- altura da linha (alvo de toque)
-local VISIVEIS = 8    -- linhas inteiras visíveis na lista
+local ITEM = U.celular() and 44 or 40   -- altura da linha (alvo de toque)
+local VISIVEIS = U.celular() and 7 or 8 -- linhas inteiras visíveis na lista
 local LISTA_TOPO = 74 -- categoria e título acima das linhas
 
 -- objetos da categoria escolhida
@@ -137,7 +137,7 @@ function E.atualizar(dt)
     local gx, gz = motor.chao(mx, my)
     local a = E.arrasto
     -- só um clique, sem arrastar, seleciona: não pode encaixar o objeto na grade
-    if math.abs(mx - a.sx) + math.abs(my - a.sy) > 4 then a.saiu = true end
+    if math.abs(mx - a.sx) + math.abs(my - a.sy) > (U.celular() and 12 or 4) then a.saiu = true end
     if gx and a.saiu then
       E.mover_para(a.id, gx - a.ox, gz - a.oz)
       a.moveu = true
@@ -392,7 +392,7 @@ local function desenhar_acoes()
   else
     botao("editor_tudo", ACOES.y + 340, "Restaurar tudo", function() E.confirmar = true end, { cor = "#5a2a22", cor_texto = "#ffb0a2", tam = 14 })
   end
-  motor.texto("Roda: zoom", ax, ACOES.y + 398, 13, cor.texto)
+  motor.texto(U.celular() and "Pinça: zoom" or "Roda: zoom", ax, ACOES.y + 398, 13, cor.texto)
   motor.texto("Jogo pausado", ax, ACOES.y + 416, 13, cor.texto)
 end
 
@@ -414,7 +414,8 @@ function E.desenhar()
     local dx, dz = L.desloc(E.sel)
     txt = o.nome .. string.format("  x %.2f  z %.2f", o.x + dx, o.z + dz):gsub("%.", ",")
   else
-    txt = "Arraste um ponto dourado para mover o objeto"
+    -- no toque não há nome ao passar o mouse: tocar no ponto seleciona e mostra o nome
+    txt = U.celular() and "Toque num ponto dourado para ver o nome; arraste para mover" or "Arraste um ponto dourado para mover o objeto"
   end
   local cx, w = pill(txt, tam)
   motor.retangulo(cx - w / 2, 12, w, 32, fundo, 10)
