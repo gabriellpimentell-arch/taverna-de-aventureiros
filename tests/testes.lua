@@ -714,6 +714,31 @@ do
   ok("taverna continua servindo", J.estado.servidos > 50, J.estado.servidos)
   ok("missões continuam concluindo", J.estado.feitas > 10, J.estado.feitas)
 
+  -- empurrado por quem está sentado, ninguém afunda no móvel; quem já está lá dentro sai pelo lado livre
+  novo()
+  local mesa = J.POS_MESAS[1]
+  local banco = J.lugares[2]
+  local sentado = { x = banco.x, z = banco.z, sentado = true }
+  local empurrado = { x = banco.x - 0.16, z = banco.z - 0.05 }
+  local antes = util.distancia(empurrado.x, empurrado.z, mesa.x, mesa.z)
+  ok("o caso começa dentro do móvel", Cam.bloqueado(empurrado.x, empurrado.z))
+  Cam.separar({ sentado, empurrado }, 0.1)
+  ok("empurrão não afunda no móvel", util.distancia(empurrado.x, empurrado.z, mesa.x, mesa.z) >= antes,
+    empurrado.x .. "," .. empurrado.z)
+
+  -- encostado no móvel, o empurrão vira deslizar ao longo dele em vez de não mover nada
+  local ox, oz = 2.0, 1.5
+  while not Cam.bloqueado(ox, oz - 0.3) do oz = oz - 0.05 end
+  local parado = { x = ox, z = oz }
+  local vizinho = { x = ox - 0.2, z = oz + 0.2 }
+  Cam.separar({ vizinho, parado }, 0.1)
+  ok("empurrão desliza ao longo do móvel", parado.x > ox and not Cam.bloqueado(parado.x, parado.z), parado.x)
+
+  J.sem_caminho = 0
+  local fundo = { x = mesa.x + 0.66, z = mesa.z - 0.2 }
+  J.caminho(fundo, J.QUADRO.x, J.QUADRO.z)
+  ok("quem está no fundo da mesa acha a saída", not fundo.sem_rota and J.sem_caminho == 0, J.sem_caminho)
+
   -- pegar missão: vai ao quadro, pega o papel e sai com ele
   novo()
   libera("prateleira")

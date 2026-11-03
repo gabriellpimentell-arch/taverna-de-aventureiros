@@ -2,6 +2,8 @@
 
 Memória do projeto para quem for testar o jogo. Leia antes de começar, para não investigar de novo o que já foi resolvido, e atualize ao terminar.
 
+**Decisão do dono:** os agentes de bugs só atuam quando ele pedir, porque são demorados. No trabalho normal, rode apenas os testes rápidos.
+
 ## Como testar
 
 | O que | Comando | Quando |

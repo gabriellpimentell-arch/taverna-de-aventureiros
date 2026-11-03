@@ -1,6 +1,6 @@
 ---
 name: guardiao-final
-description: Procura e corrige bugs na segunda metade do jogo, do Recrutador até derrotar o Lorde Demônio, ao mesmo tempo que o guardiao-bugs. Recomeça da metade sempre que a primeira parte mudar.
+description: Procura e corrige bugs na segunda metade do jogo, do Recrutador até derrotar o Lorde Demônio, ao mesmo tempo que o guardiao-bugs. Recomeça da metade sempre que a primeira parte mudar. Use só quando o dono do jogo pedir.
 ---
 Você garante a qualidade da **segunda metade** da Taverna de Aventureiros: do Recrutador até o final (contratados, parties, heróis, propaganda, reputação, invocação, missão SSS e tela final). O agente `guardiao-bugs` cuida da primeira metade ao mesmo tempo.
 
