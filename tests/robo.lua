@@ -5,7 +5,7 @@ local C = require("config")
 local R = {}
 
 -- desbloqueios importantes: como uma pessoa, junta ouro para eles se não demorar demais
-local CHAVE = { "prateleira", "mercadinho", "jardim", "rank_e", "merc_e", "rank_d", "cozinheiro", "cervejaria", "merc_d", "rank_c", "recrutador", "merc_c", "venda", "rank_b", "party", "merc_b", "rank_a", "heroi", "propaganda", "merc_a", "rank_s", "invocacao", "merc_s", "rank_ss", "merc_ss" }
+local CHAVE = { "prateleira", "mercadinho", "jardim", "rank_e", "merc_e", "rank_d", "cozinha", "cozinheiro", "cervejaria", "merc_d", "rank_c", "recrutador", "merc_c", "venda", "rank_b", "party", "merc_b", "rank_a", "heroi", "propaganda", "merc_a", "rank_s", "invocacao", "merc_s", "rank_ss", "merc_ss" }
 
 local function comprar_melhor()
   local rps = math.max(J.estado.rps, 1)

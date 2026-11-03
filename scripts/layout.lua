@@ -10,7 +10,7 @@ local L = {}
 
 -- cat: categoria na lista do editor. pai: o objeto acompanha outro objeto ou uma
 -- parede ("@fundo", "@oeste", "@leste", "@frente", "@canto") quando a taverna muda de tamanho.
-L.CATEGORIAS = { "Tamanho", "Salas", "Móveis", "Balcão", "Paredes", "Decoração", "Áreas", "Jardim", "Cervejaria", "Círculo" }
+L.CATEGORIAS = { "Tamanho", "Salas", "Extras", "Móveis", "Balcão", "Paredes", "Decoração", "Áreas", "Jardim", "Cervejaria", "Círculo" }
 L.OBJETOS = {}
 L.POR_ID = {}
 local function ob(id, nome, x, z, cat, pai)
@@ -214,9 +214,14 @@ local function aplicar_tabela(t)
     end
   end
   migrar(t)
+  if type(t._extras) == "table" then
+    for _, x in ipairs(t._extras) do
+      if type(x) == "table" and L.TIPOS_EXTRAS[x.tipo] then L.adicionar(x.tipo, numero(x.x), numero(x.z), x.id) end
+    end
+  end
   for id, d in pairs(t) do
     if L.POR_ID[id] and type(d) == "table" then
-      L.dados[id] = { x = numero(d.x), z = numero(d.z), y = numero(d.y), g = numero(d.g) }
+      L.dados[id] = { x = numero(d.x), z = numero(d.z), y = numero(d.y), g = numero(d.g), oculto = d.oculto == true or nil }
     end
   end
   -- só depois de ler tudo: o limite de um objeto depende de onde está quem o carrega
@@ -225,10 +230,87 @@ end
 
 -- as posições oficiais vêm primeiro; as editadas neste computador têm prioridade
 function L.carregar()
+  L.limpar_extras()
   L.dados = {}
   L.tamanho = tamanho_zero()
   aplicar_tabela(require("layout_padrao"))
   aplicar_tabela(util.desserializar(motor.layout_carregar()))
+end
+
+-- Itens que o jogador acrescenta pelo editor: entram como objetos comuns da lista
+L.TIPOS_EXTRAS = {
+  barril = { nome = "Barril", raio = 0.43 },
+  caixote = { nome = "Caixote", raio = 0.45 },
+  planta = { nome = "Planta", raio = 0.3 },
+  vela = { nome = "Candelabro", raio = 0.2 },
+  tapete = { nome = "Tapete" },
+  estante = { nome = "Estante", raio = 0.6 },
+  banco = { nome = "Banco", raio = 0.28 },
+  quadro = { nome = "Quadro na parede" },
+}
+
+function L.adicionar(tipo, x, z, id)
+  local t = L.TIPOS_EXTRAS[tipo]
+  if not t then return nil end
+  if not id or L.POR_ID[id] then
+    L.prox_extra = (L.prox_extra or 0) + 1
+    id = "extra_" .. L.prox_extra
+    while L.POR_ID[id] do
+      L.prox_extra = L.prox_extra + 1
+      id = "extra_" .. L.prox_extra
+    end
+  end
+  local o = { id = id, nome = t.nome, x = x, z = z, cat = "Extras", extra = tipo }
+  L.OBJETOS[#L.OBJETOS + 1] = o
+  L.POR_ID[id] = o
+  return o
+end
+
+local function tirar_extra(id)
+  for i, o in ipairs(L.OBJETOS) do
+    if o.id == id then
+      table.remove(L.OBJETOS, i)
+      break
+    end
+  end
+  L.POR_ID[id] = nil
+  L.dados[id] = nil
+end
+
+function L.limpar_extras()
+  for i = #L.OBJETOS, 1, -1 do
+    if L.OBJETOS[i].extra then tirar_extra(L.OBJETOS[i].id) end
+  end
+end
+
+-- O que a árvore de habilidades constrói não pode ser excluído: só movido
+local FIXOS = { mesa = true, balcao = true, fogao = true, cozinheiro = true, bardo = true, barraca = true, estantes = true,
+  quadro = true, porta = true, palco = true, jardim = true, cervejaria = true, circulo = true, quartos = true,
+  cozinha = true, pomar = true, fazenda = true }
+
+function L.removivel(id)
+  local o = L.POR_ID[id]
+  if not o then return false end
+  if o.extra then return true end
+  if id:match("^mesa%d") then return false end
+  return not FIXOS[id]
+end
+
+function L.oculto(id)
+  local d = L.dados[id]
+  return d ~= nil and d.oculto == true
+end
+
+-- Exclui: item novo some de vez; item original fica escondido e pode voltar
+function L.excluir(id)
+  if not L.removivel(id) then return false end
+  if L.POR_ID[id].extra then tirar_extra(id)
+  else L.de(id).oculto = true end
+  return true
+end
+
+function L.devolver(id)
+  if L.dados[id] then L.dados[id].oculto = nil end
 end
 
 function L.restaurar(id)
@@ -237,16 +319,26 @@ function L.restaurar(id)
     L.dados[id] = nil
     if padrao[id] then aplicar_tabela({ [id] = padrao[id] }) end
   else
+    L.limpar_extras()
     L.dados = {}
     L.tamanho = tamanho_zero()
     aplicar_tabela(padrao)
   end
 end
 
+function L.lista_extras()
+  local l = {}
+  for _, o in ipairs(L.OBJETOS) do
+    if o.extra then l[#l + 1] = { id = o.id, tipo = o.extra, x = o.x, z = o.z } end
+  end
+  return l
+end
+
 function L.texto()
   local t = {}
   for id, d in pairs(L.dados) do t[id] = d end
   t._tamanho = L.tamanho
+  t._extras = L.lista_extras()
   return util.serializar(t)
 end
 
@@ -255,9 +347,10 @@ function L.salvar()
   local padrao, editado = require("layout_padrao"), {}
   for id, d in pairs(L.dados) do
     local p = padrao[id] or {}
-    if d.x ~= (p.x or 0) or d.z ~= (p.z or 0) or d.y ~= (p.y or 0) or d.g ~= (p.g or 0) then editado[id] = d end
+    if d.x ~= (p.x or 0) or d.z ~= (p.z or 0) or d.y ~= (p.y or 0) or d.g ~= (p.g or 0) or d.oculto then editado[id] = d end
   end
   editado._tamanho = L.tamanho
+  editado._extras = L.lista_extras()
   motor.layout_salvar(util.serializar(editado))
 end
 

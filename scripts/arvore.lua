@@ -38,12 +38,15 @@ local n = {
   { id = "garcom", ramo = "servico", p = 1, l = 0, custo = 120, mult = 3.4, max = 4, nome = "Garçom", desc = "+1 garçom que serve sozinho", ef = { garcons = 1 } },
   { id = "agilidade", pai = "garcom", ramo = "servico", p = 2, l = -1, nome = "Treino da equipe", desc = "Garçons servem 15% mais rápido", custo = 350, mult = 2.2, max = 10, ef = { x_garcom = 0.85 } },
   { id = "bardo", pai = "garcom", ramo = "servico", p = 2, l = 1, nome = "Bardo", desc = "A música faz os pedidos renderem +15%", custo = 3000, mult = 3.2, max = 5, ef = { x_pedido = 1.15, bardo = 1 } },
-  { id = "cozinheiro", pai = "agilidade", req = "jardim", ramo = "servico", p = 3, l = -1, nome = "Cozinheiro", desc = "Usa o que você colhe: comida rende bem mais", custo = 8000, mult = 4, max = 6, ef = { cozinheiro = 1 } },
+  { id = "cozinha", pai = "agilidade", req = "jardim", ramo = "servico", p = 3, l = -2, nome = "Cozinha", desc = "Constrói a cozinha, uma sala só para preparar a comida", custo = 7000, mult = 1, max = 1, ef = { a_cozinha = 1 } },
+  { id = "cozinheiro", pai = "cozinha", ramo = "servico", p = 4, l = -2, nome = "Cozinheiro", desc = "Usa o que você colhe: comida rende bem mais", custo = 8000, mult = 4, max = 6, ef = { cozinheiro = 1 } },
 
   -- BEBIDAS E COMIDA ---------------------------------------------------------------------
   { id = "cardapio", ramo = "bebidas", p = 1, l = 0, nome = "Cardápio", desc = "Pedidos rendem +30%", custo = 15, mult = 2.15, max = 20, ef = { x_pedido = 1.3 } },
   { id = "jardim", pai = "cardapio", ramo = "bebidas", p = 2, l = -1, nome = "Jardim", desc = "Abre a plantação da taverna", custo = 5000, mult = 1, max = 1, ef = { a_jardim = 1, canteiros = 2 } },
   { id = "fazendeiro", pai = "jardim", ramo = "bebidas", p = 3, l = -3, nome = "Fazendeiro", desc = "Cuida do jardim: colheitas rendem +25%", custo = 4000, mult = 3.2, max = 6, ef = { fazendeiro = 1, x_colheita = 1.25 } },
+  { id = "pomar", pai = "jardim", ramo = "bebidas", p = 3, l = 0, nome = "Jardim de frutas", desc = "Mais árvores frutíferas: colheitas rendem +40% e pedidos +10%", custo = 30000, mult = 3.2, max = 6, ef = { a_pomar = 1, frutas = 1, x_colheita = 1.4, x_pedido = 1.1 } },
+  { id = "fazenda", pai = "pomar", ramo = "bebidas", p = 4, l = 0, nome = "Fazenda", desc = "Mais vacas e alimentos próprios: +60 ouro por segundo e pedidos +15%", custo = 350000, mult = 3.4, max = 8, ef = { a_fazenda = 1, vacas = 1, renda_fazenda = 60, x_pedido = 1.15 } },
   { id = "canteiro", pai = "jardim", ramo = "bebidas", p = 3, l = -2, nome = "Mais canteiros", desc = "+1 canteiro", custo = 2500, mult = 3, max = 8, ef = { canteiros = 1 } },
   { id = "adubo", pai = "jardim", ramo = "bebidas", p = 3, l = -1, nome = "Adubo", desc = "Colheitas rendem +30%", custo = 5000, mult = 3.2, max = 8, ef = { x_colheita = 1.3 } },
   { id = "irrigacao", pai = "canteiro", ramo = "bebidas", p = 4, l = -2, nome = "Irrigação", desc = "As plantas crescem 15% mais rápido", custo = 16000, mult = 3, max = 6, ef = { x_ciclo = 0.85 } },

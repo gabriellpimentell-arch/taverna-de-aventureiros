@@ -60,6 +60,9 @@ J.NOTICIAS = {
   { id = "mercadinho", titulo = "O mercadinho!", texto = "Agora você pode abrir o Mercadinho. Os aventureiros voltam com espólios, você compra e revende com lucro." },
   { id = "jardim", titulo = "O jardim!", texto = "Agora você pode plantar o Jardim. Ele produz alimentos que abastecem a cozinha e a cervejaria." },
   { id = "fazendeiro", titulo = "Um fazendeiro!", texto = "Agora você pode contratar um Fazendeiro. Ele só cuida do jardim e cada colheita rende mais." },
+  { id = "cozinha", titulo = "A cozinha!", texto = "Agora você pode construir a Cozinha, uma sala só para preparar a comida. Ela abre espaço para o cozinheiro trabalhar." },
+  { id = "pomar", titulo = "O jardim de frutas!", texto = "Agora você pode plantar o Jardim de frutas. As colheitas e os pedidos passam a render mais." },
+  { id = "fazenda", titulo = "A fazenda!", texto = "Agora você pode abrir a Fazenda e criar as próprias vacas. Com alimentos da casa, os pedidos rendem mais e entra ouro todo segundo." },
   { id = "cozinheiro", titulo = "Um cozinheiro!", texto = "Agora você pode contratar um Cozinheiro. Ele usa o que você colhe e a comida passa a render bem mais." },
   { id = "cervejaria", titulo = "A cervejaria!", texto = "Agora você pode abrir a Cervejaria, com um cervejeiro próprio. As bebidas da casa rendem bem mais." },
   { id = "ala_leste", titulo = "Uma ala nova!", texto = "Agora você pode construir a Ala leste. A taverna cresce e ganha mais duas mesas." },
@@ -178,7 +181,7 @@ local function recalcular()
 end
 
 -- no modo de edição tudo aparece, para dar para mover até o que ainda não foi comprado
-local PREVIA = { a_leste = 1, a_jardim = 1, a_cerveja = 1, a_circulo = 1, mesas = 7, balcao = 1, cozinheiro = 1, bardo = 1,
+local PREVIA = { a_cozinha = 1, a_pomar = 1, a_fazenda = 1, frutas = 6, vacas = 6, a_leste = 1, a_jardim = 1, a_cerveja = 1, a_circulo = 1, mesas = 7, balcao = 1, cozinheiro = 1, bardo = 1,
   prateleira = 1, mercadinho = 8, canteiros = 10, venda = 1, pocoes = 1, armaduras = 1, armas = 1 }
 
 function J.ef(k)
@@ -206,6 +209,9 @@ function J.pode_comprar_no(no)
 end
 
 local AVISOS = {
+  cozinha = "A cozinha está pronta!",
+  pomar = "O jardim de frutas foi plantado!",
+  fazenda = "A fazenda abriu as porteiras!",
   prateleira = "A prateleira de missões abriu! Aba Missões liberada.",
   mercadinho = "O mercadinho abriu! Os aventureiros vão vender espólios.",
   venda = "Aba de venda liberada no Mercadinho!",
@@ -312,10 +318,12 @@ end
 function J.montar_mapa()
   local obs = {}
   local function circulo(id, x, z, r)
+    if L.oculto(id) then return end
     local wx, wz = L.t(id, x, z)
     obs[#obs + 1] = { x = wx, z = wz, r = r }
   end
   local function caixa(id, x, z, ex, ez)
+    if L.oculto(id) then return end
     obs[#obs + 1] = { id = id, x = x, z = z, ex = ex, ez = ez, base = L.base, mundo = L.t }
   end
   for i = 1, J.num_mesas() do
@@ -323,6 +331,13 @@ function J.montar_mapa()
     circulo(m.id, m.bx, m.bz, 0.88)
     circulo(m.id, m.bx - 1.25, m.bz, 0.03)
     circulo(m.id, m.bx + 1.25, m.bz, 0.03)
+  end
+  -- itens acrescentados no editor também ocupam o chão
+  for _, o in ipairs(L.OBJETOS) do
+    if o.extra then
+      local r = L.TIPOS_EXTRAS[o.extra].raio
+      if r then circulo(o.id, o.x, o.z, r) end
+    end
   end
   caixa("balcao", 3.05, -2.15, 5.5, 0.95)
   if J.ef("balcao") > 0 then
@@ -951,7 +966,7 @@ function J.renda_venda()
   return t
 end
 
-function J.renda_passiva() return J.ef("renda_quartos") + J.renda_venda() end
+function J.renda_passiva() return J.ef("renda_quartos") + J.ef("renda_fazenda") + J.renda_venda() end
 
 -- Jardim ---------------------------------------------------------------------------------
 
@@ -1225,6 +1240,7 @@ local OBJETIVOS = {
   { "prateleira", "Construa a Prateleira de missões" },
   { "mercadinho", "Abra o Mercadinho" },
   { "jardim", "Plante o Jardim" },
+  { "cozinha", "Construa a Cozinha" },
   { "cozinheiro", "Contrate o Cozinheiro" },
   { "venda", "Libere a Aba de venda" },
   { "recrutador", "Traga o Recrutador" },
@@ -1486,6 +1502,8 @@ function J.carregar()
   for r, n in pairs(e.feitas_rank) do
     if type(n) ~= "number" then e.feitas_rank[r] = nil end
   end
+  -- quem já tinha cozinheiro antes de existir a cozinha ganha a sala
+  if type(e.nos) == "table" and (tonumber(e.nos.cozinheiro) or 0) > 0 then e.nos.cozinha = 1 end
   -- ignora nós que não existem mais e níveis acima do máximo
   for id, nv in pairs(e.nos) do
     local no = A.POR_ID[id]

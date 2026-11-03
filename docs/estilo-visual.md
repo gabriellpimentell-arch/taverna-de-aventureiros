@@ -230,3 +230,118 @@ Li o texto das páginas, não as imagens, e nenhuma trazia paleta em hexadecimal
 - [CraftPix: Guild Hall em vista de cima](https://craftpix.net/?p=97724): inventário de guilda (quadro de avisos, suportes de armas, pentagramas, bandeiras).
 - [Superhive: Medieval Market & Tavern Props](https://superhivemarket.com/products/medieval-market--tavern-props-pack): inventário de objetos (caixote, sacos, banca, lanterna).
 - [TurboSquid: Low Poly Witch Room](https://www.turbosquid.com/3d-models/low-poly-witch-room-stylized-fantasy-magic-interior-2644308): magia em cor fria e brilhante contra luz quente de vela.
+
+## Cozinha, pomar e fazenda
+
+Proposta autoral, ainda não testada em jogo. As receitas usam os ajudantes da seção "Receitas". Em `scripts/mundo.lua` não há ajudante `esfera` nem `b` em `caixa`, `cilindro` e `cone`: lá, use `peca` e `brilho` ou acrescente esses ajudantes ao aplicar.
+
+| Área | Cores |
+|---|---|
+| Cozinha | fuligem `#2b2523`, azulejo `#c9bda6`, cobre `#b8693a`, brasa `#ff7a24` |
+| Pomar | grama `#6f9a48`, copas `#3f6b34` `#5a8f42`, maçã `#c8382e`, pera `#d9c24a`, vime `#a87a42` |
+| Fazenda | celeiro `#8f3a2c`, acabamento `#efe2c4`, telhado `#4e4a48`, feno `#d3ad4f` `#b8923c`, vaca `#ece4d4` `#3a302b` |
+
+### Cozinha
+
+**Fogão a lenha (encostado no fundo)**
+```lua
+caixa(0,0,0, 1.4,.85,.8, PEDRA_ESC); caixa(0,.85,0, 1.5,.08,.9,"#2b2523")     -- corpo e chapa
+caixa(-.3,.15,.39, .5,.4,.06,"#201a18"); caixa(-.3,.18,.41, .36,.2,.06,"#ff7a24",0,1.3)  -- boca e brasa
+cilindro(-.3,.93,0, .5,.3,"#b8693a"); cilindro(-.3,1.23,0, .54,.05,FERRO)     -- panela
+cilindro(.45,.93,-.2, .26,2, FERRO)                                            -- chaminé
+```
+
+**Mesa de preparo**
+```lua
+for _,p in ipairs{{-.9,-.35},{.9,-.35},{-.9,.35},{.9,.35}} do caixa(p[1],0,p[2], .12,.72,.12, MADEIRA_ESC) end
+caixa(0,.72,0, 2,.1,.9, TAMPO); caixa(0,.25,0, 1.8,.08,.7, MADEIRA_MED)        -- tampo e prateleira
+caixa(-.4,.82,.05, .6,.06,.4,"#7b4a26"); cone(-.4,.88,.05, .14,.24,"#e08a3c")  -- tábua e cenoura
+esfera(.5,.94,0, .24,"#86b552")                                                -- repolho
+```
+
+**Panelas penduradas (na parede do fundo)**
+```lua
+caixa(0,2.5,.18, 2,.08,.08, FERRO)             -- barra
+caixa(-1,2.4,.09, .08,.18,.2, FERRO); caixa(1,2.4,.09, .08,.18,.2, FERRO)      -- suportes
+for i,x in ipairs{-.6,0,.6} do local d = .28+i*.06
+  caixa(x,2.25,.18, .08,.25,.08, FERRO)        -- gancho
+  cilindro(x,2.25-d*.7,.18, d,d*.7,"#b8693a")  -- panela, maior para a direita
+end
+```
+
+### Pomar
+
+**Macieira**
+```lua
+cilindro(0,0,0, .34,1.2,"#5b3a22")
+esfera(0,1.75,0, 1.7,"#5a8f42",1.4); esfera(-.35,2.15,-.15, .9,"#3f6b34",.7)
+-- maçãs: {.55,1.95,.55} {-.4,2.2,.5} {.1,2.35,.35} {-.65,1.75,.5} {.75,1.6,.3}
+esfera(x,y,z, .18,"#c8382e")
+```
+
+**Árvore com frutas (pereira, copa alta)**
+```lua
+cilindro(0,0,0, .3,1.05,"#5b3a22"); esfera(0,1.9,0, 1.3,"#3f6b34",1.7)
+-- peras: {.45,1.75,.45} {-.5,2,.4} {.1,2.5,.45}
+esfera(x,y,z, .18,"#d9c24a"); cone(x,y+.06,z, .1,.14,"#d9c24a")
+```
+Frutas só aparecem quando prontas para colher: a árvore passa a mostrar o estado do jogo.
+
+**Cesto**
+```lua
+cilindro(0,0,0, .6,.3,"#a87a42"); cilindro(0,.12,0, .63,.08,"#7b4a26")         -- corpo e faixa
+esfera(0,.3,0, .5,"#c8382e",.2)                                                -- frutas; tire se vazio
+caixa(-.27,.3,0, .08,.28,.08,"#7b4a26"); caixa(.27,.3,0, .08,.28,.08,"#7b4a26")
+caixa(0,.58,0, .62,.08,.08,"#7b4a26")                                          -- alça
+```
+
+### Fazenda
+
+**Celeiro (no fundo: tem 3,1 de altura)**
+```lua
+caixa(0,0,0, 4,2,3,"#8f3a2c")                  -- paredes
+caixa(0,2,0, 4,.2,2.4,"#8f3a2c"); caixa(0,2.2,0, 4,.3,1.4,"#8f3a2c"); caixa(0,2.5,0, 4,.35,.5,"#8f3a2c")  -- empena em degraus
+peca("caixa",0,2.55,.82, 4.4,.14,2, 0,"#4e4a48",.6); peca("caixa",0,2.55,-.82, 4.4,.14,2, 0,"#4e4a48",-.6)  -- telhado
+caixa(0,0,1.5, 1.4,1.5,.06,"#6b2a20")          -- porta
+peca("caixa",0,.75,1.55, .1,1.6,.04, 0,"#efe2c4",0,.75); peca("caixa",0,.75,1.55, .1,1.6,.04, 0,"#efe2c4",0,-.75)  -- X
+```
+
+**Cerca (moirão a cada 1,5 m)**
+```lua
+caixa(x,0,0, .14,.85,.14, MADEIRA_ESC)
+caixa(xm,.3,0, 1.5,.1,.08, MADEIRA_MED); caixa(xm,.62,0, 1.5,.1,.08, MADEIRA_MED)
+```
+
+**Cocho**
+```lua
+caixa(-.55,0,0, .1,.18,.5, MADEIRA_ESC); caixa(.55,0,0, .1,.18,.5, MADEIRA_ESC)   -- pés
+caixa(0,.18,0, 1.4,.08,.5, MADEIRA_MED)                                           -- fundo
+caixa(0,.18,-.25, 1.5,.3,.08, MADEIRA_MED); caixa(0,.18,.25, 1.5,.3,.08, MADEIRA_MED)
+caixa(-.72,.18,0, .08,.3,.58, MADEIRA_MED); caixa(.72,.18,0, .08,.3,.58, MADEIRA_MED)
+caixa(0,.26,0, 1.3,.14,.42,"#d3ad4f")          -- feno; água seria "#5f93b5"
+```
+
+**Feno (2 fardos embaixo e 1 em cima)**
+```lua
+caixa(-.52,0,0, 1,.55,.6,"#d3ad4f"); caixa(.52,0,0, 1,.55,.6,"#b8923c"); caixa(0,.55,0, 1,.55,.6,"#d3ad4f")
+caixa(x-.25,y,0, .08,.57,.64,"#7b4a26"); caixa(x+.25,y,0, .08,.57,.64,"#7b4a26")  -- amarras de cada fardo (x, y)
+```
+
+**Vaca low poly (olha para +x, sem rosto)**
+```lua
+caixa(0,.55,0, 1.2,.6,.6,"#ece4d4")            -- corpo
+for _,p in ipairs{{-.42,-.2},{.42,-.2},{-.42,.2},{.42,.2}} do caixa(p[1],0,p[2], .16,.57,.16,"#ece4d4") end
+caixa(-.2,.9,0, .5,.27,.62,"#3a302b"); caixa(.3,.7,0, .3,.47,.62,"#3a302b")       -- manchas
+caixa(.75,.8,0, .4,.4,.4,"#ece4d4"); caixa(.97,.8,0, .12,.2,.34,"#e8a6a0")        -- cabeça e focinho
+cone(.75,1.2,-.14, .08,.14,"#e8dcc0"); cone(.75,1.2,.14, .08,.14,"#e8dcc0")       -- chifres
+caixa(-.63,.55,0, .08,.55,.08,"#3a302b")       -- rabo
+```
+
+Fontes desta seção (só li os títulos nos resultados de busca, sem abrir as páginas; serviram como inventário de objetos, e cores e medidas são escolhas minhas):
+
+- [CGTrader: Medieval Kitchen Low Poly](https://www.cgtrader.com/3d-models/interior/kitchen/medieval-kitchen-low-poly-ar-vr-asset-pack)
+- [CGTrader: Apple Tree Low Poly](https://www.cgtrader.com/3d-models/plant/other/apple-tree-low-poly)
+- [CGTrader: Apples in Basket](https://www.cgtrader.com/3d-models/food/fruit/apples-in-basket)
+- [CGTrader: Low poly Farm Barn Diorama](https://cgtrader.com/3d-models/exterior/industrial-exterior/low-poly-farm-barn-diorama)
+- [CGTrader: Barn Equipment Props Pack](https://www.cgtrader.com/3d-models/exterior/other/barn-equipment-props-pack)
+- [Superhive: Hay Bale Square And Round](https://superhivemarket.com/products/hay-bale-square-and-round/ratings)

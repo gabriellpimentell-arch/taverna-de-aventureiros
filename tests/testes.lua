@@ -1553,6 +1553,42 @@ do
   novo()
 end
 
+-- Excluir e acrescentar itens no editor
+do
+  local L = require("layout")
+  motor._layout = false
+  novo()
+  ok("mesa não pode ser excluída", not L.removivel("mesa1") and not L.excluir("mesa1"))
+  ok("círculo não pode ser excluído", not L.removivel("circulo"))
+  ok("barril pode", L.removivel("barril1") and L.excluir("barril1") and L.oculto("barril1"))
+  ok("desenha sem o barril", pcall(desenhar))
+  local o = L.adicionar("planta", 2, 2)
+  ok("acrescenta item", o and L.POR_ID[o.id] and L.removivel(o.id))
+  local o2 = L.adicionar("barril", 3, 3)
+  L.salvar()
+  iniciar()
+  ok("excluído continua fora", L.oculto("barril1"))
+  ok("novo continua lá", L.POR_ID[o.id] ~= nil and L.POR_ID[o2.id] ~= nil)
+  J.montar_mapa()
+  ok("desenha os novos", pcall(desenhar))
+  ok("tipo inválido", L.adicionar("xx", 0, 0) == nil)
+  ok("exclui o novo", L.excluir(o2.id) and L.POR_ID[o2.id] == nil)
+  L.devolver("barril1")
+  ok("devolve", not L.oculto("barril1"))
+  L.restaurar()
+  ok("restaurar tira os novos", L.POR_ID[o.id] == nil)
+  L.salvar()
+  motor._layout = false
+  novo()
+  libera("fazenda"); libera("cozinheiro")
+  ok("fazenda rende", J.renda_passiva() >= 60)
+  ok("cozinheiro exige cozinha", J.nivel("cozinha") == 1)
+  motor._save = '{ ["versao"] = 2, ["nos"] = { ["cozinheiro"] = 2 } }'
+  iniciar()
+  ok("save antigo ganha a cozinha", J.nivel("cozinha") == 1)
+  novo()
+end
+
 -- Tela inicial e saves ------------------------------------------------------------------------------
 do
   local S = require("saves")

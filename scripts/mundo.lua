@@ -17,6 +17,7 @@ local L = require("layout")
 local G = nil
 local function grupo(id)
   if not id then G = nil return end
+  if L.oculto(id) then G = { oculto = true } return end
   local o = L.POR_ID[id]
   local x, z = L.desloc(id)
   local y, g = L.altura(id), L.giro(id)
@@ -26,6 +27,7 @@ end
 M.grupo = grupo
 
 local function peca(f, x, y, z, ex, ey, ez, giro, c, rx, rz, b)
+  if G and G.oculto then return end
   if G then
     local ax, az = x - G.px, z - G.pz
     x = G.px + G.x + ax * G.co + az * G.si
@@ -895,6 +897,37 @@ local function poeira_briga(p)
   end
 end
 
+-- Itens acrescentados no editor
+local function extras()
+  for _, o in ipairs(L.OBJETOS) do
+    if o.extra then
+      grupo(o.id)
+      local x, z, t = o.x, o.z, o.extra
+      if t == "barril" then barril(x, z)
+      elseif t == "caixote" then
+        caixa(x, 0, z, 0.8, 0.7, 0.8, MAD_MED)
+        caixa(x, 0.7, z, 0.84, 0.06, 0.84, TAMPO)
+      elseif t == "planta" then
+        cilindro(x, 0, z, 0.42, 0.42, "#8a5a33")
+        peca("esfera", x, 0.72, z, 0.72, 0.72, 0.72, 0, "#4f8a3c")
+      elseif t == "vela" then
+        cilindro(x, 0, z, 0.1, 1.1, FERRO)
+        cilindro(x, 0, z, 0.36, 0.05, FERRO)
+        vela(x, 1.1, z)
+      elseif t == "tapete" then tapete(x, z, 2.6, 1.7)
+      elseif t == "estante" then
+        caixa(x, 0, z, 1.5, 2.0, 0.42, MAD_ESC)
+        for k = 0, 2 do caixa(x, 0.45 + k * 0.6, z + 0.2, 1.3, 0.06, 0.1, TAMPO) end
+      elseif t == "banco" then banquinho(x, z)
+      elseif t == "quadro" then
+        caixa(x, 1.6, z, 1.0, 0.8, 0.06, MAD_ESC)
+        caixa(x, 1.68, z + 0.02, 0.84, 0.64, 0.05, "#c9a24a")
+      end
+    end
+  end
+  grupo(nil)
+end
+
 -- Desenho ------------------------------------------------------------------------------
 
 function M.desenhar_cena()
@@ -919,6 +952,7 @@ function M.desenhar_cena()
   end
 
   salao()
+  extras()
   ala_leste(a.leste)
   grupo("jardim")
   jardim(a.jardim)
