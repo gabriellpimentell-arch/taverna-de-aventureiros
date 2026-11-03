@@ -13,3 +13,11 @@ Pedido do dono. Referência de construção: `docs/referencia-sims.md`, seção 
 - **Segundo andar**: Quartos e Sala do chefe da guilda. Cervejaria, cozinha e invocação podem ir para cima ou para baixo.
 - **Equipe**: o gerente fica atrás do balcão e serve sozinho no começo. Com garçom, ele põe o pedido no balcão e o garçom leva. O moço de cozinha traz da cozinha para o gerente. Ao abrir as missões o gerente vira chefe da guilda e sobe; o balcão passa a funcionar sozinho com a equipe.
 - **Economia**: começa endividado; pega empréstimo com o agiota; compra mantimentos e revende. Produção: cozinha (pão), cervejaria, jardim (trigo e lúpulo), pomar (frutas), fazenda (carne).
+
+## Estado do motor (ramo `salas-blocos`)
+Pronto em `layout.lua`, `mundo.lua` e `editor.lua`; a Loja usa estas funções sem tocar em desenho:
+- `L.pos_sala(id)` -> x, z, andar. `L.mover_sala(id, x, z, andar)` -> ok, motivo. `L.encaixe_valido(id, x, z, andar, l, p)` -> ok, motivo, x e z já encaixados. `L.vaga_sala(id, andar)` -> x, z. `id` também aceita `"taverna"`.
+- `L.pos_porta()` -> lado, t. `L.mover_porta(lado, t)` -> ok, motivo. `L.porta_livre(lado, t)`. `L.porta_mais_perto(x, z)` -> lado, t. Lados: oeste, fundo, leste, frente.
+- `L.andar_ativo`, `L.mudar_andar(n)`, `L.andar_existe(n)`, `L.andares()`, `L.andar_de(id)`, `L.no_andar_ativo(id)`. `L.portas(andar)`, `L.lado_porteira(id)`, `L.trechos_baixos(id, lado)`, `L.parede_baixa(id, lado, c)`, `L.estado_blocos()`, `L.definir_blocos(t)`.
+- Depois de mover com o jogo rodando: `L.salvar()`. O jogo percebe a mudança por `L.versao` e chama `J.aplicar_obra()` sozinho, sem expulsar ninguém.
+- Falta a Loja: `J.auto_colocar`, preço, reembolso e fantasma fora do editor.

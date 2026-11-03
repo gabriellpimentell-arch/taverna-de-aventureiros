@@ -1195,6 +1195,7 @@ function T.desenhar()
   T.aba_anterior = aba_atual
   hud()
   barra_abas()
+  if T.aba == "taverna" then M.desenhar_botoes_andar() end
   dica()
   aviso()
   if T.modal == "config" then janela_config()

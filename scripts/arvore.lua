@@ -24,6 +24,8 @@ local n = {
   { id = "balcao", pai = "mesa", ramo = "salao", p = 2, l = -1, nome = "Bancos no balcão", desc = "+4 lugares no balcão", custo = 90, mult = 1, max = 1, ef = { balcao = 1 } },
   { id = "conforto", pai = "mesa", ramo = "salao", p = 2, l = 1, nome = "Cadeiras confortáveis", desc = "Pedidos rendem +10%", custo = 150, mult = 2.4, max = 6, ef = { x_pedido = 1.1 } },
   { id = "quartos", pai = "balcao", ramo = "salao", p = 3, l = -1, nome = "Quartos", desc = "+6 ouro por segundo", custo = 1500, mult = 2.8, max = 10, ef = { renda_quartos = 6 } },
+  { id = "segundo_andar", pai = "quartos", ramo = "salao", p = 4, l = -1, nome = "Segundo andar", desc = "Abre o segundo andar, com os quartos e a sala do chefe da guilda", custo = 12000, mult = 1, max = 1, ef = { a_segundo_andar = 1 } },
+  { id = "subsolo", pai = "segundo_andar", ramo = "salao", p = 5, l = -1, nome = "Subsolo", desc = "Abre o subsolo: um andar de pedra para mudar salas de lugar", custo = 150000, mult = 1, max = 1, ef = { a_subsolo = 1 } },
   { id = "ala_leste", pai = "conforto", ramo = "salao", p = 3, l = 1, nome = "Ala leste", desc = "Abre uma ala nova e +2 mesas", custo = 60000, mult = 1, max = 1, ef = { a_leste = 1, mesas = 2 } },
   { id = "decoracao", pai = "ala_leste", ramo = "salao", p = 4, l = 1, nome = "Decoração", desc = "Pedidos rendem +15%", custo = 90000, mult = 3.4, max = 6, ef = { x_pedido = 1.15 } },
 

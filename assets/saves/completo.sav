@@ -346,6 +346,8 @@
 ["recrutador"] = 1,
 ["ricos"] = 8,
 ["ritual"] = 6,
+["segundo_andar"] = 1,
+["subsolo"] = 1,
 ["vagas"] = 14,
 ["venda"] = 1
 },
