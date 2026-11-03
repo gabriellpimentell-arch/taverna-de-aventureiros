@@ -457,7 +457,7 @@ J.atualizar(0.1)
 ok("party incompleta não prende o membro", J.estado.contratados[1].em_missao == true and #J.estado.parties == 0)
 motor._save = '{ ["versao"] = 2, ["final_resta"] = 1e30, ["missoes"] = { { ["rank"] = 1, ["resta"] = 1e30 }, { ["rank"] = 1, ["resta"] = -5, ["contratado"] = 40 } } }'
 iniciar()
-ok("final e missão não ficam eternos", J.estado.final_resta <= C.sss.duracao and J.estado.missoes[1].resta <= C.ranks[1].duracao and #J.estado.missoes == 1)
+ok("final e missão não ficam eternos", (J.estado.final_resta or math.huge) <= C.sss.duracao and J.estado.missoes[1].resta <= C.ranks[1].duracao and #J.estado.missoes == 1)
 -- número inválido em um campo não pode perder o save inteiro
 novo()
 J.estado.ouro = 777

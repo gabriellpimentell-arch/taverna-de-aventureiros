@@ -81,13 +81,17 @@ function util.serializar(t)
 end
 
 function util.desserializar(texto)
-  if not texto then return nil end
+  if type(texto) ~= "string" then return nil end
+  -- só dados: fora das aspas, nada de comandos (um laço infinito travaria o jogo)
+  local sem_textos = texto:gsub('\\.', ""):gsub('"[^"]*"', '""')
+  if sem_textos:find("%f[%a]%a%a%a+") then
+    for palavra in sem_textos:gmatch("%a+") do
+      if palavra ~= "true" and palavra ~= "false" and palavra ~= "nan" and palavra ~= "inf" and palavra ~= "e" then return nil end
+    end
+  end
   local f = load("return " .. texto, "save", "t", {})   -- ambiente vazio: só dados
   if not f then return nil end
-  -- um arquivo adulterado com laço infinito não pode travar o jogo
-  debug.sethook(function() error("arquivo inválido") end, "", 5000000)
   local ok, dados = pcall(f)
-  debug.sethook()
   if ok and type(dados) == "table" then return dados end
   return nil
 end
