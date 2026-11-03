@@ -44,6 +44,8 @@ local sufixos = { { 1e18, "qui" }, { 1e15, "qua" }, { 1e12, "tri" }, { 1e9, "bi"
 
 function util.formatar(n)
   n = math.floor(n + 0.5)
+  -- além do maior sufixo: sem isto o número viraria centenas de dígitos por cima da tela
+  if n >= 1e21 then return (string.format("%.2e", n):gsub("%.", ",")) end
   for _, s in ipairs(sufixos) do
     local base = s[1] == 1e4 and 1e3 or s[1]
     -- 999.999 vira "1 mi", e não "1000 mil"

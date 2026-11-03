@@ -118,6 +118,7 @@ local function tamanho_zero()
 end
 L.tamanho = tamanho_zero()
 L.TAMANHO_MAX = 40
+L.MAX_EXTRAS = 60
 local SALAO_L, SALAO_P = 13, 9.2      -- tamanho original do salão
 local SALAO_L_MIN, SALAO_P_MIN = 8, 7
 local SALA_MIN = 3
@@ -187,6 +188,19 @@ local function cursor(alvo)
   return x
 end
 
+-- sala interna mais funda que o salão invade a fileira da frente: a área que está na frente dela recua
+local function recuo_externo(ext)
+  local xa = cursor(ext)
+  local xb, recuo = xa + largura(ext), 0
+  for _, b in ipairs(INTERNAS) do
+    if L.aberta(b.id) then
+      local ia = cursor(b)
+      if ia < xb and ia + largura(b) > xa then recuo = math.max(recuo, L.tamanho[b.k .. "_p"]) end
+    end
+  end
+  return recuo
+end
+
 local function ancora(pai)
   local s = L.tamanho
   if pai == "@fundo" then return 0, -s.fundo
@@ -196,7 +210,7 @@ local function ancora(pai)
   local b = POR_ANCORA[pai]
   if b then
     local x = cursor(b)
-    return x - b.x0, b.interna and -s.fundo or s.frente
+    return x - b.x0, b.interna and -s.fundo or s.frente + recuo_externo(b)
   end
   return 0, 0
 end
@@ -232,6 +246,21 @@ function L.colocar(id, x, z)
 end
 
 -- meia largura (x) e meia profundidade (z) de quem precisa caber inteiro num salão menor
+-- Quem recebe gente precisa ficar dentro das paredes, em qualquer tamanho de salão:
+-- { folga em x, folga do fundo, folga da frente, fim = quanto pode entrar na ala leste }
+local DENTRO = {
+  balcao = { 2.8, 1.6, 1.6, fim = 0.5 }, palco = { 0.6, 0.6, 0.6 }, bardo = { 0.4, 0.4, 0.4 },
+  quadro = { 1, 0.1, 1.1 }, barraca = { 2.4, 2.3, 2.5, fim = 5.6 },
+}
+local function folga_dentro(id, d)
+  local m = DENTRO[id]
+  if m or not id:match("^mesa%d") then return m end
+  -- os bancos ficam nas pontas e giram com a mesa
+  local g = d and d.g or 0
+  local mx, mz = 0.9 + 0.7 * math.abs(math.cos(g)), 0.9 + 0.7 * math.abs(math.sin(g))
+  return { mx, mz, mz, fim = L.POR_ID[id].pai == "@leste" and 5.6 + 0.3 or nil }
+end
+
 local MEIA = { balcao = { 2.8, 1.6 }, prateleira = { 2.7, 0.3 }, tapete1 = { 2.3, 1 }, tapete2 = { 2.2, 1 }, carga = { 0.8, 0.5 } }
 
 local function raiz(o)
@@ -244,7 +273,8 @@ local function limites_externos(sala)
   local xa, xb, _, zb = L.salao()
   local xmax = xb + 6.5
   for _, b in ipairs(EXTERNAS) do xmax = math.max(xmax, cursor(b) + largura(b) + 0.5) end
-  return xa - 0.5, xmax, math.max(zb + 5.3, zb + 0.6 + math.max(SALA_MIN, sala.p + L.tamanho[sala.k .. "_p"]))
+  local recuo = recuo_externo(sala)
+  return xa - 0.5, xmax, recuo + math.max(zb + 5.3, zb + 0.6 + math.max(SALA_MIN, sala.p + L.tamanho[sala.k .. "_p"]))
 end
 
 local function algum_negativo()
@@ -258,7 +288,7 @@ end
 function L.limitar(id)
   local o, d = L.POR_ID[id], L.dados[id]
   -- sem edição e sem salão encolhido o objeto está onde nasceu: não cria dado à toa
-  if not d and not algum_negativo() then return end
+  if not d and not algum_negativo() and not L.dados[raiz(o).id] then return end
   local s = L.tamanho
   local xa, xb, za, zb = L.salao()
   local dx, dz = L.desloc(id)
@@ -269,14 +299,20 @@ function L.limitar(id)
   if sala and sala.interna then
     -- sala interna: fica entre as paredes dela
     x0, x1, z0, z1 = L.sala_mundo(r.id)
-    x0, x1, z0, z1 = x0 + 0.5, x1 - 0.1, z0 - 0.1, z1 - 0.1
+    -- o que está dentro não entra na parede da frente nem na sala vizinha
+    local borda = r == o and 0.1 or 0.5
+    x0, x1, z0, z1 = x0 + 0.5, x1 - borda, z0 - 0.1, z1 - borda
   elseif sala then
     x0, x1, z1 = limites_externos(sala)
     z0 = za - 0.5
   else
     x0, x1, z0, z1 = xa - 0.5, xb + 6.5, za - 0.5, zb + 0.55
     -- salão menor que o original: quem não segue aquela parede precisa caber inteiro dentro
-    if r == o then
+    local dentro = r == o and folga_dentro(id, d)
+    if dentro then
+      x0, x1 = xa + dentro[1], xb + (dentro.fim or 0) - dentro[1]
+      z0, z1 = za + dentro[2], zb - dentro[3]
+    elseif r == o then
       local p = o.pai
       local m = MEIA[id] or (id:match("^mesa%d") and { 1.6, 0.9 }) or { 0.5, 0.6 }
       local mx, mz = math.min(m[1], (xb - xa) / 2), math.min(m[2], (zb - za) / 2)
@@ -296,6 +332,24 @@ function L.limitar(id)
   end
   d = L.dados[id]
   if d then d.y = util.limitar(d.y, -1, 6) end
+end
+
+-- quem é carregado pelo objeto também precisa continuar dentro depois que ele se move
+function L.limitar_carregados(id)
+  local function carregado(o)
+    while o and o.pai and o.pai:sub(1, 1) ~= "@" do
+      if o.pai == id then return true end
+      o = L.POR_ID[o.pai]
+    end
+    return false
+  end
+  for _, o in ipairs(L.OBJETOS) do
+    if carregado(o) then
+      local d = L.dados[o.id]
+      if d and d.orig then d.x, d.z, d.orig = d.orig.x, d.orig.z, nil end
+      L.limitar(o.id)
+    end
+  end
 end
 
 -- Limites da sala no mundo. As paredes das internas não andam no editor; as externas andam inteiras.
@@ -413,13 +467,19 @@ local function aplicar_tabela(t)
   end
   migrar(t)
   if type(t._extras) == "table" then
+    local n = 0
     for _, x in ipairs(t._extras) do
-      if type(x) == "table" and L.TIPOS_EXTRAS[x.tipo] then L.adicionar(x.tipo, numero(x.x), numero(x.z), x.id) end
+      if n < L.MAX_EXTRAS and type(x) == "table" and L.TIPOS_EXTRAS[x.tipo] then
+        L.adicionar(x.tipo, numero(x.x), numero(x.z), type(x.id) == "string" and x.id or nil)
+        n = n + 1
+      end
     end
   end
   for id, d in pairs(t) do
     if L.POR_ID[id] and type(d) == "table" then
-      L.dados[id] = { x = numero(d.x), z = numero(d.z), y = numero(d.y), g = numero(d.g), oculto = d.oculto == true or nil }
+      L.dados[id] = { x = numero(d.x), z = numero(d.z), y = numero(d.y), g = numero(d.g), oculto = d.oculto == true and L.removivel(id) or nil }
+      -- empurrado por um salão menor: continua sabendo para onde voltar quando ele crescer
+      if type(d.orig) == "table" then L.dados[id].orig = { x = numero(d.orig.x), z = numero(d.orig.z) } end
     end
   end
   -- só depois de ler tudo: o limite de um objeto depende de onde está quem o carrega
@@ -484,7 +544,7 @@ end
 -- O que a árvore de habilidades constrói não pode ser excluído: só movido
 local FIXOS = { mesa = true, balcao = true, fogao = true, cozinheiro = true, bardo = true, barraca = true, estantes = true,
   quadro = true, porta = true, palco = true, jardim = true, cervejaria = true, circulo = true, quartos = true,
-  cozinha = true, pomar = true, fazenda = true, celeiro = true }
+  cozinha = true, pomar = true, fazenda = true, celeiro = true, canteiros = true }
 
 function L.removivel(id)
   local o = L.POR_ID[id]
@@ -517,6 +577,9 @@ function L.restaurar(id)
   if id then
     L.dados[id] = nil
     if padrao[id] then aplicar_tabela({ [id] = padrao[id] }) end
+    -- a posição original pode ter ficado fora de um salão que encolheu
+    L.limitar(id)
+    L.limitar_carregados(id)
   else
     L.limpar_extras()
     L.dados = {}

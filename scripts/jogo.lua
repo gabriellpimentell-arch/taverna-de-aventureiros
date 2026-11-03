@@ -181,7 +181,7 @@ local function recalcular()
 end
 
 -- no modo de edição tudo aparece, para dar para mover até o que ainda não foi comprado
-local PREVIA = { a_cozinha = 1, a_pomar = 1, a_fazenda = 1, frutas = 6, vacas = 6, a_leste = 1, a_jardim = 1, a_cerveja = 1, a_circulo = 1, mesas = 7, balcao = 1, cozinheiro = 1, bardo = 1,
+local PREVIA = { a_cozinha = 1, a_pomar = 1, a_fazenda = 1, frutas = 6, vacas = 8, a_leste = 1, a_jardim = 1, a_cerveja = 1, a_circulo = 1, mesas = 7, balcao = 1, cozinheiro = 1, bardo = 1,
   prateleira = 1, mercadinho = 8, canteiros = 10, venda = 1, pocoes = 1, armaduras = 1, armas = 1 }
 
 function J.ef(k)
@@ -190,6 +190,7 @@ function J.ef(k)
 end
 function J.nivel(id)
   if J.previa and id == "quartos" then return 1 end
+  if J.previa and id == "decoracao" then return 5 end   -- flâmulas: tudo o que dá para tocar precisa aparecer
   return J.estado.nos[id] or 0
 end
 
@@ -408,26 +409,30 @@ function J.caminho(p, x, z)
   -- quem ainda vem pelo vão está fora do mapa: a rota começa no fim do vão
   local vao, fx, fz = p.vao, p.x, p.z
   if vao then p.x, p.z = vao[#vao].x, vao[#vao].z end
-  local r = Cam.rota(p.x, p.z, x, z)
+  local r, fundo = Cam.rota(p.x, p.z, x, z), false
   if not r then
     -- empurrado para dentro de um móvel: sai pelo ponto livre mais próximo e segue a rota dali
-    for raio = 0.3, 0.6, 0.3 do
+    -- (a mesa e os bancos bloqueiam até 1,5 m do centro; sem saída de verdade cada busca custa caro, por isso são poucas)
+    local tentativas = 4
+    for raio = 0.3, 1.8, 0.3 do
       for k = 0, 7 do
         local a = k * math.pi / 4
         local ax, az = p.x + math.cos(a) * raio, p.z + math.sin(a) * raio
-        if not Cam.bloqueado(ax, az) then
+        if tentativas > 0 and not Cam.bloqueado(ax, az) then
+          tentativas = tentativas - 1
           r = Cam.rota(ax, az, x, z)
           if r then
             table.insert(r, 1, { x = ax, z = az })
+            fundo = raio > 0.6   -- longe demais para sair sem cruzar o móvel: atravessa, como o atalho
             break
           end
         end
       end
-      if r then break end
+      if r or tentativas == 0 then break end
     end
   end
-  p.sem_rota = not r
-  p.fantasma = not r or nil
+  p.sem_rota = not r or fundo
+  p.fantasma = p.sem_rota or nil
   if not r then
     r = { { x = x, z = z } }
     J.sem_caminho = (J.sem_caminho or 0) + 1
@@ -1089,6 +1094,14 @@ function J.desfazer_party(num)
   local e = J.estado
   for i, p in ipairs(e.parties) do
     if p.id == num then
+      for _, id in ipairs(p.membros) do
+        local c = J.contratado_por_id(id)
+        -- no meio da batalha final a party não se desfaz: a luta continuaria sem ninguém nela
+        if c and c.na_final then
+          J.avisar("Esta party está enfrentando o Lorde Demônio!", 3)
+          return false
+        end
+      end
       for _, id in ipairs(p.membros) do
         local c = J.contratado_por_id(id)
         if c then c.party = nil end

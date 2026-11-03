@@ -14,7 +14,7 @@ local cor = util.cores
 
 local E = { ativo = false }
 
-local MAX_EXTRAS, MAX_DESFAZER = 60, 30
+local MAX_EXTRAS, MAX_DESFAZER = L.MAX_EXTRAS, 30
 -- salas inteiras: no toque, só contam se nada menor estiver perto
 local SALAS = {}
 do
@@ -224,7 +224,7 @@ end
 
 local function guardar()
   local dados = {}
-  for id, d in pairs(L.dados) do dados[id] = { x = d.x, z = d.z, y = d.y, g = d.g, oculto = d.oculto } end
+  for id, d in pairs(L.dados) do dados[id] = { x = d.x, z = d.z, y = d.y, g = d.g, oculto = d.oculto, orig = d.orig } end
   local tamanho = {}
   for k, v in pairs(L.tamanho) do tamanho[k] = v end
   E.desfazer[#E.desfazer + 1] = { dados = dados, _tamanho = tamanho, _extras = L.lista_extras() }
@@ -253,6 +253,7 @@ local function acao(fn)
   guardar()
   fn(L.de(E.sel))
   L.limitar(E.sel)
+  L.limitar_carregados(E.sel)
   mudou()
   J.aplicar_visual()
 end
@@ -295,6 +296,7 @@ function E.mover_para(id, x, z)
   end
   L.colocar(id, x, z)
   L.limitar(id)
+  L.limitar_carregados(id)
   J.aplicar_visual()
 end
 
@@ -395,12 +397,12 @@ local function congelar_camera()
   if q then E.camera = { x = q.x, z = q.z, escala = q.escala } end
 end
 
-local function comecar_arrasto(id, x, y, cands, era_sel)
+local function comecar_arrasto(id, x, y, cands, era_sel, sel_antes)
   local o = L.POR_ID[id]
   local gx, gz = motor.chao(x, y)
   local ax, az = L.desloc(id)
   E.arrasto = { id = id, ox = (gx or 0) - (o.x + ax), oz = (gz or 0) - (o.z + az), moveu = false, sx = x, sy = y,
-    cands = cands, era_sel = era_sel }
+    cands = cands, era_sel = era_sel, sel_antes = sel_antes }
   congelar_camera()
 end
 
@@ -419,9 +421,9 @@ function E.tocar(x, y)
   for _, id in ipairs(cands) do if id == E.sel then atual = id end end
   local id = atual or cands[1]
   if id then
-    local era_sel = E.sel == id
+    local era_sel, sel_antes = E.sel == id, E.sel
     E.sel = id
-    comecar_arrasto(id, x, y, cands, era_sel)
+    comecar_arrasto(id, x, y, cands, era_sel, sel_antes)
   else
     E.pan = { x = x, y = y, sx = x, sy = y, moveu = false }   -- arrastar o chão vazio move a câmera (com zoom)
   end
@@ -465,7 +467,8 @@ function E.soltar(cancelado)
   if a then
     E.arrasto = nil
     if a.moveu then mudou()
-    elseif not cancelado then escolher(a, a.sx, a.sy) end
+    elseif cancelado then E.sel = a.sel_antes   -- virou pinça: o dedo não queria escolher nada
+    else escolher(a, a.sx, a.sy) end
   end
 end
 

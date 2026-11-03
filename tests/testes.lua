@@ -677,6 +677,8 @@ novo()
 J.estado.ouro = 1e100
 for _, id in ipairs({ "taverna", "arvore" }) do T.aba = id; quadros(2) end
 ok("formatar número enorme", type(util.formatar(1e100)) == "string")
+ok("número enorme cabe na tela", #util.formatar(1e300) <= 10 and #util.formatar(1e21) <= 10, util.formatar(1e300))
+ok("maior sufixo continua igual", util.formatar(5e20):find("qui", 1, true) ~= nil, util.formatar(5e20))
 
 -- Colisões: bonecos não se atravessam nem atravessam mesas ---------------------------------------
 do
@@ -1468,6 +1470,96 @@ do
     J.caminho(p, J.QUADRO.x, J.QUADRO.z)
     ok("quem está dentro da mesa consegue sair", not p.sem_rota)
   end
+  -- achado pelo robô: fundo na mesa, ao lado do banco, nenhum ponto a até 0,6 m estava livre
+  for _, d in ipairs({ { 0.66, -0.18 }, { 0.63, 0.04 }, { -0.45, 0.35 }, { 0, 0 } }) do
+    local p = { x = m.x + d[1], z = m.z + d[2] }
+    J.sem_caminho = 0
+    J.caminho(p, J.QUADRO.x, J.QUADRO.z)
+    ok("quem está bem no fundo da mesa consegue sair", J.sem_caminho == 0 and #p.rota > 1, d[1] .. "," .. d[2])
+  end
+  -- sem saída de verdade (destino cercado) não repete a busca cara a cada ponto livre em volta
+  do
+    local Cam, rota, buscas = require("caminhos"), nil, 0
+    rota = Cam.rota
+    Cam.rota = function() buscas = buscas + 1 end
+    local p = { x = 0, z = 1.8 }
+    J.caminho(p, J.QUADRO.x, J.QUADRO.z)
+    Cam.rota = rota
+    ok("sem saída faz poucas buscas", p.sem_rota and buscas <= 5, buscas)
+  end
+  novo()
+end
+
+-- Desfazer a party no meio da batalha final deixava a luta seguir sem party nenhuma
+do
+  motor._layout = false
+  motor._save = motor.ler_asset("saves/completo.sav")
+  iniciar()
+  J.offline = nil
+  ok("final começa", J.iniciar_final())
+  local pf = J.party_final()
+  ok("party na final não se desfaz", pf and not J.desfazer_party(pf.id) and J.party_final() == pf)
+  local outra
+  for _, p in ipairs(J.estado.parties) do if p ~= pf then outra = p end end
+  ok("as outras ainda se desfazem", outra and J.desfazer_party(outra.id))
+  for _ = 1, 30 do atualizar(0.1) end
+  ok("luta continua", J.estado.final_resta ~= nil and J.party_final() == pf)
+  motor._save = false
+  novo()
+end
+
+-- Layout salvo com itens excluídos e novos sobrevive a abrir qualquer save, antigo ou novo
+do
+  local L = require("layout")
+  local velho = motor.ler_asset("saves/metade.sav")
+  local d = util.desserializar(velho)
+  d.nos.cozinha, d.nos.pomar, d.nos.fazenda = nil, nil, nil   -- de antes dessas salas
+  local antigo = util.serializar(d)
+  local lay = util.serializar({ barril1 = { x = 0, z = 0, y = 0, g = 0, oculto = true }, cocho = { x = 1, z = 0, y = 0, g = 0, oculto = true },
+    _tamanho = { dir = 2 }, _extras = { { id = "extra_9", tipo = "barril", x = 0, z = 2 } } })
+  for _, caso in ipairs({ { "antigo", antigo }, { "metade", velho }, { "completo", motor.ler_asset("saves/completo.sav") }, { "novo", false } }) do
+    motor._layout, motor._save = lay, caso[2]
+    iniciar()
+    J.offline = nil
+    local tudo_ok = pcall(function() for _ = 1, 60 do atualizar(0.1) end desenhar() end)
+    ok("layout com excluídos abre o save " .. caso[1], tudo_ok and L.oculto("barril1") and L.oculto("cocho") and L.POR_ID.extra_9 ~= nil and L.tamanho.dir == 2)
+    ok("save " .. caso[1] .. " sem caminho perdido", (J.sem_caminho or 0) == 0, J.sem_caminho)
+  end
+  ok("save antigo com cozinheiro ganha a cozinha", (function()
+    motor._layout, motor._save = lay, antigo
+    iniciar()
+    return J.nivel("cozinha") == 1 and L.aberta("cozinha")
+  end)())
+  motor._layout, motor._save = false, false
+  L.restaurar()
+  novo()
+end
+
+-- Editor: o que a árvore compra não pode ser excluído (GDD), e os saves prontos mostram as paredes iguais
+do
+  local L, M = require("layout"), require("mundo")
+  ok("canteiros vêm da árvore: só movem", not L.removivel("canteiros"))
+  local velho = motor.peca
+  for _, nome in ipairs({ "comeco", "metade", "completo" }) do
+    motor._layout = false
+    motor._save = motor.ler_asset("saves/" .. nome .. ".sav")
+    iniciar()
+    J.offline = nil
+    for _ = 1, 60 do atualizar(0.1) end
+    local alturas, maior = {}, 0
+    motor.peca = function(f, _, _, _, _, ey)
+      if f == "caixa" and ey >= 3.5 and ey < 6 then
+        alturas[ey] = true
+        maior = math.max(maior, ey)
+      end
+    end
+    desenhar()
+    motor.peca = velho
+    local n = 0
+    for _ in pairs(alturas) do n = n + 1 end
+    ok("paredes da mesma altura: " .. nome, n == 1 and maior == 4.2, n .. " alturas, maior " .. maior)
+  end
+  motor._save = false
   novo()
 end
 
@@ -1843,6 +1935,192 @@ do
   motor._layout = false
   J.sem_noticias = true
   novo()
+end
+
+-- Editor: tentar quebrar paredes, salas e arquivos do layout
+do
+  local L, Ed, Mu = require("layout"), require("editor"), require("mundo")
+  motor._layout = false
+  novo()
+  L.restaurar()
+  T.f2(); atualizar(0.05); desenhar()
+  local function mundo(id)
+    local dx, dz = L.desloc(id)
+    return L.POR_ID[id].x + dx, L.POR_ID[id].z + dz
+  end
+  local function dentro_sala(sala, id)
+    local x0, x1, z0, z1 = L.sala_mundo(sala)
+    local x, z = mundo(id)
+    return x >= x0 and x <= x1 and z >= z0 - 0.2 and z <= z1, x
+  end
+  -- mover a sala interna não leva o que está dentro para fora das paredes dela
+  local fx0 = mundo("fogao")
+  Ed.mover_para("cozinha", 0, 0)
+  for _, id in ipairs({ "fogao", "cozinheiro", "mesa_preparo", "despensa" }) do
+    ok("sala movida: " .. id .. " continua dentro", dentro_sala("cozinha", id))
+  end
+  Ed.mover_para("cozinha", 14.75, 0.1)
+  ok("sala de volta: fogão volta ao lugar", mundo("fogao") == fx0, mundo("fogao"))
+  Ed.mover_para("circulo", 100, 100)
+  for i = 1, 4 do ok("círculo movido: pilar " .. i .. " dentro", dentro_sala("circulo", "pilar" .. i)) end
+  L.restaurar()
+  -- layout salvo com a sala movida já vem com os filhos dentro
+  motor._layout = util.serializar({ cozinha = { x = -3, z = 0, y = 0, g = 0 } })
+  L.carregar()
+  ok("layout com sala movida: fogão dentro", dentro_sala("cozinha", "fogao"))
+  motor._layout = false
+  L.restaurar()
+
+  -- encolher a sala ao mínimo: nada entra na parede da frente nem na sala vizinha
+  for _ = 1, 8 do L.mudar_tamanho("coz_l", -1) end
+  local _, cx1 = L.sala_mundo("cozinha")
+  for _, id in ipairs({ "fogao", "cozinheiro", "mesa_preparo", "despensa", "panelas" }) do
+    ok("sala mínima: " .. id .. " longe da parede", mundo(id) <= cx1 - 0.5, mundo(id))
+  end
+  L.restaurar()
+
+  -- posição original de um item num salão que encolheu não o joga para fora
+  for _ = 1, 6 do L.mudar_tamanho("dir", -1); L.mudar_tamanho("frente", -1) end
+  local _, xb = L.salao()
+  L.restaurar("mesa3")
+  ok("posição original respeita o salão menor", mundo("mesa3") <= xb, mundo("mesa3"))
+  L.restaurar()
+
+  -- sala mais funda que o salão não cobre a área da frente
+  L.mudar_tamanho("coz_p", 4)
+  local _, _, _, cz1 = L.sala_mundo("cozinha")
+  local _, _, fz0 = L.sala_mundo("fazenda")
+  ok("cozinha funda não entra na fazenda", fz0 >= cz1, fz0)
+  ok("o jardim, que não fica na frente dela, não recua", select(3, L.sala_mundo("jardim")) == 4.8)
+  L.restaurar()
+
+  -- quem recebe gente não sai pela parede
+  local xa, xb2, za, zb = L.salao()
+  for _, alvo in ipairs({ { -100, 100 }, { 100, -100 } }) do
+    for _, id in ipairs({ "mesa1", "balcao", "palco", "bardo", "barraca", "quadro" }) do
+      Ed.mover_para(id, alvo[1], alvo[2])
+      local x, z = mundo(id)
+      ok("dentro da parede: " .. id, x > xa and x < xb2 + 5.6 and z > za and z < zb, x .. "," .. z)
+    end
+  end
+  Ed.mover_para("mesa1", 100, 0)
+  ok("mesa do salão não vai para a ala que pode não existir", mundo("mesa1") <= xb2, mundo("mesa1"))
+  L.restaurar()
+  for _, o in ipairs(L.OBJETOS) do
+    if o.id:match("^mesa%d") or o.id == "balcao" or o.id == "barraca" then
+      L.mudar_tamanho("dir", 0)
+      ok("o padrão continua onde estava: " .. o.id, not (L.dados[o.id] and L.dados[o.id].orig))
+    end
+  end
+  L.restaurar()
+
+  -- arquivo de layout estragado
+  motor._layout = util.serializar({
+    _extras = { { tipo = "planta", id = 5, x = 1, z = 1 }, { tipo = "barril", id = {}, x = 1, z = 1 } },
+    mesa1 = { oculto = true, x = 0, z = 0 }, balcao = { oculto = true },
+  })
+  L.carregar()
+  for _, o in ipairs(L.OBJETOS) do
+    if o.extra then ok("id de item novo é sempre texto", type(o.id) == "string", type(o.id)) end
+  end
+  ok("arquivo não esconde o que vem da árvore", not L.oculto("mesa1") and not L.oculto("balcao"))
+  ok("desenha com o arquivo estragado", pcall(desenhar))
+  local muitos = { _extras = {} }
+  for i = 1, 500 do muitos._extras[i] = { tipo = "planta", x = 0, z = 0 } end
+  motor._layout = util.serializar(muitos)
+  L.carregar()
+  local n = 0
+  for _, o in ipairs(L.OBJETOS) do if o.extra then n = n + 1 end end
+  ok("arquivo não passa do limite de itens novos", n == L.MAX_EXTRAS, n)
+  motor._layout = false
+  L.carregar()
+
+  -- empurrado pelo salão menor: desfazer e recarregar não esquecem o lugar
+  Ed.mover_para("mesa3", 4.5, 0.25)
+  local mx = mundo("mesa3")
+  Ed.desfazer = {}
+  L.mudar_tamanho("dir", -5)
+  ok("empurrada", mundo("mesa3") < mx)
+  L.salvar(); L.carregar()
+  L.mudar_tamanho("dir", 5)
+  ok("recarregar não esquece o lugar da mesa empurrada", mundo("mesa3") == mx, mundo("mesa3"))
+  L.mudar_tamanho("dir", -5)
+  Ed.mudou = true
+  Ed.excluir("barril1")   -- guarda um desfazer com a mesa empurrada
+  Ed.voltar()
+  L.mudar_tamanho("dir", 5)
+  ok("desfazer não esquece o lugar da mesa empurrada", mundo("mesa3") == mx, mundo("mesa3"))
+  L.restaurar()
+
+  -- tudo o que se pode tocar aparece na edição: nada de selecionar o invisível
+  J.aplicar_visual()
+  for _ = 1, 100 do atualizar(0.1) end
+  ok("edição mostra todas as vacas", J.ef("vacas") >= #L.VACAS)
+  local conta = 0
+  rawset(motor, "peca", function() conta = conta + 1 end)
+  local function pecas() conta = 0; Mu.desenhar_cena(); return conta end
+  local base = pecas()
+  for _, o in ipairs(L.OBJETOS) do
+    if L.removivel(o.id) then
+      Ed.excluir(o.id)
+      ok("excluir some da cena: " .. o.id, pecas() < base)
+      Ed.voltar()
+    end
+  end
+  rawset(motor, "peca", nil)
+  L.restaurar()
+
+  -- pinça que começa sobre um item não troca a seleção
+  Ed.sel = "mesa2"
+  local px, py = motor.projetar(-3.6, 0.5, 0.2)
+  motor._mouse = { px, py }; motor._baixo = true
+  T.tocar(px, py)
+  ok("toque pegou outro item", Ed.sel == "mesa1", Ed.sel)
+  T.cancelar_toque()
+  ok("pinça devolve a seleção", Ed.sel == "mesa2", Ed.sel)
+  motor._baixo = false
+
+  -- sair no meio do arrasto: fica o que foi movido, e nada preso
+  Ed.sel = nil
+  motor._mouse = { px, py }; motor._baixo = true
+  T.tocar(px, py)
+  motor._mouse = { px + 90, py }
+  atualizar(0.05)
+  local movida = mundo("mesa1")
+  T.esc()
+  ok("sair no arrasto fecha limpo", not Ed.ativo and not Ed.arrasto and not J.editando)
+  motor._mouse = { px + 300, py }
+  atualizar(0.05); desenhar()
+  motor._baixo = false
+  T.soltar(px + 300, py)
+  ok("o dedo depois de sair não move mais", mundo("mesa1") == movida)
+  L.restaurar()
+  L.salvar()
+
+  -- o cozinheiro não sai da cozinha, mesmo com os móveis colados na parede (save antigo)
+  motor._layout = false
+  motor._save = '{ ["versao"] = 2, ["nos"] = { ["cozinheiro"] = 2 } }'
+  iniciar()
+  J.sem_noticias = true
+  local x0, x1, z0, z1 = L.sala_mundo("cozinha")
+  L.colocar("fogao", x0, z0); L.limitar("fogao")
+  L.colocar("mesa_preparo", x0, z1); L.limitar("mesa_preparo")
+  local dentro, ambos = true, {}
+  for _ = 1, 400 do
+    atualizar(0.1)
+    local c = Mu.cozinheiro
+    if c then
+      local wx, wz = L.t("cozinheiro", c.x, c.z)
+      ambos[c.posto] = true
+      if wx < x0 + 0.3 or wx > x1 - 0.3 or wz < z0 + 0.3 or wz > z1 - 0.3 then dentro = false end
+    end
+  end
+  ok("cozinheiro nunca atravessa a parede", dentro)
+  ok("cozinheiro continua indo aos dois postos", ambos.fogao and ambos.mesa)
+  L.restaurar()
+  motor._layout = false
+  novo()
+  J.sem_noticias = true
 end
 
 -- Tela inicial e saves ------------------------------------------------------------------------------

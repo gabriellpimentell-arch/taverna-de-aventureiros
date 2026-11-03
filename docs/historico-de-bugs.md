@@ -37,11 +37,18 @@ Só rode o que a mudança pode ter afetado. Os testes em `tests/testes.lua` já 
 
 - **Bonecos se encostando:** "bonecos quase nunca se sobrepõem" falha às vezes (69 casos em 3000 passos, limite de 60). Causa não encontrada.
 - **Por dentro da mesa:** "ninguém anda por dentro de mesa" falhou uma vez (41 casos) e não voltou em 120 sementes. Causa não encontrada. `iniciar` ressemeia pelo relógio, então a semente não reproduz a falha.
-- **Pessoa sem caminho:** os robôs das duas metades acusam isso de vez em quando (`tests/parte.sh`), quando alguém é empurrado fundo para dentro de um móvel. A pessoa atravessa o móvel para se soltar; o jogo não trava.
+- **Pessoa empurrada para dentro da mesa:** com o passo de 0,25 s do robô, um empurrão entre bonecos pode saltar até 0,9 m e cair no fundo de uma mesa. Quem cai lá agora sai pelo ponto livre até 1,8 m, cruzando o móvel; a causa do salto segue aberta. Não foi medido com o passo menor do jogo real.
+- **Vacas em fazenda mínima:** com a fazenda encolhida a 3 x 3 m, as 8 vacas ficam paradas e sobrepostas. Não trava; o editor permite esse tamanho.
+- **Salão mínimo com 8 mesas:** não cabe; as pessoas atravessam móveis (874 casos de sem caminho em 150 s), como em "Layout que fecha o caminho".
 - **Layout que fecha o caminho:** com a porta tapada ou móveis fechando o corredor, as pessoas atravessam os móveis. É proposital, para o jogo não travar, e o editor avisa.
+- **Salão encolhido fecha o caminho:** com tudo comprado, recuar a frente 1 m deixa 18 dos 20 lugares sem rota (a segunda fileira encosta na primeira e o bardo fecha a saída da porta); -3 m na direita ou na esquerda deixa 4, e -2 m no fundo, 2. No mínimo (8 x 7 m) as mesas ficam empilhadas, porque 6 mesas não cabem. O editor avisa ao sair, e as pessoas atravessam os móveis. Precisa de decisão: mínimo maior ou rearrumar as mesas sozinho.
+- **Itens novos só no salão e na ala leste:** o limite não deixa levá-los para a cozinha, o jardim, o pomar ou a fazenda. Os móveis originais soltos têm o mesmo limite.
+- **Áreas externas sobre o salão:** jardim, pomar e fazenda podem ser arrastados para cima do salão. A porta pode ir para o meio do salão. Item levado para uma sala ainda não comprada fica solto até ela abrir.
+- **Cozinheiro e móveis:** ele anda em linha reta entre fogão e mesa de preparo. Não sai da cozinha, mas atravessa o que o jogador puser no meio.
+- **Giro do balcão:** a folga até a parede considera o balcão sem giro; girado a 90 graus, ele pode encostar na parede.
 - **Editor:** balcão e estantes de venda não acompanham a parede do fundo quando ela recua.
 - **Notícia:** fechar o jogo com a tela de novidade aberta faz aquela novidade não voltar.
-- **Desempenho em salão enorme:** com +40 m, uma rota leva 19 ms e uma busca sem caminho, 350 ms.
+- **Desempenho em salão enorme:** com +40 m, uma rota leva 19 ms e uma busca sem caminho, 350 ms. Com o save completo, 20 contratados que partem no mesmo quadro travaram 840 ms uma vez (2 núcleos ocupados). Tamanho normal: pico de 96 ms; desenho sempre abaixo de 9 ms em Lua.
 - **Balanceamento:** o robô leva cerca de 31 h e o ouro por segundo dele cai no fim.
 
 - **Android, só dá para ver no aparelho:** nenhum dos itens de Android foi rodado em celular. Conferir: abrir, tocar, pinça, minimizar e voltar (sombras e fontes), botão voltar, Sair e abrir de novo, copiar no editor, desempenho (sombra de 2048 e uma chamada de desenho por peça).
@@ -79,6 +86,13 @@ Só rode o que a mudança pode ter afetado. Os testes em `tests/testes.lua` já 
 - Recomeçar mantinha a contagem de histórias.
 - Invocados piscavam, porque o visual era sorteado a cada quadro.
 
+### Segunda metade, com cozinha, pomar e fazenda
+- Desfazer a party durante a batalha final deixava a luta seguir sem party. Agora é recusado, com aviso.
+- Número acima de 1e21 virava centenas de dígitos na tela. Agora usa notação científica.
+- Os canteiros, comprados na árvore, podiam ser excluídos, contra o GDD.
+- Quem caía no fundo de uma mesa fazia `tests/parte.sh 2` falhar quase sempre em "pessoa sem caminho", e sem saída real fazia até 16 buscas caras seguidas; agora são no máximo 4.
+- Testes novos: paredes de 4,2 m nos três saves prontos; layout com excluídos e itens novos abrindo save antigo, metade, completo e novo.
+
 ### Rotas e colisões
 - Quem era empurrado seguia reto por dentro da mesa; agora a rota é refeita.
 - O banco direito da mesa 8 não tinha caminho, e todos cruzavam as mesas 7 e 8.
@@ -96,6 +110,18 @@ Só rode o que a mudança pode ter afetado. Os testes em `tests/testes.lua` já 
 - Filhos não giravam nem subiam com o pai, e arrastar filho de pai girado errava o ponto.
 - Ids antigos (`garrafas`, `barris_*`) perdiam a posição; encolher o salão deixava objetos fora.
 - Com +40 m em todos os lados, o limite de visão cortava o salão.
+
+### Editor estilo The Sims
+- Mover ou girar uma sala interna (cozinha, cervejaria, círculo) levava fogão, cozinheiro e pilares para fora das paredes, que não andam. Ao voltar a sala, eles voltam ao lugar. Layout salvo assim é corrigido ao carregar.
+- Encolher a sala deixava móveis entrando na parede da frente e na sala vizinha.
+- "Posição original" num salão encolhido jogava o item para fora da parede.
+- Mesas, balcão, palco, bardo, quadro e barraca podiam ser arrastados para fora das paredes, e as pessoas atravessavam a parede para chegar. Mesas 1 a 6 ficam no salão, porque a ala pode não existir.
+- Sala interna mais funda que o salão cobria a área externa da frente, com vacas dentro da cozinha. Agora essa área recua.
+- Mesa empurrada por salão menor esquecia o lugar depois de desfazer ou recarregar.
+- Arquivo de layout estragado: id de item novo que não era texto, itens novos sem limite, e itens da árvore escondidos.
+- Vacas 7 e 8 e as flâmulas podiam ser selecionadas sem aparecer na edição.
+- Pinça que começava sobre um item trocava a seleção.
+- Cozinheiro atravessava a parede quando fogão ou mesa de preparo ficavam colados nela.
 
 ### Notícias e menestrel
 - Notícia, faixa e medidor eram zerados a cada 12 missões; a notícia sobrevivia a apagar o progresso.

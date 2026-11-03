@@ -1251,7 +1251,12 @@ local function posto_cozinheiro(qual)
   -- no fogão fica de lado, à esquerda da panela: de frente ele a esconderia da câmera
   local id, px, pz, ox, oz = "fogao", 13.0, -3.25, 13.7, -3.95
   if qual == "mesa" then id, px, pz, ox, oz = "mesa_preparo", 14.3, -1.64, 14.3, -0.9 end
-  local x, z = L.base("cozinheiro", L.t(id, px, pz))
+  -- móvel colado na parede: o posto fica do lado de dentro, nunca dentro da parede
+  local wx, wz = L.t(id, px, pz)
+  local x0, x1, z0, z1 = L.sala_mundo("cozinha")
+  wx = util.limitar(wx, x0 + 0.4, math.max(x0 + 0.4, x1 - 0.4))
+  wz = util.limitar(wz, z0 + 0.4, math.max(z0 + 0.4, z1 - 0.4))
+  local x, z = L.base("cozinheiro", wx, wz)
   local ax, az = L.base("cozinheiro", L.t(id, ox, oz))
   return x, z, math.atan(ax - x, az - z)
 end
