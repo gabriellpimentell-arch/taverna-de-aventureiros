@@ -67,7 +67,9 @@ jobs:
             -DPLATFORM=Android -DOPENGL_VERSION="ES 3.0"
 
       - name: Pedir OpenGL ES 3 ao celular
-        run: sed -i 's/EGL_CONTEXT_CLIENT_VERSION, 2/EGL_CONTEXT_CLIENT_VERSION, 3/' build-android/_deps/raylib-src/src/platforms/rcore_android.c
+        run: |
+          sed -i 's/EGL_CONTEXT_CLIENT_VERSION, 2/EGL_CONTEXT_CLIENT_VERSION, 3/' build-android/_deps/raylib-src/src/platforms/rcore_android.c
+          sed -i 's/glDrawBuffersEXT/glDrawBuffers/g' build-android/_deps/raylib-src/src/rlgl.h
 
       - name: Compilar
         run: cmake --build build-android --parallel
