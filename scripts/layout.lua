@@ -181,6 +181,9 @@ end
 local ABRE = { cervejaria = "a_cerveja", circulo = "a_circulo", jardim = "a_jardim", pomar = "a_pomar", fazenda = "a_fazenda",
   quartos_sala = "a_segundo_andar", sala_guilda = "a_segundo_andar" }
 function L.aberta(id)
+  -- comprada e ainda sem lugar escolhido na Loja: por enquanto não existe na cena
+  local J = package.loaded.jogo
+  if J and J.sala_posta and not J.sala_posta(id) then return false end
   -- save antigo pode ter o cozinheiro de antes de a cozinha existir: ele precisa de onde ficar
   if id == "cozinha" then return ef("a_cozinha") > 0 or ef("cozinheiro") > 0 end
   return ef(ABRE[id]) > 0

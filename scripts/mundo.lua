@@ -57,11 +57,14 @@ local VIOLETA, CIANO, FUNDO_MAGIA = "#a06aff", "#6fe6ff", "#2a2244"
 local AZUL_GUILDA, OURO = "#2b4a8c", "#d4a83e"
 local RANKS = { "#9aa0a6", "#5abf7c", "#6d8fe0", "#a06ad8", "#f2c14e" }
 
+M.PAINEL_RECUO, M.PAINEL_DESVIO = 0.34, 2.3
+
 function M.iniciar()
   M.tempo = 0
   M.zoom, M.zoom_alvo = 1, 1
   M.pan_x, M.pan_z = 0, 0
   M.dt_cena = 0
+  M.painel, M.painel_alvo = 0, 0
   M.fazendeiro = { x = -5.7, z = 6.35, giro = 0, fase = 0, t = 0, i = 1 }
   M.cozinheiro = nil
   M.vacas = {}
@@ -108,6 +111,12 @@ function M.calcular_enquadramento(a)
       zmin = math.min(zmin, util.lerp(za - 0.4, sz0 - 0.4, k))
     end
   end
+  -- sala sendo colocada pela Loja ainda não existe, mas o fantasma dela precisa caber na tela
+  local f = M.quadro_extra
+  if f and ativo == (f.andar or 0) then
+    xmin, xmax = math.min(xmin, f.x0 - 0.4), math.max(xmax, f.x1 + 0.2)
+    zmin, zmax = math.min(zmin, f.z0 - 0.4), math.max(zmax, f.z1 + 0.6)
+  end
   local cx, cz = (xmin + xmax) / 2, (zmin + zmax) / 2
   -- a fileira de salas é larga e rasa: aproveita melhor a tela do que o salão sozinho
   local w = xmax - xmin
@@ -133,6 +142,7 @@ function M.atualizar(dt)
   M.quadro.escala = util.lerp(M.quadro.escala, q.escala, k)
   M.quadro.largura, M.quadro.fundo = q.largura, q.fundo
   M.zoom = util.lerp(M.zoom, M.zoom_alvo, math.min(1, dt * 8))
+  M.painel = util.lerp(M.painel or 0, M.painel_alvo or 0, math.min(1, dt * 7))
   M.aplicar_camera()
   M.mover_cozinheiro(dt)
   M.mover_vacas(dt)
@@ -140,8 +150,10 @@ end
 
 function M.aplicar_camera()
   local q = M.quadro
-  local d = q.escala / M.zoom
-  local ax, az = q.x + M.pan_x, q.z + M.pan_z
+  -- painel da Loja aberto: a cena recua e anda para a esquerda, para nada ficar atrás dele
+  local k = M.painel or 0
+  local d = q.escala / M.zoom * (1 + M.PAINEL_RECUO * k)
+  local ax, az = q.x + M.pan_x + M.PAINEL_DESVIO * d * k, q.z + M.pan_z
   motor.cena_camera(ax + 6.5 * d, 15 * d, az + 18 * d, ax, 0.3, az - 0.3, 28)
   motor.cena_sombra(q.x, q.z, math.max(24, math.max(q.largura or 14, q.fundo or 10) * 1.1))
 end

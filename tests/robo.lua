@@ -3,6 +3,7 @@ local J = require("jogo")
 local A = require("arvore")
 local C = require("config")
 local R = {}
+J.auto_colocar = true   -- o robô não escolhe lugar: tudo vai para o padrão
 
 -- desbloqueios importantes: como uma pessoa, junta ouro para eles se não demorar demais
 local CHAVE = { "fornecedor", "cozinha", "cervejaria", "prateleira", "mercadinho", "jardim", "rank_e", "merc_e", "rank_d", "cozinha", "cozinheiro", "cervejaria", "merc_d", "rank_c", "recrutador", "merc_c", "venda", "rank_b", "party", "merc_b", "rank_a", "heroi", "propaganda", "merc_a", "rank_s", "invocacao", "merc_s", "rank_ss", "merc_ss" }

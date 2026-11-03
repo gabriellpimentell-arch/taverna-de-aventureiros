@@ -20,4 +20,4 @@ Pronto em `layout.lua`, `mundo.lua` e `editor.lua`; a Loja usa estas funções s
 - `L.pos_porta()` -> lado, t. `L.mover_porta(lado, t)` -> ok, motivo. `L.porta_livre(lado, t)`. `L.porta_mais_perto(x, z)` -> lado, t. Lados: oeste, fundo, leste, frente.
 - `L.andar_ativo`, `L.mudar_andar(n)`, `L.andar_existe(n)`, `L.andares()`, `L.andar_de(id)`, `L.no_andar_ativo(id)`. `L.portas(andar)`, `L.lado_porteira(id)`, `L.trechos_baixos(id, lado)`, `L.parede_baixa(id, lado, c)`, `L.estado_blocos()`, `L.definir_blocos(t)`.
 - Depois de mover com o jogo rodando: `L.salvar()`. O jogo percebe a mudança por `L.versao` e chama `J.aplicar_obra()` sozinho, sem expulsar ninguém.
-- Falta a Loja: `J.auto_colocar`, preço, reembolso e fantasma fora do editor.
+- Loja pronta em `loja.lua` (tela) e `jogo.lua` (regras): `J.para_colocar`, `J.por_item`, `J.por_sala`, `J.comprar_decoracao`, `J.orcar_obra`, `J.obra`. Salvo em `e.colocados` e `e.obras`. Sem `e.colocados` (save antigo) ou com `J.auto_colocar` (testes, robô) tudo é colocado sozinho. Preços em `config.lua`.

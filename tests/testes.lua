@@ -19,6 +19,7 @@ local T = require("telas")
 local util = require("util")
 
 J_sem = require("jogo")
+J_sem.auto_colocar = true    -- colocação manual tem teste próprio mais abaixo
 J_sem.sem_noticias = true   -- as notícias pausam o jogo: têm teste próprio mais abaixo
 
 local falhas, total = 0, 0
@@ -294,7 +295,7 @@ do
 end
 for _ = 1, 8 do J.contratar() end
 for _ = 1, 4 do J.invocar() end
-for _, id in ipairs({ "taverna", "arvore", "missoes", "mercadinho", "producao", "aventureiros", "invocacao" }) do
+for _, id in ipairs({ "taverna", "loja", "arvore", "missoes", "mercadinho", "producao", "aventureiros", "invocacao" }) do
   T.aba = id
   T.arv.sel = "mesa"
   atualizar(0.1)
@@ -2169,7 +2170,7 @@ do
     for _ = 1, 200 do atualizar(0.1) end
     desenhar()
     ok("save pronto joga: " .. nome, J.estado.tempo >= 10, J.estado.tempo)
-    for _, id in ipairs({ "taverna", "arvore", "missoes", "mercadinho", "producao", "aventureiros", "invocacao" }) do
+    for _, id in ipairs({ "taverna", "loja", "arvore", "missoes", "mercadinho", "producao", "aventureiros", "invocacao" }) do
       T.aba = id
       ok("tela no save " .. nome .. ": " .. id, pcall(desenhar))
     end
@@ -2353,6 +2354,346 @@ do
   T.soltar(440, 240)
   ok("pinça não dispara o botão ao soltar", not apertou)
   ok("função da pinça existe para o motor", type(_G.cancelar_toque) == "function" and type(_G.ao_voltar) == "function")
+  novo()
+  J.sem_noticias = true
+end
+
+-- Loja: colocar, decoração e obras -------------------------------------------------------------------
+do
+  local L = require("layout")
+  local Lj = require("loja")
+  J.auto_colocar = false
+  local function jogo_novo()
+    motor._layout = nil
+    novo()
+    J.comecar_endividado()
+    J.noticia = nil
+    T.aba = "loja"
+    Lj.iniciar()
+    J.estado.ouro = 1e7
+    quadros(1)
+  end
+  local function comprar(...)
+    for _, id in ipairs({ ... }) do
+      J.estado.ouro = 1e12
+      assert(J.comprar_no(id), "não comprou " .. id)
+    end
+  end
+  local function fechou(t) return t end
+
+  jogo_novo()
+  ok("jogo novo coloca à mão", J.manual())
+  ok("a primeira mesa já vem posta", J.num_mesas() == 1)
+  ok("nada pendente no começo", J.total_para_colocar() == 0)
+  comprar("mesa")
+  ok("mesa comprada fica para colocar", J.total_para_colocar() == 1 and J.para_colocar()[1].tipo == "mesa")
+  ok("mesa comprada não conta antes de posta", J.num_mesas() == 1 and #J.lugares == 2)
+  quadros(3)
+  ok("sem colocar, o jogo segue com a mesa que tem", J.num_mesas() == 1)
+  local ok_mal, motivo = J.por_item("mesa", -100, 0)
+  ok("mesa fora da taverna é recusada com motivo", not ok_mal and type(motivo) == "string" and J.num_mesas() == 1)
+  ok("mesa em cima de outra é recusada", not J.por_item("mesa", -3.6, 0.2) and J.total_para_colocar() == 1)
+  ok("coloca mesa no lugar padrão", J.por_item("mesa") and J.num_mesas() == 2 and #J.lugares == 4 and J.total_para_colocar() == 0)
+  ok("colocar sem ter comprado não dá", not J.por_item("mesa"))
+
+  comprar("mesa")
+  ok("coloca mesa em lugar escolhido", J.por_item("mesa", 1.5, 3.5))
+  local mx, mz = L.t("mesa3", J.POS_MESAS[3].bx, J.POS_MESAS[3].bz)
+  ok("mesa vai para onde foi posta", math.abs(mx - 1.5) < 0.01 and math.abs(mz - 3.5) < 0.01, mx)
+  comprar("mesa")
+  J.salvar()
+  L.salvar()
+  iniciar()
+  J.noticia = nil
+  ok("contador salvo: postas continuam", J.num_mesas() == 3 and J.estado.colocados.mesas == 2)
+  ok("contador salvo: pendente continua", J.total_para_colocar() == 1 and J.manual())
+  mx = L.t("mesa3", J.POS_MESAS[3].bx, J.POS_MESAS[3].bz)
+  ok("lugar escolhido salvo", math.abs(mx - 1.5) < 0.01, mx)
+
+  -- sala comprada espera lugar, com fantasma e motivo
+  jogo_novo()
+  comprar("garcom", "cozinha")
+  ok("sala comprada não abre sozinha", not L.aberta("cozinha") and J.fracao_custo("comida") == C.fracao_comida.comprada)
+  ok("selo conta a sala", J.total_para_colocar() == 1)
+  local xa, xb, za = L.salao()
+  local bom, m2 = J.por_sala("cozinha", xb + 30, za, 0)
+  ok("sala solta é recusada com motivo", not bom and type(m2) == "string" and not L.aberta("cozinha"))
+  U.apertar("loja_aba_itens")
+  desenhar()
+  ok("botão da sala pendente aparece", U.apertar("loja_item_cozinha") and Lj.colocando and Lj.colocando.id == "cozinha")
+  desenhar()
+  ok("fantasma nasce verde na vaga", Lj.colocando.ok == true, Lj.colocando.motivo)
+  ok("nada muda antes de confirmar", not L.aberta("cozinha"))
+  Lj.colocando.x, Lj.colocando.z = xb + 30, za
+  desenhar()
+  ok("fantasma longe fica vermelho com motivo", Lj.colocando.ok == false and Lj.colocando.motivo ~= nil)
+  ok("não confirma em vermelho", not Lj.confirmar() and not L.aberta("cozinha"))
+  Lj.colocando.x, Lj.colocando.z = L.vaga_sala("cozinha", 0)
+  desenhar()
+  ok("confirma em verde", Lj.confirmar() and L.aberta("cozinha") and J.total_para_colocar() == 0)
+  ok("sala posta passa a valer nas regras", J.fracao_custo("comida") == C.fracao_comida.cozinha)
+  local d = util.desserializar(motor.carregar())
+  ok("sala posta fica no save", d.colocados and d.colocados.salas.cozinha == true)
+
+  -- Itens que dependem de sala: canteiro, árvore e vaca
+  jogo_novo()
+  comprar("cardapio", "garcom", "cozinha", "cervejaria", "jardim", "canteiro", "pomar", "pomar", "fazenda", "fazenda")
+  local x0, z0 = L.vaga_sala("jardim", 0)
+  ok("canteiro espera o jardim", not J.por_item("canteiro"))
+  ok("árvore espera o pomar", not J.por_item("arvore"))
+  ok("jardim fechado não dá canteiros", J.ef("canteiros") == 0 and not J.jardim_aberto())
+  ok("põe jardim", J.por_sala("jardim", x0, z0, 0))
+  ok("jardim traz seus 2 canteiros", J.ef("canteiros") == 2)
+  ok("canteiro comprado entra ao pôr", J.por_item("canteiro") and J.ef("canteiros") == 3)
+  x0, z0 = L.vaga_sala("pomar", 0)
+  ok("põe pomar", J.por_sala("pomar", x0, z0, 0))
+  ok("pomar vem com 3 árvores e 1 fica pendente", J.ef("frutas") == 1)
+  ok("árvore extra entra ao pôr", J.por_item("arvore") and J.ef("frutas") == 2)
+  x0, z0 = L.vaga_sala("fazenda", 0)
+  ok("põe fazenda", J.por_sala("fazenda", x0, z0, 0))
+  ok("fazenda vem com 1 vaca", J.ef("vacas") == 1 and J.ef("renda_fazenda") == 60)
+  ok("vaca extra conta e rende ao pôr", J.por_item("vaca") and J.ef("vacas") == 2 and J.ef("renda_fazenda") == 120)
+  ok("só faltam as salas compradas no caminho", J.total_para_colocar() == 2)
+  quadros(3)
+
+  -- Segundo andar: o andar abre na hora, as salas esperam
+  jogo_novo()
+  comprar("mesa", "balcao", "quartos", "segundo_andar")
+  J.por_item("mesa")
+  ok("andar novo abre, salas dele não", L.andar_existe(1) and not L.aberta("quartos_sala") and not L.aberta("sala_guilda"))
+  ok("quartos e sala do chefe pendentes", J.total_para_colocar() == 2)
+  desenhar()
+  ok("botão dos quartos leva ao andar deles", U.apertar("loja_item_quartos_sala") and L.andar_ativo == 1 and Lj.colocando ~= nil)
+  ok("quartos entram no segundo andar", Lj.confirmar() and L.aberta("quartos_sala") and L.andar_de("quartos_sala") == 1)
+  L.mudar_andar(0)
+  quadros(2)
+
+  -- Decoração
+  jogo_novo()
+  local e = J.estado
+  local preco = C.preco_decoracao.planta
+  local gx, gz = -1, 2
+  e.ouro = preco - 1
+  local pode, falta = J.comprar_decoracao("planta", gx, gz)
+  ok("decoração sem ouro não entra e diz quanto falta", not pode and falta:find("Faltam") and #L.lista_extras() == 0, falta)
+  e.ouro = preco
+  ok("decoração fora de sala é recusada sem cobrar", not J.comprar_decoracao("planta", 500, 0) and e.ouro == preco)
+  ok("compra decoração", J.comprar_decoracao("planta", gx, gz) and e.ouro == 0 and #L.lista_extras() == 1)
+  for t in pairs(L.TIPOS_EXTRAS) do ok("decoração tem preço: " .. t, C.preco_decoracao[t] ~= nil) end
+  e.ouro = 1000
+  quadros(1)
+  Lj.aba = "itens"; desenhar()
+  ok("cartão abre o fantasma sem cobrar", U.apertar("loja_decor_banco") and Lj.colocando and e.ouro == 1000)
+  desenhar()
+  ok("cancelar não cobra", U.apertar("loja_cancelar") and not Lj.colocando and e.ouro == 1000)
+
+  -- Obras: cobrar, devolver, sem ouro, sem lucro
+  jogo_novo()
+  e = J.estado
+  local preco1 = J.preco_metro()
+  ok("preço do metro vem do config", preco1 == C.obra_metro_base)
+  e.ouro = 10000
+  local feito, r = J.obra("dir", 3)
+  local p1, p2, p3 = preco1, J.preco_metro(-1), J.preco_metro()
+  ok("aumentar cobra", feito and r.metros == 3 and r.custo > 0 and e.ouro == 10000 - r.custo and L.tamanho.dir == 3)
+  ok("preço cresce com o tamanho", J.preco_metro() > preco1, J.preco_metro())
+  ok("guarda o pago por lado", #e.obras.dir == 3)
+  local pago = r.custo
+  local ultimo = e.obras.dir[3]
+  local antes = e.ouro
+  feito, r = J.obra("dir", -1)
+  ok("diminuir devolve 50% do último metro", feito and r.devolve == math.floor(ultimo * 0.5) and e.ouro == antes + r.devolve and L.tamanho.dir == 2)
+  feito, r = J.obra("dir", -2)
+  ok("volta ao original", L.tamanho.dir == 0 and #e.obras.dir == 0)
+  ok("aumentar e diminuir nunca dá lucro", e.ouro < 10000 and e.ouro >= 10000 - pago)
+  antes = e.ouro
+  feito, r = J.obra("dir", -1)
+  ok("abaixo do original não devolve", feito and r.devolve == 0 and e.ouro == antes and L.tamanho.dir == -1)
+  feito, r = J.obra("dir", 1)
+  antes = e.ouro
+  ok("metro abaixo do original não entra na conta", #e.obras.dir == 0)
+  feito, r = J.obra("dir", -1)
+  ok("nem depois de pago abaixo do original", e.ouro == antes)
+  J.obra("dir", 1)
+  for _ = 1, 200 do
+    local s0 = e.ouro
+    J.obra("frente", 2)
+    J.obra("frente", -2)
+    if e.ouro > s0 then ok("laço aumenta e diminui sem lucro", false, e.ouro - s0) break end
+  end
+  ok("laço aumenta e diminui sem lucro", true)
+
+  -- Sem ouro: para no último metro pago
+  e.ouro = 0
+  local orc = J.orcar_obra("oeste", 2)
+  ok("sem ouro nenhum, orçamento mostra quanto falta", orc.metros == 0 and orc.falta > 0)
+  feito, r = J.obra("oeste", 2)
+  ok("sem ouro não muda nem cobra", not feito and r.falta > 0 and e.ouro == 0 and L.tamanho.oeste == 0)
+  local um = J.preco_metro()
+  e.ouro = um + 1
+  orc = J.orcar_obra("oeste", 5)
+  ok("para no último metro pago", orc.metros == 1 and orc.custo == um and orc.falta > 0, orc.metros)
+  feito, r = J.obra("oeste", 5)
+  ok("cobra só o que deu", feito and r.metros == 1 and e.ouro == 1 and L.tamanho.oeste == 1)
+  ok("obra fica salva no save", util.desserializar(motor.carregar()).obras.oeste[1] == um)
+  L.salvar()
+  iniciar()
+  J.noticia = nil
+  ok("pago por metro volta do save", J.estado.obras.oeste[1] == um)
+  ok("save estragado não trava a obra", (function()
+    J.estado.obras = { dir = { "x", -3, 5 }, sumiu = { 1 } }
+    motor.salvar(util.serializar(J.estado))
+    iniciar()
+    J.noticia = nil
+    return #J.estado.obras.dir == 1 and J.estado.obras.sumiu == nil
+  end)())
+
+  -- Arrastando com o jogo rodando: dedo, fantasma, cobra só ao soltar, ninguém expulso
+  jogo_novo()
+  e = J.estado
+  comprar("mesa", "garcom", "cozinha")
+  J.por_item("mesa")
+  local vx, vz = L.vaga_sala("cozinha", 0)
+  J.por_sala("cozinha", vx, vz, 0)
+  -- no motor falso a tela é reta: atrás da taverna a sala fica longe do painel
+  local fxa, _, fza = L.salao()
+  assert(L.mover_sala("cozinha", fxa, fza - 9.2))
+  local cliente = { estado = "esperando", sentado = true, x = 0, z = 0, y = 0.42, giro = 0, rota = {}, t = 0, fase = 0, tipo = { nome = "comum" }, pedido = "bebida", pele = "#ffffff" }
+  local lugar = J.lugares[1]
+  cliente.lugar, lugar.dono = lugar, cliente
+  cliente.x, cliente.z = lugar.x, lugar.z
+  J.pessoas = { cliente }
+  J.relogio_chegada = -1e6
+  T.aba = "loja"
+  Lj.aba = "comodos"
+  quadros(1)
+  ok("jogo não pausa na Loja", not J.editando and not J.previa)
+  local t0 = J.estado.tempo
+  quadros(2)
+  ok("tempo segue com a Loja aberta", J.estado.tempo > t0)
+  U.apertar("loja_sala_cozinha")
+  ok("selecionar pela lista", Lj.sel == "cozinha")
+  local ouro0 = e.ouro
+  local px0, pz0 = L.pos_sala("cozinha")
+  local cx0, cx1, cz0, cz1 = L.sala_mundo("cozinha")
+  -- dedo na sala, arrasta para a frente da taverna
+  local function chao_para_tela(x, z) return 480 + x * 30, 300 + z * 26 end
+  local sx, sy = chao_para_tela((cx0 + cx1) / 2, (cz0 + cz1) / 2 + 2)
+  motor._baixo = true; motor._mouse = { sx, sy }
+  atualizar(0.05); desenhar()
+  T.tocar(sx, sy)
+  ok("toque na sala começa o arrasto", Lj.arrasto and Lj.arrasto.tipo == "sala", Lj.arrasto and Lj.arrasto.tipo)
+  motor._mouse = { sx + 3000, sy }
+  atualizar(0.05); desenhar()
+  ok("longe: fantasma vermelho com motivo", Lj.arrasto.f and not Lj.arrasto.f.ok and Lj.arrasto.f.motivo)
+  ok("durante o arrasto a sala não andou", L.pos_sala("cozinha") == px0)
+  motor._baixo = false
+  T.soltar(sx + 3000, sy)
+  ok("soltar em vermelho não move", L.pos_sala("cozinha") == px0)
+  local alvox, alvoz = select(1, L.salao()) - (cx1 - cx0), select(3, L.salao())
+  ok("o destino é válido", (L.encaixe_valido("cozinha", alvox, alvoz, 0)))
+  sx, sy = chao_para_tela((cx0 + cx1) / 2, (cz0 + cz1) / 2 + 2)
+  motor._baixo = true; motor._mouse = { sx, sy }
+  T.tocar(sx, sy)
+  motor._mouse = { sx + (alvox - cx0) * 30, sy + (alvoz - cz0) * 26 }
+  atualizar(0.05); desenhar()
+  ok("perto: fantasma verde", Lj.arrasto.f and Lj.arrasto.f.ok, Lj.arrasto.f and Lj.arrasto.f.motivo)
+  motor._baixo = false
+  T.soltar(motor._mouse[1], motor._mouse[2])
+  ok("mover é grátis", e.ouro <= ouro0 + 1e6 and e.ouro >= ouro0 and L.pos_sala("cozinha") ~= px0)
+  ok("mover grava o layout", motor._layout ~= nil and motor._layout:find("_salas") ~= nil)
+  ok("moveu sem expulsar ninguém", cliente.lugar == J.lugares[1] or cliente.lugar.dono == cliente)
+  quadros(2)
+  ok("cliente continua sentado depois da obra", #J.pessoas >= 1 and cliente.lugar ~= nil and cliente.lugar.dono == cliente)
+
+  -- alça: puxa, o fantasma orça, cobra ao soltar
+  Lj.selecionar("taverna")
+  desenhar()
+  local al
+  for _, a in ipairs(Lj.alcas()) do if a.p.chave == "frente" then al = a end end
+  ok("alça da taverna aparece", al ~= nil)
+  e.ouro = J.preco_metro() + 5
+  local ouro1 = e.ouro
+  motor._baixo = true; motor._mouse = { al.x, al.y }
+  T.tocar(al.x, al.y)
+  ok("toque pega a alça", Lj.alca ~= nil)
+  motor._mouse = { al.x, al.y + 26 * 4 }
+  atualizar(0.05); desenhar()
+  ok("sem ouro, fantasma para no último metro pago", Lj.alca.orc.metros == 1 and Lj.alca.orc.falta > 0, Lj.alca.orc.metros)
+  ok("nada cobrado enquanto arrasta", e.ouro >= ouro1 and L.tamanho.frente == 0)
+  e.ouro = 0
+  atualizar(0.01)
+  e.ouro = ouro1
+  motor._baixo = false
+  T.soltar(al.x, al.y + 26 * 4)
+  ok("cobra ao soltar", L.tamanho.frente == 1 and e.ouro < ouro1 + 50, L.tamanho.frente)
+  ok("cliente continua sentado depois de aumentar", cliente.lugar ~= nil and cliente.lugar.dono == cliente)
+
+  -- gastou enquanto arrastava: confere de novo ao soltar
+  desenhar()
+  for _, a in ipairs(Lj.alcas()) do if a.p.chave == "dir" then al = a end end
+  e.ouro = 1e6
+  motor._baixo = true; motor._mouse = { al.x, al.y }
+  T.tocar(al.x, al.y)
+  motor._mouse = { al.x + 30 * 3, al.y }
+  atualizar(0.05)
+  e.ouro = 0
+  motor._baixo = false
+  local dir0 = L.tamanho.dir
+  T.soltar(al.x + 30 * 3, al.y)
+  ok("ouro conferido de novo ao soltar", L.tamanho.dir == dir0 and e.ouro == 0)
+
+  -- Porta
+  Lj.selecionar("porta")
+  desenhar()
+  local lado0 = L.pos_porta()
+  sx, sy = motor.projetar(J.PORTA.x, 1, J.PORTA.z)
+  motor._baixo = true; motor._mouse = { sx, sy }
+  T.tocar(sx, sy)
+  local fx0, fx1, fz0, fz1 = L.sala_mundo("taverna")
+  motor._mouse = { chao_para_tela((fx0 + fx1) / 2, fz1 + 0.5) }
+  atualizar(0.05); desenhar()
+  ok("porta arrastada mostra o lado", Lj.arrasto and Lj.arrasto.f and Lj.arrasto.f.lado == "frente", Lj.arrasto and Lj.arrasto.f and Lj.arrasto.f.lado)
+  motor._baixo = false
+  T.soltar(motor._mouse[1], motor._mouse[2])
+  ok("porta muda de parede de graça", L.pos_porta() == "frente" and lado0 ~= "frente")
+
+  -- Editor F2 continua abrindo e fechando depois da Loja
+  T.aba = "loja"
+  T.f2()
+  ok("F2 abre o editor", require("editor").ativo and T.aba == "taverna")
+  quadros(1)
+  T.f2()
+  ok("F2 fecha o editor", not require("editor").ativo)
+
+  -- saves antigos e auto_colocar: nada muda
+  J.auto_colocar = true
+  motor._layout = nil
+  novo()
+  ok("auto: sem contador", J.estado.colocados == nil and not J.manual())
+  libera("mesa")
+  ok("auto: mesa conta na hora", J.num_mesas() == 2 and J.total_para_colocar() == 0)
+  libera("cozinha")
+  ok("auto: sala abre na hora", L.aberta("cozinha"))
+  J.auto_colocar = false
+  novo()
+  J.estado.mantimentos = nil
+  J.salvar()
+  iniciar()
+  ok("save antigo coloca sozinho", not J.manual())
+  libera("mesa")
+  ok("save antigo: mesa conta na hora", J.num_mesas() == 2)
+  ok("auto também tem a aba", (function() T.aba = "loja"; quadros(1); return U.apertar("loja_aba_comodos") end)())
+  -- prévia do editor mostra tudo mesmo com colocação manual
+  jogo_novo()
+  comprar("garcom", "cozinha")
+  J.previa = true
+  ok("prévia mostra sala não posta", L.aberta("cozinha"))
+  J.previa = false
+  ok("fim da prévia volta a esperar", not L.aberta("cozinha"))
+  J.auto_colocar = true
+  T.aba = "taverna"
+  motor._layout = nil
   novo()
   J.sem_noticias = true
 end

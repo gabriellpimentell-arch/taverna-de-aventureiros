@@ -25,6 +25,12 @@ C.lote_mantimentos = 10
 C.fracao_comida = { comprada = 0.4, cozinha = 0.25, jardim = 0.1 }
 C.fracao_bebida = { comprada = 0.3, cervejaria = 0.2, jardim = 0.05 }
 
+-- Loja e obras: preço do metro = base * (1 + cresce * metros já aumentados na construção toda)
+C.obra_metro_base = 40
+C.obra_metro_cresce = 0.02
+C.obra_devolucao = 0.5         -- quanto volta do que foi pago por um metro, ao diminuir
+C.preco_decoracao = { banco = 15, caixote = 20, planta = 25, barril = 30, vela = 40, quadro = 50, tapete = 60, estante = 80 }
+
 -- Equipe -------------------------------------------------------------------------
 C.garcom_intervalo = 4.0
 C.garcom_velocidade = 3.4

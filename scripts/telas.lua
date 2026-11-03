@@ -10,6 +10,7 @@ local U = require("ui")
 local M = require("mundo")
 local Ed = require("editor")
 local S = require("saves")
+local Lj = require("loja")
 local cor = util.cores
 local fmt = util.formatar
 
@@ -38,6 +39,7 @@ function T.iniciar()
   T.arv = { x = 0, y = 0, zoom = 0.85, sel = nil }
   T.rolagem = { aventureiros = 0 }
   T.confirmar = false
+  Lj.iniciar()
   M.iniciar()
   T.aplicar_opcoes()
 end
@@ -51,7 +53,7 @@ end
 -- Abas -----------------------------------------------------------------------------
 
 local function abas_visiveis()
-  local l = { { id = "taverna", nome = "Taverna" }, { id = "arvore", nome = "Árvore" } }
+  local l = { { id = "taverna", nome = "Taverna" }, { id = "loja", nome = "Loja" }, { id = "arvore", nome = "Árvore" } }
   if J.prateleira_aberta() then l[#l + 1] = { id = "missoes", nome = "Missões" } end
   if J.mercadinho_aberto() then l[#l + 1] = { id = "mercadinho", nome = "Mercadinho" } end
   if J.jardim_aberto() then l[#l + 1] = { id = "producao", nome = "Produção" } end
@@ -73,6 +75,15 @@ local function barra_abas()
     if a.id == "arvore" and J.tem_compra() then
       motor.circulo(x + w - 10, 496, 6, cor.vermelho)
       motor.anel(x + w - 10, 496, 5, 7, "#ffffff")
+    end
+    -- selo da Loja: quantos itens comprados esperam um lugar
+    local pendentes = a.id == "loja" and J.total_para_colocar() or 0
+    if pendentes > 0 then
+      local txt = pendentes > 99 and "99+" or tostring(pendentes)
+      local sw = math.max(22, motor.largura_texto(txt, 13, true) + 10)
+      motor.retangulo(x + w - sw + 4, 480, sw, 22, cor.vermelho, 11)
+      motor.contorno(x + w - sw + 4, 480, sw, 22, "#ffffff", 1.5, 11)
+      motor.texto(txt, x + w - sw / 2 + 4, 482, 13, "#ffffff", "centro", true)
     end
     x = x + w + 6
   end
@@ -152,7 +163,7 @@ local function hud()
     motor.texto("Nível " .. nv, 802, 28, 14, cor.ouro, "centro", true)
   end
 
-  if e.opcoes.fps then
+  if e.opcoes.fps and T.aba ~= "loja" then
     motor.retangulo(712, 58, 240, 42, "#21150ee8", 8)
     motor.texto(motor.fps() .. " FPS  •  " .. #J.pessoas .. " pessoas", 944, 60, 13, cor.texto, "direita", true)
     local trav = J.travados or 0
@@ -1159,6 +1170,8 @@ end
 -- Ciclo --------------------------------------------------------------------------------
 
 function T.atualizar(dt)
+  M.painel_alvo = (T.aba == "loja" and not T.tela and not Ed.ativo) and 1 or 0
+  if T.aba ~= "loja" then Lj.cancelar() end
   if T.tela then
     M.atualizar(dt)
     motor.roda()
@@ -1183,6 +1196,7 @@ function T.atualizar(dt)
   local bloqueado = T.modal or J.offline or J.estado.fim or J.noticia
   if roda ~= 0 and not bloqueado then
     if T.aba == "taverna" then M.rolar(roda)
+    elseif T.aba == "loja" then Lj.rolar(roda)
     elseif T.aba == "arvore" then T.arv.zoom = util.limitar(T.arv.zoom + roda * 0.08, ZOOM_MIN, ZOOM_MAX); T.arv.manual = true; limitar_arvore()
     elseif T.aba == "aventureiros" then T.rolagem.aventureiros = T.rolagem.aventureiros - roda * 40 end
   end
@@ -1200,7 +1214,13 @@ function T.atualizar(dt)
         limitar_arvore()
       end
     elseif T.aba == "taverna" then M.arrastar(dx, dy)
+    elseif T.aba == "loja" then
+      if T.toque.no_painel then Lj.rolar_lista(dy)
+      elseif T.toque.arrasta then M.arrastar(dx, dy) end
     elseif T.aba == "aventureiros" then T.rolagem.aventureiros = T.rolagem.aventureiros - dy end
+  end
+  if T.aba == "loja" then
+    if bloqueado then Lj.soltar(true) else Lj.atualizar(dt) end
   end
 end
 
@@ -1220,7 +1240,7 @@ function T.desenhar()
   end
   local aba_atual = T.aba
   M.desenhar_cena()
-  if T.aba == "taverna" then
+  if T.aba == "taverna" or T.aba == "loja" then
     M.desenhar_baloes()
   elseif T.aba == "arvore" then tela_arvore(T.aba_anterior ~= "arvore")
   elseif T.aba == "missoes" then tela_missoes()
@@ -1232,7 +1252,8 @@ function T.desenhar()
   T.aba_anterior = aba_atual
   hud()
   barra_abas()
-  if T.aba == "taverna" then M.desenhar_botoes_andar() end
+  if T.aba == "loja" then Lj.desenhar() end
+  if T.aba == "taverna" or T.aba == "loja" then M.desenhar_botoes_andar() end
   dica()
   aviso()
   if T.modal == "config" then janela_config()
@@ -1263,6 +1284,7 @@ function T.tocar(x, y)
   T.toque = { x = x, y = y, ux = x, uy = y, moveu = false, arrasta = false }
   local z = U.achar(x, y)
   if z then
+    if z.id:find("^loja_") then T.toque.no_painel = true end
     if z.solto then
       T.toque.zona = z
       T.toque.arrasta = true
@@ -1272,7 +1294,9 @@ function T.tocar(x, y)
     return
   end
   T.toque.arrasta = true
-  if T.aba == "taverna" and not T.modal and not J.offline and not J.estado.fim then M.tocar(x, y) end
+  local livre = not T.modal and not J.offline and not J.estado.fim
+  if T.aba == "taverna" and livre then M.tocar(x, y)
+  elseif T.aba == "loja" and livre and Lj.tocar(x, y) then T.toque.arrasta = false end
 end
 
 function T.soltar(x, y)
@@ -1280,6 +1304,7 @@ function T.soltar(x, y)
   if Ed.ativo then Ed.soltar() return end
   local t = T.toque
   T.toque = nil
+  if T.aba == "loja" then Lj.soltar() end
   if t and t.zona and not t.moveu and t.zona.fn then
     local z = U.achar(x, y)
     if z and z.id == t.zona.id then z.fn() end
@@ -1291,6 +1316,7 @@ function T.cancelar_toque()
   if T.tela then return end
   if Ed.ativo then Ed.soltar(true) return end
   T.toque = nil
+  Lj.soltar(true)
 end
 
 function T.f2()
@@ -1312,6 +1338,7 @@ function T.esc()
   if Ed.ativo then Ed.fechar() return end
   if J.offline then return end
   if J.noticia and not T.modal then J.noticia = nil return end
+  if T.aba == "loja" and not T.modal and Lj.voltar() then return end
   if T.modal == "config" then T.modal = nil
   elseif T.modal then T.modal = "config"
   elseif T.aba ~= "taverna" then T.aba = "taverna"

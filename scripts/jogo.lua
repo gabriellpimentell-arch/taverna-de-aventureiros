@@ -160,6 +160,7 @@ local function estado_inicial()
     final_resta = nil, fim = false,
     opcoes = { musica = 0.4, efeitos = 0.7, sombras = true, fps = false, fluxo = false },
     noticias = {},
+    obras = {},             -- chave da parede -> preço pago em cada metro acima do tamanho original
   }
 end
 
@@ -167,10 +168,36 @@ end
 
 local ef = {}
 
+-- Colocação manual: só no jogo novo. e.colocados nil (save antigo) ou J.auto_colocar (testes, robô)
+-- põem tudo sozinho no lugar padrão, como sempre foi.
+function J.manual()
+  return not J.auto_colocar and J.estado ~= nil and J.estado.colocados ~= nil
+end
+
+-- sala -> nó da árvore que a compra
+local NO_DA_SALA = { cozinha = "cozinha", cervejaria = "cervejaria", circulo = "invocacao", jardim = "jardim", pomar = "pomar",
+  fazenda = "fazenda", quartos_sala = "segundo_andar", sala_guilda = "segundo_andar" }
+local ORDEM_SALAS = { "cozinha", "cervejaria", "jardim", "pomar", "fazenda", "quartos_sala", "sala_guilda", "circulo" }
+
+-- Quantos níveis do nó já valem: o que precisa de lugar só conta depois de posto.
+-- O primeiro nível de Pomar e Fazenda vem com a própria sala.
+local function nivel_valendo(no, nv)
+  if not J.manual() then return nv end
+  local c = J.estado.colocados
+  local id = no.id
+  if id == "cozinha" or id == "cervejaria" or id == "jardim" or id == "pomar" or id == "fazenda" then
+    if not c.salas[id] then return 0 end
+  end
+  if id == "pomar" then return 1 + math.min(c.frutas, nv - 1) end
+  if id == "fazenda" then return 1 + math.min(c.vacas, nv - 1) end
+  if id == "canteiro" then return math.min(c.canteiros, nv) end
+  return nv
+end
+
 local function recalcular()
   ef = {}
   for _, no in ipairs(A.NOS) do
-    local nv = J.estado.nos[no.id] or 0
+    local nv = nivel_valendo(no, J.estado.nos[no.id] or 0)
     if nv > 0 then
       for k, v in pairs(no.ef) do
         if k:sub(1, 2) == "x_" then ef[k] = (ef[k] or 1) * v ^ nv
@@ -178,6 +205,16 @@ local function recalcular()
       end
     end
   end
+  if J.manual() then
+    local c = J.estado.colocados
+    ef.mesas = math.min(ef.mesas or 0, c.mesas)
+    if not c.salas.circulo then ef.a_circulo = nil end
+  end
+end
+
+function J.sala_posta(id)
+  if J.previa or not J.manual() then return true end
+  return J.estado.colocados.salas[id] == true
 end
 
 -- no modo de edição tudo aparece, para dar para mover até o que ainda não foi comprado
@@ -225,11 +262,13 @@ local AVISOS = {
 function J.comprar_no(id)
   local no = A.POR_ID[id]
   if not no or not J.pode_comprar_no(no) then return false end
+  local antes = J.total_para_colocar()
   J.estado.ouro = J.estado.ouro - J.custo_no(no)
   J.estado.nos[id] = J.nivel(id) + 1
   recalcular()
   J.ajustar_equipe()
   if AVISOS[id] then J.avisar(AVISOS[id]) end
+  if J.manual() and J.total_para_colocar() > antes then J.avisar(A.POR_ID[id].nome .. ": escolha o lugar na aba Loja") end
   return true
 end
 
@@ -265,6 +304,10 @@ function J.comecar_endividado()
   local e = J.estado
   e.mantimentos = { comida = 0, bebida = 0 }
   e.divida, e.emprestimos = C.divida_inicial, 0
+  if not J.auto_colocar then
+    e.colocados = { mesas = 0, canteiros = 0, frutas = 0, vacas = 0, salas = {} }
+    recalcular()
+  end
   J.noticia = { id = "historia", titulo = "A taverna do seu tio",
     texto = "Você herdou esta taverna, e com ela " .. C.divida_inicial .. " de ouro em dívidas e uma despensa vazia. Bartolo, o agiota da vila, empresta um pouco para recomeçar. Pegue o empréstimo, compre comida e bebida e revenda por um preço maior." }
 end
@@ -347,7 +390,7 @@ local function gastar_mantimento(p)
 end
 
 -- O gerente: serve sozinho no começo; com garçom fica atrás do balcão; com a sala da guilda, sobe
-function J.gerente_na_guilda() return J.ef("prateleira") > 0 and J.ef("a_segundo_andar") > 0 end
+function J.gerente_na_guilda() return J.ef("prateleira") > 0 and L.aberta("sala_guilda") end
 
 -- Lugares ---------------------------------------------------------------------------
 
@@ -361,22 +404,23 @@ function J.reconstruir_lugares()
     local g = L.giro(m.id)
     local ax, az = L.t(m.id, m.bx - 1.25, m.bz)
     local bx, bz = L.t(m.id, m.bx + 1.25, m.bz)
-    l[#l + 1] = { x = ax, z = az, giro = math.pi / 2 + g, y = 0.42, mesa = i }
-    l[#l + 1] = { x = bx, z = bz, giro = -math.pi / 2 + g, y = 0.42, mesa = i }
+    l[#l + 1] = { x = ax, z = az, giro = math.pi / 2 + g, y = 0.42, mesa = i, chave = "m" .. i .. "a" }
+    l[#l + 1] = { x = bx, z = bz, giro = -math.pi / 2 + g, y = 0.42, mesa = i, chave = "m" .. i .. "b" }
   end
   if J.ef("balcao") > 0 then
     for _, x in ipairs(J.BANCOS_BALCAO) do
       local bx, bz = L.t("balcao", x, -1.42)
-      l[#l + 1] = { x = bx, z = bz, giro = math.pi + L.giro("balcao"), y = 0.42, balcao = true }
+      l[#l + 1] = { x = bx, z = bz, giro = math.pi + L.giro("balcao"), y = 0.42, balcao = true, chave = "b" .. x }
     end
   end
-  -- quem está sentado continua no mesmo lugar: a ordem da lista muda, a posição não
+  -- quem está sentado continua no mesmo lugar: se a mesa andou numa obra, vai junto com ela
   for _, v in ipairs(velhos) do
     if v.dono then
       for _, n in ipairs(l) do
-        if n.x == v.x and n.z == v.z then
+        if n.chave == v.chave then
           n.dono = v.dono
           v.dono.lugar = n
+          if v.dono.sentado then v.dono.x, v.dono.z, v.dono.giro = n.x, n.z, n.giro end
           break
         end
       end
@@ -596,6 +640,272 @@ function J.ocupados()
   local n = 0
   for _, l in ipairs(J.lugares) do if l.dono then n = n + 1 end end
   return n, #J.lugares
+end
+
+-- Loja: o que foi comprado e ainda não tem lugar --------------------------------------------------
+
+local function bruto(id) return J.estado.nos[id] or 0 end
+
+-- Lista do que falta pôr: { tipo = "sala"|"mesa"|"canteiro"|"arvore"|"vaca", id, nome, n, requer = sala que precisa vir antes }
+function J.para_colocar()
+  local r = {}
+  if not J.manual() then return r end
+  local c = J.estado.colocados
+  local internas, externas = L.salas()
+  local nomes = {}
+  for _, lista in ipairs({ internas, externas }) do
+    for _, b in ipairs(lista) do nomes[b.id] = b.nome end
+  end
+  for _, id in ipairs(ORDEM_SALAS) do
+    if bruto(NO_DA_SALA[id]) > 0 and not c.salas[id] then
+      r[#r + 1] = { tipo = "sala", id = id, nome = nomes[id], n = 1 }
+    end
+  end
+  local mesas = bruto("mesa") + bruto("ala_leste") * 2 - c.mesas
+  if mesas > 0 then r[#r + 1] = { tipo = "mesa", nome = "Mesa", n = mesas } end
+  local cant = bruto("canteiro") - c.canteiros
+  if cant > 0 then r[#r + 1] = { tipo = "canteiro", nome = "Canteiro", n = cant, requer = not c.salas.jardim and "Jardim" or nil } end
+  local arv = bruto("pomar") - 1 - c.frutas
+  if arv > 0 then r[#r + 1] = { tipo = "arvore", nome = "Árvore do pomar", n = arv, requer = not c.salas.pomar and "Jardim de frutas" or nil } end
+  local vac = bruto("fazenda") - 1 - c.vacas
+  if vac > 0 then r[#r + 1] = { tipo = "vaca", nome = "Vaca", n = vac, requer = not c.salas.fazenda and "Fazenda" or nil } end
+  return r
+end
+
+function J.total_para_colocar()
+  local n = 0
+  for _, i in ipairs(J.para_colocar()) do n = n + i.n end
+  return n
+end
+
+local function pendente(tipo, id)
+  for _, i in ipairs(J.para_colocar()) do
+    if i.tipo == tipo and (not id or i.id == id) then return i end
+  end
+end
+
+local function objeto_do_item(tipo)
+  if tipo == "mesa" then return "mesa" .. (J.num_mesas() + 1) end
+  if tipo == "arvore" then return "arvore" .. (J.ef("frutas") + 3) end
+  if tipo == "vaca" then return "vaca" .. (J.ef("vacas") + 1) end
+end
+
+-- Onde o próximo item fica se ninguém escolher outro lugar
+function J.lugar_padrao(tipo)
+  local id = objeto_do_item(tipo)
+  if tipo == "mesa" then
+    local m = POS_MESAS[J.num_mesas() + 1]
+    return L.t(id, m.bx, m.bz)
+  end
+  local o = id and L.POR_ID[id]
+  if o then return L.t(id, o.x, o.z) end
+end
+
+local function perto_de_mesa(x, z)
+  for i = 1, J.num_mesas() do
+    local m = POS_MESAS[i]
+    local mx, mz = L.t(m.id, m.bx, m.bz)
+    if math.abs(mx - x) < 3.1 and math.abs(mz - z) < 1.9 then return "Mesa " .. i end
+  end
+end
+
+-- Dá para pôr aqui? Devolve ok, motivo e o ponto já no passo de 0,25 m. Decoração: tipo = "decor", extra = tipo de TIPOS_EXTRAS.
+function J.lugar_item(tipo, x, z, extra)
+  if type(x) ~= "number" or type(z) ~= "number" or x ~= x or z ~= z then return false, "Posição inválida" end
+  x, z = math.floor(x * 4 + 0.5) / 4, math.floor(z * 4 + 0.5) / 4
+  local function nao(motivo) return false, motivo, x, z end
+  local function dentro(id, f)
+    local x0, x1, z0, z1 = L.sala_mundo(id)
+    return x >= x0 + f and x <= x1 - f and z >= z0 + f and z <= z1 - f
+  end
+  if tipo == "mesa" then
+    if L.andar_ativo ~= 0 then return nao("Mesas ficam no térreo") end
+    local xa, xb, za, zb = L.salao()
+    if L.leste_aberta() then xb = xb + 5.6 end
+    if x < xa + 1.6 or x > xb - 1.6 or z < za + 0.9 or z > zb - 0.9 then return nao("Fora da taverna ou colada na parede") end
+    local q = perto_de_mesa(x, z)
+    if q then return nao("Muito perto da " .. q) end
+    if util.distancia(x, z, J.PORTA.x, J.PORTA.z) < 2 then return nao("Bloquearia a porta") end
+    if Cam.bloqueado(x, z) or Cam.bloqueado(x - 1.25, z) or Cam.bloqueado(x + 1.25, z) then return nao("Tem um móvel neste lugar") end
+  elseif tipo == "arvore" then
+    if L.andar_ativo ~= 0 then return nao("Árvores ficam no térreo") end
+    if not dentro("pomar", 0.6) then return nao("Precisa ficar dentro do pomar") end
+    for i = 1, J.ef("frutas") + 2 do
+      local ax, az = L.t("arvore" .. i, L.POR_ID["arvore" .. i].x, L.POR_ID["arvore" .. i].z)
+      if util.distancia(x, z, ax, az) < 1.2 then return nao("Muito perto de outra árvore") end
+    end
+  elseif tipo == "vaca" then
+    if L.andar_ativo ~= 0 then return nao("Vacas ficam no térreo") end
+    if not dentro("fazenda", 1) then return nao("Precisa ficar dentro da fazenda") end
+  elseif tipo == "decor" then
+    if L.andar_ativo ~= 0 then return nao("Decoração só fica no térreo") end
+    local onde
+    if dentro("taverna", 0.2) then onde = "taverna" end
+    if not onde then
+      local internas, externas = L.salas()
+      for _, lista in ipairs({ internas, externas }) do
+        for _, b in ipairs(lista) do
+          if L.aberta(b.id) and L.andar_de(b.id) == 0 and dentro(b.id, 0.2) then onde = b.id end
+        end
+      end
+    end
+    if not onde then return nao("Precisa ficar dentro de uma sala") end
+    local d = L.TIPOS_EXTRAS[extra]
+    if d and d.raio and onde == "taverna" and Cam.bloqueado(x, z) then return nao("Tem um móvel neste lugar") end
+  end
+  return true, nil, x, z
+end
+
+-- depois de pôr algo: quem conta muda, e a próxima abertura já encontra o jogo salvo
+local function depois_de_colocar()
+  recalcular()
+  J.aplicar_visual()
+  J.reconstruir_lugares()
+  J.montar_mapa()
+  L.salvar()
+  J.salvar()
+end
+
+-- Põe o próximo item na posição dada (sem posição: no lugar padrão)
+function J.por_item(tipo, x, z)
+  local i = pendente(tipo)
+  if not i then return false, "Nada deste tipo para colocar" end
+  if i.requer then return false, "Coloque " .. i.requer .. " primeiro" end
+  local c = J.estado.colocados
+  if tipo == "canteiro" then
+    c.canteiros = c.canteiros + 1
+    depois_de_colocar()
+    return true
+  end
+  local id = objeto_do_item(tipo)
+  if not x then x, z = J.lugar_padrao(tipo) end
+  local ok, motivo, nx, nz = J.lugar_item(tipo, x, z)
+  if not ok then return false, motivo end
+  L.colocar(id, nx, nz)
+  L.limitar(id)
+  L.limitar_carregados(id)
+  if tipo == "mesa" then c.mesas = c.mesas + 1
+  elseif tipo == "arvore" then c.frutas = c.frutas + 1
+  else c.vacas = c.vacas + 1 end
+  depois_de_colocar()
+  return true
+end
+
+function J.por_sala(id, x, z, andar)
+  if not pendente("sala", id) then return false, "Nada deste tipo para colocar" end
+  local ok, motivo = L.encaixe_valido(id, x, z, andar)
+  if not ok then return false, motivo end
+  local c = J.estado.colocados
+  c.salas[id] = true
+  recalcular()
+  ok, motivo = L.mover_sala(id, x, z, andar)
+  if not ok then
+    c.salas[id] = nil
+    recalcular()
+    return false, motivo
+  end
+  J.ajustar_equipe()
+  depois_de_colocar()
+  return true
+end
+
+local function quantos_extras()
+  local n = 0
+  for _, o in ipairs(L.OBJETOS) do if o.extra then n = n + 1 end end
+  return n
+end
+
+-- Decoração é paga aqui; o preço só sai quando o lugar é aceito
+function J.comprar_decoracao(tipo, x, z)
+  local preco = C.preco_decoracao[tipo]
+  if not preco or not L.TIPOS_EXTRAS[tipo] then return false, "Item desconhecido" end
+  if quantos_extras() >= L.MAX_EXTRAS then return false, "Limite de " .. L.MAX_EXTRAS .. " itens de decoração" end
+  local e = J.estado
+  if e.ouro < preco then return false, "Faltam " .. util.formatar(math.ceil(preco - e.ouro)) .. " de ouro" end
+  local ok, motivo, nx, nz = J.lugar_item("decor", x, z, tipo)
+  if not ok then return false, motivo end
+  e.ouro = e.ouro - preco
+  local o = L.adicionar(tipo, nx, nz)
+  depois_de_colocar()
+  return true, nil, o.id
+end
+
+-- Obras: mover é de graça; cada metro novo é pago e guardado por lado --------------------------------
+
+-- Preço do próximo metro, cresce um pouco com tudo o que já foi aumentado. extra = metros ainda não aplicados.
+function J.preco_metro(extra)
+  local total = extra or 0
+  for _, v in pairs(L.tamanho) do if v > 0 then total = total + v end end
+  return math.floor(C.obra_metro_base * (1 + C.obra_metro_cresce * total))
+end
+
+-- O que aconteceria ao mudar `delta` metros nesta parede, sem mudar nada.
+-- { metros = quanto dá de verdade, custo, devolve, falta = ouro para o metro seguinte, limite = bateu no máximo ou mínimo }
+function J.orcar_obra(chave, delta)
+  local r = { metros = 0, custo = 0, devolve = 0, falta = 0, limite = false }
+  local atual = L.tamanho[chave]
+  if not atual then return r end
+  local lim_max = L.TAMANHO_MAX
+  local lim_min = math.min(L.tamanho_minimo(chave), lim_max)
+  local ouro = J.estado.ouro
+  if delta > 0 then
+    for i = 1, delta do
+      if atual + i > lim_max then r.limite = true; break end
+      local p = J.preco_metro(i - 1)
+      if r.custo + p > ouro then r.falta = r.custo + p - ouro; break end
+      r.custo, r.metros = r.custo + p, i
+    end
+  elseif delta < 0 then
+    local pilha = J.estado.obras[chave] or {}
+    local topo = #pilha
+    for i = 1, -delta do
+      local v = atual - (i - 1)
+      if v - 1 < lim_min then r.limite = true; break end
+      if v > 0 and topo > 0 then
+        r.devolve = r.devolve + math.floor(pilha[topo] * C.obra_devolucao)
+        topo = topo - 1
+      end
+      r.metros = -i
+    end
+  end
+  return r
+end
+
+-- Faz a obra metro a metro, conferindo o ouro de novo: o jogo não parou enquanto o dedo arrastava
+function J.obra(chave, delta)
+  local e = J.estado
+  local r = { metros = 0, custo = 0, devolve = 0, falta = 0 }
+  if not L.tamanho[chave] or delta == 0 then return false, r end
+  local passo = delta > 0 and 1 or -1
+  for _ = 1, math.abs(delta) do
+    local orc = J.orcar_obra(chave, passo)
+    if orc.metros == 0 then
+      r.falta = orc.falta
+      break
+    end
+    local antes = L.tamanho[chave]
+    L.mudar_tamanho(chave, passo)
+    if L.tamanho[chave] == antes then break end
+    e.obras[chave] = e.obras[chave] or {}
+    local pilha = e.obras[chave]
+    if passo > 0 then
+      e.ouro = e.ouro - orc.custo
+      r.custo = r.custo + orc.custo
+      -- metro abaixo do tamanho original não devolve nada: não entra na conta
+      if antes >= 0 then pilha[#pilha + 1] = orc.custo end
+    else
+      e.ouro = e.ouro + orc.devolve
+      r.devolve = r.devolve + orc.devolve
+      if antes > 0 and #pilha > 0 then pilha[#pilha] = nil end
+    end
+    r.metros = r.metros + passo
+  end
+  if r.metros ~= 0 then
+    J.aplicar_visual()
+    L.salvar()
+    J.salvar()
+  end
+  return r.metros ~= 0, r
 end
 
 -- Valor dos pedidos -----------------------------------------------------------------
@@ -1750,6 +2060,26 @@ function J.carregar()
   end
   for k, v in pairs(estado_inicial()) do
     if type(v) == "number" then e[k] = saneado(e[k], v) end
+  end
+  -- contadores da Loja: arquivo estragado volta a colocar sozinho, nunca trava
+  if type(e.colocados) == "table" then
+    local c = e.colocados
+    for _, k in ipairs({ "mesas", "canteiros", "frutas", "vacas" }) do c[k] = math.max(0, math.floor(saneado(c[k], 0))) end
+    if type(c.salas) ~= "table" then c.salas = {} end
+    for id, v in pairs(c.salas) do
+      if not NO_DA_SALA[id] or v ~= true then c.salas[id] = nil end
+    end
+  else
+    e.colocados = nil
+  end
+  for chave, pilha in pairs(e.obras) do
+    if not L.tamanho[chave] or type(pilha) ~= "table" then e.obras[chave] = nil
+    else
+      for i = #pilha, 1, -1 do
+        local v = saneado(pilha[i], nil)
+        if not v or v < 0 then table.remove(pilha, i) end
+      end
+    end
   end
   e.salvo_em = saneado(e.salvo_em, nil)
   e.final_resta = saneado(e.final_resta, nil)

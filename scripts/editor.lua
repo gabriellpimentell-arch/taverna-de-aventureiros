@@ -603,6 +603,8 @@ local function destacar(id, forte)
   etiqueta(o.nome, cx / n, topo, forte)
 end
 
+function E.raio_alca() return raio_alca() end
+
 local function desenhar_alca(a, ativa)
   local r = raio_alca() * 0.68
   motor.circulo(a.x, a.y, r + 2, "#000000b0")
@@ -626,6 +628,8 @@ local function desenhar_alca(a, ativa)
     motor.linha(bx, by, bx - dx * t * l + dy * t, by - dy * t * l - dx * t, 2, c)
   end
 end
+
+E.desenhar_alca = desenhar_alca
 
 local function medida(p)
   local v = L.tamanho[p.chave] or 0

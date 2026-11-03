@@ -14,6 +14,7 @@
 --    layout.lua   posições dos objetos (modo de edição)
 --    caminhos.lua rotas e colisões
 --    editor.lua   modo de edição
+--    loja.lua     aba Loja: colocar itens e obras com o jogo rodando
 --    saves.lua    vagas de save e saves prontos
 --    util.lua     funções de apoio
 -- =============================================================================
