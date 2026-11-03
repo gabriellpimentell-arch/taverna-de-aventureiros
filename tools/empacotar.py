@@ -31,7 +31,9 @@ def main() -> None:
         pacote += struct.pack("<I", len(n)) + n
         pacote += struct.pack("<I", len(dados)) + dados
 
-    final = Path(exe).read_bytes() + bytes(pacote) + struct.pack("<Q", len(pacote)) + b"TAVPAKFT"
+    # sem executável ("-"): só o pacote, usado pelo Android
+    base = b"" if exe == "-" else Path(exe).read_bytes()
+    final = base + bytes(pacote) + struct.pack("<Q", len(pacote)) + b"TAVPAKFT"
     Path(saida).write_bytes(final)
     print(f"{len(arquivos)} arquivos embutidos ({len(pacote) // 1024} KB), versão {versao}")
 

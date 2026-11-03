@@ -2,12 +2,13 @@ name: Gerar executável
 
 on:
   push:
-    branches: [main]
+    branches: [main, android]   # no branch android só compila; publicar é só no main
     paths:
       - "src/**"
       - "scripts/**"
       - "assets/**"
       - "tools/**"
+      - "android/**"
       - "CMakeLists.txt"
       - ".github/workflows/**"
   workflow_dispatch:
@@ -52,14 +53,60 @@ jobs:
           name: TavernaDeAventureiros-windows
           path: dist/
 
+  android:
+    needs: testes
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configurar
+        run: |
+          cmake -S . -B build-android -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK_LATEST_HOME/build/cmake/android.toolchain.cmake" \
+            -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-26 -DANDROID_STL=c++_static \
+            -DPLATFORM=Android -DOPENGL_VERSION="ES 3.0"
+
+      - name: Pedir OpenGL ES 3 ao celular
+        run: sed -i 's/EGL_CONTEXT_CLIENT_VERSION, 2/EGL_CONTEXT_CLIENT_VERSION, 3/' build-android/_deps/raylib-src/src/platforms/rcore_android.c
+
+      - name: Compilar
+        run: cmake --build build-android --parallel
+
+      - name: Montar o APK
+        run: |
+          mkdir -p dist
+          VERSAO="${GITHUB_SHA::7}"
+          python tools/empacotar.py - dist/pacote-m1.bin "$VERSAO"
+          android/gerar_apk.sh "$(find build-android -name libtaverna.so | head -1)" dist/pacote-m1.bin dist/TavernaDeAventureiros.apk
+
+      - name: Guardar como artefato
+        uses: actions/upload-artifact@v4
+        with:
+          name: TavernaDeAventureiros-android
+          path: dist/
+
+  publicar:
+    needs: [windows, android]
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+
       - name: Publicar versão de teste
-        shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release delete teste --yes --cleanup-tag || true
-          gh release create teste dist/TavernaDeAventureiros.exe dist/versao.txt \
+          gh release create teste \
+            dist/TavernaDeAventureiros-windows/TavernaDeAventureiros.exe \
+            dist/TavernaDeAventureiros-windows/versao.txt \
+            dist/TavernaDeAventureiros-android/TavernaDeAventureiros.apk \
+            dist/TavernaDeAventureiros-android/pacote-m1.bin \
             --prerelease \
             --title "Versão de teste" \
-            --notes "Gerada automaticamente a partir do commit ${GITHUB_SHA::7}. Baixe só o TavernaDeAventureiros.exe: ele se atualiza sozinho ao abrir." \
+            --notes "Gerada automaticamente a partir do commit ${GITHUB_SHA::7}. No computador, baixe o TavernaDeAventureiros.exe. No Android, baixe o TavernaDeAventureiros.apk. Os dois se atualizam sozinhos ao abrir." \
             --target "$GITHUB_SHA"

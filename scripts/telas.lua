@@ -755,7 +755,9 @@ local function janela_config()
   local cx = x + 28
   controle_volume("musica", "Música", cx, y + 60, o.musica, function(v) o.musica = v; T.aplicar_opcoes() end)
   controle_volume("efeitos", "Efeitos", cx, y + 108, o.efeitos, function(v) o.efeitos = v; T.aplicar_opcoes() end)
-  alternador("tela_cheia", "Tela cheia (F11)", cx, y + 156, motor.tela_cheia(), function() motor.alternar_tela_cheia() end)
+  if motor.plataforma == "desktop" then
+    alternador("tela_cheia", "Tela cheia (F11)", cx, y + 156, motor.tela_cheia(), function() motor.alternar_tela_cheia() end)
+  end
   alternador("sombras", "Sombras (mais leve sem)", cx, y + 204, o.sombras, function() o.sombras = not o.sombras; T.aplicar_opcoes() end)
   alternador("mostrar_fps", "FPS e fluxo de pessoas", cx, y + 252, o.fps, function() o.fps = not o.fps end)
 
@@ -894,14 +896,28 @@ local function tela_titulo()
   cabecalho_menu()
   motor.texto("Do balcão de um vilarejo à guilda que salva o mundo", 481, 105, 17, "#000000a0", "centro")
   motor.texto("Do balcão de um vilarejo à guilda que salva o mundo", 480, 104, 17, cor.texto, "centro")
-  local x, w, y = 340, 280, 160
+  local x, w, y, passo = 340, 280, 136, 58
   local ultimo = S.ultimo()
-  U.botao("menu_continuar", x, y, w, 54, "Continuar", { ativo = ultimo ~= nil, tam = 19 }, function() S.abrir(ultimo); T.iniciar() end)
+  U.botao("menu_continuar", x, y, w, 50, "Continuar", { ativo = ultimo ~= nil, tam = 19 }, function() S.abrir(ultimo); T.iniciar() end)
   local outro = { cor = "#3d291b", cor_texto = cor.texto, tam = 18 }
-  U.botao("menu_novo", x, y + 66, w, 54, "Novo jogo", outro, function() T.tela = "novo"; T.confirmar = false end)
-  U.botao("menu_carregar", x, y + 132, w, 54, "Jogos salvos", outro, function() T.tela = "carregar"; T.confirmar = false end)
-  U.botao("menu_tela", x, y + 198, w, 54, motor.tela_cheia() and "Modo janela" or "Tela cheia", outro, function() motor.alternar_tela_cheia() end)
-  U.botao("menu_sair", x, y + 264, w, 54, "Sair", { cor = "#5a2a22", cor_texto = "#ffb0a2", tam = 18 }, function() motor.sair() end)
+  U.botao("menu_novo", x, y + passo, w, 50, "Novo jogo", outro, function() T.tela = "novo"; T.confirmar = false end)
+  U.botao("menu_carregar", x, y + passo * 2, w, 50, "Jogos salvos", outro, function() T.tela = "carregar"; T.confirmar = false end)
+  U.botao("menu_layout", x, y + passo * 3, w, 50, "Modo Layout (sem NPCs)", { cor = "#57b0c2", cor_texto = "#0d1f24", tam = 17 }, function()
+    -- taverna vazia e pausada: só a aparência
+    J.pessoas, J.garcons = {}, {}
+    T.tela = nil
+    Ed.abrir()
+    Ed.ao_fechar = function() J.iniciar(); T.iniciar() end
+  end)
+  local sy = y + passo * 4
+  if motor.plataforma == "desktop" then
+    U.botao("menu_tela", x, sy, w, 50, motor.tela_cheia() and "Modo janela" or "Tela cheia", outro, function() motor.alternar_tela_cheia() end)
+    sy = sy + passo
+  end
+  U.botao("menu_sair", x, sy, w, 50, "Sair", { cor = "#5a2a22", cor_texto = "#ffb0a2", tam = 18 }, function() motor.sair() end)
+  if motor.apk_velho then
+    motor.texto("Há um APK novo: baixe-o de novo para receber as atualizações.", 480, 490, 14, "#ff9a8a", "centro", true)
+  end
   motor.texto("Versão " .. (motor.versao or "dev"), 480, 512, 13, cor.texto_fraco, "centro")
 end
 

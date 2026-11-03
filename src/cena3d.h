@@ -21,6 +21,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <string>
 #include <vector>
 
 namespace cena3d {
@@ -139,6 +140,17 @@ out vec4 saida;
 void main() { saida = vec4(1.0); }
 )";
 
+// No celular (OpenGL ES 3) muda só o cabeçalho dos sombreadores
+static std::string adaptar(const char* fonte) {
+    std::string s = fonte;
+#if defined(__ANDROID__) || defined(TAVERNA_ES3)
+    const std::string de = "#version 330";
+    size_t p = s.find(de);
+    if (p != std::string::npos) s.replace(p, de.size(), "#version 300 es\nprecision highp float;\nprecision highp sampler2D;");
+#endif
+    return s;
+}
+
 static Vector3 solDirecao() { return Vector3Normalize(Vector3{-0.55f, 1.0f, 0.62f}); }
 
 static void preparar() {
@@ -150,7 +162,7 @@ static void preparar() {
     E.malhas[CONE] = GenMeshCone(0.5f, 1, 9);
     E.malhas[ESFERA] = GenMeshSphere(0.5f, 6, 9);
 
-    E.sombreador = LoadShaderFromMemory(VS_COR, FS_COR);
+    E.sombreador = LoadShaderFromMemory(adaptar(VS_COR).c_str(), adaptar(FS_COR).c_str());
     E.sombreador.locs[SHADER_LOC_MATRIX_MODEL] = GetShaderLocation(E.sombreador, "matModel");
     E.locLuzVP = GetShaderLocation(E.sombreador, "luzVP");
     E.locSol = GetShaderLocation(E.sombreador, "solDir");
@@ -159,7 +171,7 @@ static void preparar() {
     E.locLuzPos = GetShaderLocation(E.sombreador, "luzPos");
     E.locLuzCor = GetShaderLocation(E.sombreador, "luzCor");
     E.locLuzAlc = GetShaderLocation(E.sombreador, "luzAlc");
-    E.profundidade = LoadShaderFromMemory(VS_PROF, FS_PROF);
+    E.profundidade = LoadShaderFromMemory(adaptar(VS_PROF).c_str(), adaptar(FS_PROF).c_str());
 
     E.matCor = LoadMaterialDefault();
     E.matCor.shader = E.sombreador;

@@ -27,6 +27,7 @@
 #include "atualizador.h"
 #include "cena3d.h"
 #include "sons.h"
+#include "android_sistema.h"
 
 extern "C" {
 #include "lua.h"
@@ -66,6 +67,7 @@ struct Motor {
     float relogioVigia = 0.0f;
     std::string arquivoTeste;
     std::string versao = "dev";
+    bool apkVelho = false;
 };
 
 static Motor M;
@@ -365,12 +367,38 @@ static bool g_sair = false;
 
 // Janela e opções -------------------------------------------------------------
 
+#if defined(__ANDROID__)
+static int l_minimizar(lua_State*) { android_sistema::minimizar(); return 0; }
+#else
 static int l_minimizar(lua_State*) { MinimizeWindow(); return 0; }
+#endif
 static int l_sair(lua_State*) { g_sair = true; return 0; }
+#if defined(__ANDROID__)
+static int l_alternar_tela_cheia(lua_State*) { return 0; }
+#else
 static int l_alternar_tela_cheia(lua_State*) { ToggleBorderlessWindowed(); return 0; }
+#endif
 static int l_tela_cheia(lua_State* L) { lua_pushboolean(L, IsWindowState(FLAG_BORDERLESS_WINDOWED_MODE)); return 1; }
 static int l_mouse_baixo(lua_State* L) { lua_pushboolean(L, IsMouseButtonDown(MOUSE_BUTTON_LEFT)); return 1; }
+#if defined(__ANDROID__)
+// no celular, o zoom vem do movimento de pinça com dois dedos
+static int l_roda(lua_State* L) {
+    static float distanciaAntes = -1;
+    float delta = 0;
+    if (GetTouchPointCount() == 2) {
+        Vector2 a = GetTouchPosition(0), b = GetTouchPosition(1);
+        float d = std::hypot(a.x - b.x, a.y - b.y);
+        if (distanciaAntes > 0) delta = (d - distanciaAntes) * 0.02f;
+        distanciaAntes = d;
+    } else {
+        distanciaAntes = -1;
+    }
+    lua_pushnumber(L, delta);
+    return 1;
+}
+#else
 static int l_roda(lua_State* L) { lua_pushnumber(L, GetMouseWheelMove()); return 1; }
+#endif
 // motor.recorte(x, y, w, h): só desenha dentro desta área; sem argumentos, volta à tela toda
 static int l_recorte(lua_State* L) {
     float z = M.camera.zoom;
@@ -466,7 +494,11 @@ static int l_layout_carregar(lua_State* L) {
 }
 
 static int l_copiar(lua_State* L) {
+#if defined(__ANDROID__)
+    android_sistema::copiar(luaL_checkstring(L, 1));
+#else
     SetClipboardText(luaL_checkstring(L, 1));
+#endif
     return 0;
 }
 
@@ -508,7 +540,7 @@ static void registrarApi(lua_State* L) {
     lua_setfield(L, -2, "largura");
     lua_pushnumber(L, ALTURA);
     lua_setfield(L, -2, "altura");
-#if defined(PLATFORM_ANDROID)
+#if defined(__ANDROID__)
     lua_pushstring(L, "android");
 #else
     lua_pushstring(L, "desktop");
@@ -516,6 +548,8 @@ static void registrarApi(lua_State* L) {
     lua_setfield(L, -2, "plataforma");
     lua_pushstring(L, M.versao.c_str());
     lua_setfield(L, -2, "versao");
+    lua_pushboolean(L, M.apkVelho);
+    lua_setfield(L, -2, "apk_velho");
     lua_setglobal(L, "motor");
 }
 
@@ -667,6 +701,9 @@ static fs::path procurarPasta(const std::string& nome, const std::string& marcad
 }
 
 static fs::path pastaDeDados() {
+#if defined(__ANDROID__)
+    return fs::path(android_sistema::pastaInterna());
+#endif
 #if defined(_WIN32)
     const wchar_t* appdata = _wgetenv(L"APPDATA");
     if (appdata) return fs::path(appdata) / "TavernaDeAventureiros";
@@ -822,6 +859,38 @@ static bool verificarAtualizacao(const std::string& versaoLocal, const fs::path&
     return false;
 }
 
+#if defined(__ANDROID__)
+// Muda quando o motor mudar: um APK antigo não pode rodar scripts que pedem funções novas.
+static const char* MOTOR_ANDROID = "1";
+
+// Baixa só os scripts novos, sem reinstalar. Sem internet, segue com os que já tem.
+static void atualizarScriptsAndroid(Pacote& pacote) {
+    mostrarMensagem("Taverna de Aventureiros", "Procurando atualizações...");
+    std::string remota;
+    if (!atualizador::baixar(std::string(URL_ATUALIZACAO) + "versao.txt", remota, 4000)) return;
+    while (!remota.empty() && isspace((unsigned char)remota.back())) remota.pop_back();
+    if (remota.empty() || remota.size() > 64 || remota == pacote.versao) return;
+    mostrarMensagem("Atualizando...", "Baixando a versão nova do jogo.");
+    std::string bytes;
+    Pacote novo;
+    if (!atualizador::baixar(std::string(URL_ATUALIZACAO) + "pacote-m" + MOTOR_ANDROID + ".bin", bytes, 20000) ||
+        !lerPacote(bytes, novo) || novo.versao != remota) {
+        // o arquivo deste motor não existe mais: só um APK novo resolve
+        M.apkVelho = bytes.empty();
+        return;
+    }
+    {
+        std::ofstream f(pastaDeDados() / "pacote_baixado.bin", std::ios::binary | std::ios::trunc);
+        f.write(bytes.data(), (std::streamsize)bytes.size());
+    }
+    fs::path pasta = pastaDeDados() / "jogo";
+    if (extrairPacote(novo, pasta)) {
+        pacote = novo;
+        M.versao = novo.versao;
+    }
+}
+#endif
+
 static void atualizarCamera() {
     float lw = (float)GetScreenWidth(), lh = (float)GetScreenHeight();
     float escala = std::min(lw / LARGURA, lh / ALTURA);
@@ -835,11 +904,16 @@ int main() {
     unsigned int flags = FLAG_WINDOW_RESIZABLE | FLAG_VSYNC_HINT;
     if (!getenv("TAVERNA_TESTE")) flags |= FLAG_MSAA_4X_HINT;  // bordas mais suaves
     SetConfigFlags(flags);
+#if defined(__ANDROID__)
+    InitWindow(0, 0, "Taverna de Aventureiros");  // a tela toda do celular
+#else
     InitWindow(1280, 720, "Taverna de Aventureiros");
-    SetExitKey(KEY_NULL);  // ESC não fecha o jogo
     SetWindowMinSize(480, 270);
+#endif
+    SetExitKey(KEY_NULL);  // ESC não fecha o jogo
     SetTargetFPS(60);
 
+#if !defined(__ANDROID__)
     // modo janela (F11): 80% da largura do monitor, centralizada
     int monitor = GetCurrentMonitor();
     int mh = GetMonitorHeight(monitor), mw = GetMonitorWidth(monitor);
@@ -854,16 +928,30 @@ int main() {
         }
         ToggleBorderlessWindowed();  // começa em tela cheia
     }
+#endif
 
     // Versão distribuída: scripts e fontes embutidos no próprio .exe
     fs::path exe = atualizador::caminhoExecutavel();
     atualizador::limparVersaoAntiga(exe);
     Pacote pacote;
     bool temPacote = false;
+#if defined(__ANDROID__)
+    // No celular, o pacote vem dentro do APK; o baixado depois tem prioridade.
+    {
+        std::string bytes;
+        temPacote = android_sistema::lerAsset("pacote.bin", bytes) && lerPacote(bytes, pacote);
+        Pacote baixado;
+        if (lerArquivo(pastaDeDados() / "pacote_baixado.bin", bytes) && lerPacote(bytes, baixado)) {
+            pacote = baixado;
+            temPacote = true;
+        }
+    }
+#else
     {
         std::string bytes;
         temPacote = !exe.empty() && lerArquivo(exe, bytes) && lerPacote(bytes, pacote);
     }
+#endif
     if (temPacote) {
         fs::path pasta = pastaDeDados() / "jogo";
         if (extrairPacote(pacote, pasta)) {
@@ -893,6 +981,9 @@ int main() {
         M.fonteNegrito = GetFontDefault();
     }
 
+#if defined(__ANDROID__)
+    if (temPacote) atualizarScriptsAndroid(pacote);
+#else
     if (temPacote && !getenv("TAVERNA_SEM_ATUALIZAR") && verificarAtualizacao(M.versao, exe)) {
         if (M.fontesProprias) {
             UnloadFont(M.fonteNormal);
@@ -901,6 +992,7 @@ int main() {
         CloseWindow();
         return 0;  // a versão nova já está abrindo
     }
+#endif
 
     sons::iniciar();
 
@@ -924,7 +1016,11 @@ int main() {
 
         // F11 ou Alt+Enter: alterna entre tela cheia e janela
         bool alt = IsKeyDown(KEY_LEFT_ALT) || IsKeyDown(KEY_RIGHT_ALT);
+#if !defined(__ANDROID__)
         if (IsKeyPressed(KEY_F11) || (alt && IsKeyPressed(KEY_ENTER))) ToggleBorderlessWindowed();
+#else
+        (void)alt;
+#endif
 
         atualizarCamera();
 
@@ -940,7 +1036,7 @@ int main() {
             Vector2 p = GetScreenToWorld2D(GetMousePosition(), M.camera);
             chamar("soltar", {p.x, p.y});
         }
-        if (IsKeyPressed(KEY_ESCAPE)) chamar("tecla_esc");
+        if (IsKeyPressed(KEY_ESCAPE) || IsKeyPressed(KEY_BACK)) chamar("tecla_esc");
         if (IsKeyPressed(KEY_F2)) chamar("tecla_f2");
 
         chamar("atualizar", {dt});

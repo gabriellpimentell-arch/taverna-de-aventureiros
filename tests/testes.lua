@@ -1619,6 +1619,23 @@ do
   T.modal = "config"; desenhar(); U.apertar("voltar_menu"); desenhar()
   U.apertar("menu_carregar"); desenhar()
   ok("recomeçar save pronto", U.apertar("menu_pronto_refazer_3") and J.estado.ouro > 1e14, J.estado.ouro)
+  -- Modo Layout: taverna vazia, nada é gravado, volta para a tela inicial
+  T.modal = "config"; desenhar(); U.apertar("voltar_menu"); desenhar()
+  local n_saves = 0
+  for _ in pairs(motor._saves) do n_saves = n_saves + 1 end
+  atualizar(3); desenhar()
+  U.apertar("menu_layout"); desenhar()
+  local Ed2 = require("editor")
+  ok("modo layout abre o editor", Ed2.ativo and T.tela == nil)
+  ok("modo layout sem NPCs", #J.pessoas == 0 and #J.garcons == 0)
+  for _ = 1, 100 do atualizar(0.1) end
+  desenhar()
+  ok("continua sem NPCs", #J.pessoas == 0 and #J.garcons == 0)
+  U.apertar("editor_sair"); desenhar()
+  ok("sai para a tela inicial", T.tela == "titulo" and J.em_menu and not J.previa and not J.editando)
+  local n2 = 0
+  for _ in pairs(motor._saves) do n2 = n2 + 1 end
+  ok("modo layout não cria save", n2 == n_saves)
   -- save estragado na vaga
   motor._saves["jogo3.sav"] = "lixo"
   ok("resumo de save estragado", S.resumo("jogo3.sav") == nil)

@@ -46,6 +46,13 @@ function E.fechar()
   L.salvar()
   J.aplicar_layout()
   M.iniciar()
+  -- no Modo Layout, sair do editor volta para a tela inicial
+  if E.ao_fechar then
+    local fn = E.ao_fechar
+    E.ao_fechar = nil
+    fn()
+    return
+  end
   local sem = J.lugares_sem_rota()
   if sem > 0 then J.avisar(sem .. " lugar(es) sem caminho livre: a pessoa atravessa os móveis para chegar.", 5) end
 end

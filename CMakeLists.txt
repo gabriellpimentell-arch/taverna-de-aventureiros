@@ -34,8 +34,16 @@ if(UNIX)
 endif()
 
 # --- O jogo ------------------------------------------------------------------
-add_executable(TavernaDeAventureiros src/main.cpp src/atualizador.cpp)
-target_link_libraries(TavernaDeAventureiros PRIVATE raylib lua_estatica)
+if(ANDROID)
+  # no Android o jogo é uma biblioteca aberta pelo próprio sistema
+  add_library(TavernaDeAventureiros SHARED src/main.cpp src/atualizador.cpp)
+  set_target_properties(TavernaDeAventureiros PROPERTIES OUTPUT_NAME taverna)
+  target_include_directories(TavernaDeAventureiros PRIVATE ${ANDROID_NDK}/sources/android/native_app_glue)
+  target_link_libraries(TavernaDeAventureiros PRIVATE raylib lua_estatica android log)
+else()
+  add_executable(TavernaDeAventureiros src/main.cpp src/atualizador.cpp)
+  target_link_libraries(TavernaDeAventureiros PRIVATE raylib lua_estatica)
+endif()
 if(WIN32)
   target_link_libraries(TavernaDeAventureiros PRIVATE wininet)  # downloads da atualização
 endif()

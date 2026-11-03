@@ -93,6 +93,19 @@ void limparVersaoAntiga(const fs::path& atual) {
 
 }  // namespace atualizador
 
+#elif defined(__ANDROID__)
+
+#include "android_sistema.h"
+
+namespace atualizador {
+
+fs::path caminhoExecutavel() { return {}; }
+bool baixar(const std::string& url, std::string& saida, int limiteMs) { return android_sistema::baixar(url, saida, limiteMs); }
+bool trocarExecutavelEReiniciar(const fs::path&, const fs::path&) { return false; }
+void limparVersaoAntiga(const fs::path&) {}
+
+}  // namespace atualizador
+
 #else  // outras plataformas
 
 namespace atualizador {
