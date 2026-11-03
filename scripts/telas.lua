@@ -9,6 +9,7 @@ local util = require("util")
 local U = require("ui")
 local M = require("mundo")
 local Ed = require("editor")
+local S = require("saves")
 local cor = util.cores
 local fmt = util.formatar
 
@@ -27,6 +28,7 @@ local function duracao_texto(s)
 end
 
 function T.iniciar()
+  T.tela = J.em_menu and "titulo" or nil
   T.aba = "taverna"
   T.modal = nil
   T.ouro_visivel = J.estado.ouro
@@ -780,6 +782,10 @@ local function janela_config()
     U.botao("apagar", cx, y + 334, 200, 46, "Apagar progresso", { cor = "#5a2a22", cor_texto = "#ffb0a2" }, function() T.confirmar = true end)
   end
   motor.texto("Versão " .. (motor.versao or "dev"), cx, y + h - 34, 13, cor.texto_fraco)
+  U.botao("voltar_menu", x + 28, y + h - 62, 200, 48, "Tela inicial", { cor = "#4a3627", cor_texto = cor.texto }, function()
+    S.voltar_ao_menu()
+    T.iniciar()
+  end)
   U.botao("sair", x + w - 230, y + h - 62, 200, 48, "Salvar e sair", { cor = cor.vermelho, cor_texto = "#ffffff" }, function()
     J.salvar()
     motor.sair()
@@ -875,6 +881,110 @@ local TEMA_POR_ID = {
   invocacao = "magia",
 }
 local ICONE_POR_ID = { cozinheiro = icone_coxa, cervejaria = icone_caneca }
+
+-- Tela inicial ---------------------------------------------------------------------
+
+local function cabecalho_menu()
+  motor.retangulo(0, 0, 960, 540, "#0d0805a8")
+  motor.texto("Taverna de Aventureiros", 482, 46, 46, "#00000090", "centro", true)
+  motor.texto("Taverna de Aventureiros", 480, 44, 46, cor.ouro, "centro", true)
+end
+
+local function tela_titulo()
+  cabecalho_menu()
+  motor.texto("Do balcão de um vilarejo à guilda que salva o mundo", 480, 104, 17, cor.texto, "centro")
+  local x, w, y = 340, 280, 160
+  local ultimo = S.ultimo()
+  U.botao("menu_continuar", x, y, w, 54, "Continuar", { ativo = ultimo ~= nil, tam = 19 }, function() S.abrir(ultimo); T.iniciar() end)
+  local outro = { cor = "#3d291b", cor_texto = cor.texto, tam = 18 }
+  U.botao("menu_novo", x, y + 66, w, 54, "Novo jogo", outro, function() T.tela = "novo"; T.confirmar = false end)
+  U.botao("menu_carregar", x, y + 132, w, 54, "Jogos salvos", outro, function() T.tela = "carregar"; T.confirmar = false end)
+  U.botao("menu_tela", x, y + 198, w, 54, motor.tela_cheia() and "Modo janela" or "Tela cheia", outro, function() motor.alternar_tela_cheia() end)
+  U.botao("menu_sair", x, y + 264, w, 54, "Sair", { cor = "#5a2a22", cor_texto = "#ffb0a2", tam = 18 }, function() motor.sair() end)
+  motor.texto("Versão " .. (motor.versao or "dev"), 480, 512, 13, cor.texto_fraco, "centro")
+end
+
+local function texto_resumo(r)
+  if r.fim then return "Lorde Demônio derrotado  •  " .. duracao_texto(r.tempo) end
+  return fmt(r.ouro) .. " de ouro  •  " .. r.nos .. " melhorias  •  " .. duracao_texto(r.tempo)
+end
+
+local function cartao_vaga(id, x, y, w, nome, detalhe, fn, extra)
+  motor.retangulo(x, y, w, 62, "#3d291bf4", 10)
+  motor.contorno(x, y, w, 62, cor.carta_borda, 2, 10)
+  motor.texto(nome, x + 16, y + 9, 17, cor.texto, "esquerda", true)
+  motor.texto(detalhe, x + 16, y + 35, 14, cor.texto_fraco)
+  U.zona(id, { x = x, y = y, w = w - (extra or 0), h = 62 }, fn)
+end
+
+local function voltar_menu_botao()
+  U.botao("menu_voltar", 40, 484, 170, 44, "Voltar", { cor = "#3d291b", cor_texto = cor.texto }, function() T.tela = "titulo"; T.confirmar = false end)
+end
+
+local function tela_novo()
+  cabecalho_menu()
+  motor.texto("Novo jogo: escolha uma vaga", 480, 112, 22, cor.texto, "centro", true)
+  local x, w = 230, 500
+  for i, v in ipairs(S.VAGAS) do
+    local y = 156 + (i - 1) * 72
+    local r = S.resumo(v.arquivo)
+    cartao_vaga("menu_vaga_" .. i, x, y, w, v.nome, r and ("Ocupada: " .. texto_resumo(r)) or "Vaga livre", function()
+      if r then T.confirmar = v
+      else
+        S.novo(v.arquivo)
+        T.iniciar()
+      end
+      motor.som("clique")
+    end)
+  end
+  if T.confirmar then
+    local v = T.confirmar
+    motor.texto("Apagar " .. v.nome .. " e começar de novo?", 480, 386, 17, "#ff9a8a", "centro", true)
+    U.botao("menu_apagar_nao", 300, 416, 170, 46, "Não", {}, function() T.confirmar = false end)
+    U.botao("menu_apagar_sim", 490, 416, 170, 46, "Sim, apagar", { cor = cor.vermelho, cor_texto = "#ffffff" }, function()
+      S.novo(v.arquivo)
+      T.iniciar()
+    end)
+  end
+  voltar_menu_botao()
+end
+
+local function tela_carregar()
+  cabecalho_menu()
+  local x, w = 40, 430
+  motor.texto("Jogos salvos", x + w / 2, 112, 20, cor.texto, "centro", true)
+  for i, v in ipairs(S.VAGAS) do
+    local y = 146 + (i - 1) * 72
+    local r = S.resumo(v.arquivo)
+    if r then
+      cartao_vaga("menu_abrir_" .. i, x, y, w, v.nome, texto_resumo(r), function()
+        motor.som("clique")
+        S.abrir(v.arquivo)
+        T.iniciar()
+      end)
+    else
+      cartao_vaga("menu_abrir_" .. i, x, y, w, v.nome, "Vazio", function() motor.som("erro") end)
+    end
+  end
+
+  local px, pw = 490, 430
+  motor.texto("Saves de teste", px + pw / 2, 112, 20, cor.ouro, "centro", true)
+  for i, p in ipairs(S.PRONTOS) do
+    local y = 146 + (i - 1) * 72
+    local jogado = S.resumo(p.arquivo) ~= nil
+    cartao_vaga("menu_pronto_" .. i, px, y, pw, p.nome, p.desc, function()
+      motor.som("clique")
+      if S.abrir_pronto(p) then T.iniciar() end
+    end, jogado and 112 or 0)
+    if jogado then
+      U.botao("menu_pronto_refazer_" .. i, px + pw - 104, y + 11, 94, 40, "Recomeçar", { cor = "#4a3627", cor_texto = cor.texto, tam = 13 }, function()
+        if S.abrir_pronto(p, true) then T.iniciar() end
+      end)
+    end
+  end
+  motor.texto("O progresso nos saves de teste fica guardado à parte.", px + pw / 2, 368, 14, cor.texto_fraco, "centro")
+  voltar_menu_botao()
+end
 
 -- Notícia: o jogo para para contar que algo importante pode ser liberado
 local function janela_noticia()
@@ -992,6 +1102,11 @@ end
 -- Ciclo --------------------------------------------------------------------------------
 
 function T.atualizar(dt)
+  if T.tela then
+    M.atualizar(dt)
+    motor.roda()
+    return
+  end
   if Ed.ativo then
     M.atualizar(dt)
     Ed.atualizar(dt)
@@ -1033,6 +1148,13 @@ end
 
 function T.desenhar()
   U.limpar()
+  if T.tela then
+    M.desenhar_cena()
+    if T.tela == "titulo" then tela_titulo()
+    elseif T.tela == "novo" then tela_novo()
+    else tela_carregar() end
+    return
+  end
   if Ed.ativo then
     M.desenhar_cena()
     Ed.desenhar()
@@ -1065,6 +1187,11 @@ function T.desenhar()
 end
 
 function T.tocar(x, y)
+  if T.tela then
+    local z = U.achar(x, y)
+    if z and z.fn then z.fn() end
+    return
+  end
   if Ed.ativo then
     local z = U.achar(x, y)
     if z then
@@ -1090,6 +1217,7 @@ function T.tocar(x, y)
 end
 
 function T.soltar(x, y)
+  if T.tela then return end
   if Ed.ativo then Ed.soltar() return end
   local t = T.toque
   T.toque = nil
@@ -1100,6 +1228,7 @@ function T.soltar(x, y)
 end
 
 function T.f2()
+  if T.tela then return end
   if J.offline or J.estado.fim then return end
   if Ed.ativo then Ed.fechar()
   else
@@ -1110,6 +1239,10 @@ function T.f2()
 end
 
 function T.esc()
+  if T.tela then
+    if T.tela ~= "titulo" then T.tela = "titulo"; T.confirmar = false end
+    return
+  end
   if Ed.ativo then Ed.fechar() return end
   if J.offline then return end
   if J.noticia and not T.modal then J.noticia = nil return end

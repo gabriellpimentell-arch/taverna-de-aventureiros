@@ -18,6 +18,10 @@ local function tudo()
 end
 J.sem_noticias = true
 local passos = {
+  { 1.5, function() end, "00_titulo" },
+  { 0.3, function() T.tela = "carregar" end, "00b_carregar" },
+  { 0.3, function() T.tela = "novo" end, "00c_novo" },
+  { 0.2, function() local S = require("saves"); S.novo("jogo3.sav"); T.iniciar() end, "00d_entrou" },
   { 3, function() end, "01_inicio" },
   { 1, function() T.aba = "arvore" end, "02_arvore_inicio" },
   { 1, function() T.arv.sel = "cardapio" end, "03_arvore_no" },
@@ -36,6 +40,8 @@ local passos = {
   { 1, function() T.aba = "arvore"; T.arv.zoom = 0.5 end, "12_arvore_toda" },
   { 1, function() T.aba = "invocacao"; J.invocar(); J.estado.ouro = 1e14; J.invocar() end, "13_invocacao" },
   { 3, function() T.aba = "taverna"; M.zoom_alvo = 1 end, "14_tudo_aberto" },
+  { 2, function() local L = require("layout"); L.mudar_tamanho("jardim_l", 3); L.mudar_tamanho("jardim_p", 2); L.mudar_tamanho("cerv_l", 2); L.mudar_tamanho("circ_p", 2) end, "14b_salas_maiores" },
+  { 0.5, function() require("layout").restaurar() end, "14c_salas_normais" },
   { 1, function() T.modal = "config" end, "15_config" },
   { 0.5, function() T.confirmar = true end, "16_apagar" },
   { 0.5, function() T.confirmar = false; T.modal = "stats" end, "17_stats" },

@@ -8,6 +8,8 @@ require("motor_falso")
 local semente = tonumber(arg[2]) or os.time()
 math.randomseed(semente)
 dofile(raiz .. "/scripts/main.lua")
+require("jogo").pular_menu = true
+motor._raiz = raiz
 
 local J = require("jogo")
 local A = require("arvore")
@@ -1456,6 +1458,90 @@ do
     ok("quem está dentro da mesa consegue sair", not p.sem_rota)
   end
   novo()
+end
+
+-- Tela inicial e saves ------------------------------------------------------------------------------
+do
+  local S = require("saves")
+  motor._saves, motor._atual, motor._save = {}, false, false
+  J.pular_menu = false
+  iniciar()
+  desenhar()
+  ok("abre na tela inicial", T.tela == "titulo" and J.em_menu)
+  ok("continuar desativado sem save", S.ultimo() == nil)
+  atualizar(0.1); desenhar()
+  J.salvar()
+  ok("taverna do menu não grava nada", next(motor._saves) == nil)
+  ok("esc não quebra no menu", pcall(T.esc))
+  U.apertar("menu_novo"); desenhar()
+  ok("tela de novo jogo", T.tela == "novo")
+  U.apertar("menu_vaga_2"); desenhar()
+  ok("novo jogo entra", T.tela == nil and not J.em_menu and motor._atual == "jogo2.sav")
+  J.estado.ouro = 777
+  J.salvar()
+  T.modal = "config"; desenhar()
+  U.apertar("voltar_menu"); desenhar()
+  ok("volta à tela inicial", T.tela == "titulo")
+  ok("guardou o último jogo", S.ultimo() == "jogo2.sav")
+  U.apertar("menu_continuar"); desenhar()
+  ok("continuar carrega", J.estado.ouro == 777, J.estado.ouro)
+  T.modal = "config"; desenhar(); U.apertar("voltar_menu"); desenhar()
+  U.apertar("menu_novo"); desenhar()
+  U.apertar("menu_vaga_2"); desenhar()
+  ok("vaga ocupada pede confirmação", T.tela == "novo" and T.confirmar)
+  U.apertar("menu_apagar_nao"); desenhar()
+  ok("cancelar mantém", S.resumo("jogo2.sav").ouro == 777)
+  U.apertar("menu_vaga_2"); desenhar(); U.apertar("menu_apagar_sim"); desenhar()
+  ok("confirmar recomeça", J.estado.ouro == 0)
+  -- saves prontos
+  for i, nome in ipairs({ "comeco", "metade", "completo" }) do
+    T.modal = "config"; desenhar(); U.apertar("voltar_menu"); desenhar()
+    U.apertar("menu_carregar"); desenhar()
+    ok("abre save pronto " .. nome, U.apertar("menu_pronto_" .. i) and T.tela == nil and not J.em_menu)
+    J.sem_noticias = true
+    for _ = 1, 200 do atualizar(0.1) end
+    desenhar()
+    ok("save pronto joga: " .. nome, J.estado.tempo >= 10, J.estado.tempo)
+    for _, id in ipairs({ "taverna", "arvore", "missoes", "mercadinho", "producao", "aventureiros", "invocacao" }) do
+      T.aba = id
+      ok("tela no save " .. nome .. ": " .. id, pcall(desenhar))
+    end
+    T.aba = "taverna"
+    if nome == "metade" then ok("metade tem party aberta", J.ef("party") > 0 and J.ef("mercadinho") > 0) end
+    if nome == "completo" then
+      local tudo = true
+      for _, no in ipairs(A.NOS) do if not J.no_maximo(no) then tudo = false end end
+      ok("completo tem a árvore toda", tudo)
+      ok("completo pode enfrentar o final", J.pode_final() or J.estado.final_resta ~= nil)
+      ok("completo tem 4 invocados", J.estado.invocados_feitos == 4)
+    end
+  end
+  -- recomeçar um save pronto apaga o progresso nele
+  J.estado.ouro = 12345
+  J.salvar()
+  T.modal = "config"; desenhar(); U.apertar("voltar_menu"); desenhar()
+  U.apertar("menu_carregar"); desenhar()
+  U.apertar("menu_pronto_3"); desenhar()
+  ok("save pronto guarda o progresso", J.estado.ouro > 10000 and J.estado.ouro < 20000, J.estado.ouro)
+  T.modal = "config"; desenhar(); U.apertar("voltar_menu"); desenhar()
+  U.apertar("menu_carregar"); desenhar()
+  ok("recomeçar save pronto", U.apertar("menu_pronto_refazer_3") and J.estado.ouro > 1e14, J.estado.ouro)
+  -- save estragado na vaga
+  motor._saves["jogo3.sav"] = "lixo"
+  ok("resumo de save estragado", S.resumo("jogo3.sav") == nil)
+  -- tamanhos das salas
+  local L = require("layout")
+  L.mudar_tamanho("jardim_l", 3); L.mudar_tamanho("cerv_l", 2)
+  local dx = L.desloc("cervejaria")
+  ok("cervejaria anda com o jardim", dx == 3, dx)
+  local cx = L.desloc("circulo")
+  ok("invocação anda com as duas", cx == 5, cx)
+  ok("mundo desenha salas maiores", pcall(desenhar))
+  L.restaurar()
+  J.pular_menu = true
+  motor._saves, motor._atual, motor._save = {}, false, false
+  novo()
+  J.sem_noticias = true
 end
 
 -- Jogo completo: robô chega ao final ---------------------------------------------------------------

@@ -76,7 +76,7 @@ end
 
 function J.procurar_noticia()
   local e = J.estado
-  if J.noticia or J.sem_noticias or J.editando or J.offline or e.fim then return end
+  if J.noticia or J.em_menu or J.sem_noticias or J.editando or J.offline or e.fim then return end
   for _, n in ipairs(J.NOTICIAS) do
     local no = A.POR_ID[n.id]
     if not e.noticias[n.id] and J.nivel(n.id) == 0 and J.no_liberado(no) and e.ouro >= J.custo_no(no) then
@@ -1220,7 +1220,7 @@ function J.iniciar()
   J.noticia, J.banner, J.travados, J.media_travados = nil, nil, 0, 0
   J.espera_porta = 0
   L.carregar()
-  J.carregar()
+  if not J.em_menu then J.carregar() end
   recalcular()
   J.reconstruir_lugares()
   J.ajustar_equipe()
@@ -1349,6 +1349,7 @@ end
 -- Salvar e carregar ------------------------------------------------------------------------------------
 
 function J.salvar()
+  if J.em_menu then return end   -- a taverna atrás da tela inicial não é progresso de ninguém
   -- se o início falhou, o estado está vazio: gravar agora apagaria o progresso de verdade
   if not J.pronto then return end
   -- quem sai sem coletar não perde o ganho do tempo fora

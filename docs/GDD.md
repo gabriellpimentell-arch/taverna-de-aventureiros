@@ -20,6 +20,7 @@ Tudo no jogo se faz com um toque (celular) ou um clique (desktop): não há pers
 
 - **Uma ação, um toque**: servir, contratar, comprar habilidade, coletar ouro.
 - **Sistema**: configurações (música, efeitos, tela cheia, sombras, FPS), minimizar, estatísticas, créditos, salvar, apagar progresso com confirmação e sair. Esc abre e fecha o menu.
+- **Tela inicial**: continuar, novo jogo, jogos salvos (3 vagas) e 3 saves de teste: começo, metade e tudo 100%.
 - **Novidades**: quando algo importante pode ser liberado, o jogo pausa e mostra uma tela com os benefícios e o botão para liberar.
 - **Modo de edição**: F2 ou Configurações. Move, gira e sobe cada objeto, um a um, e ajusta o tamanho do salão; as posições valem para as regras e as colisões e continuam após as atualizações.
 - **Mesmo comportamento nas duas plataformas**: o motor traduz toque e clique para a mesma ação genérica, e o Lua nunca sabe qual foi.

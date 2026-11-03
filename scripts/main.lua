@@ -13,6 +13,7 @@
 --    layout.lua   posições dos objetos (modo de edição)
 --    caminhos.lua rotas e colisões
 --    editor.lua   modo de edição
+--    saves.lua    vagas de save e saves prontos
 --    util.lua     funções de apoio
 -- =============================================================================
 
@@ -22,6 +23,8 @@ local telas = require("telas")
 function iniciar()
   math.randomseed(os.time())
   jogo.tocar_som = motor.som
+  -- abre na tela inicial; os testes pulam direto para o jogo
+  if not jogo.pular_menu then jogo.em_menu = true end
   jogo.iniciar()
   telas.iniciar()
 end

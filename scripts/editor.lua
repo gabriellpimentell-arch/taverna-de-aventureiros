@@ -53,7 +53,8 @@ end
 local function guardar()
   local copia = {}
   for id, d in pairs(L.dados) do copia[id] = { x = d.x, z = d.z, y = d.y, g = d.g } end
-  copia._tamanho = { dir = L.tamanho.dir, frente = L.tamanho.frente, fundo = L.tamanho.fundo, oeste = L.tamanho.oeste }
+  copia._tamanho = {}
+  for k, v in pairs(L.tamanho) do copia._tamanho[k] = v end
   E.desfazer[#E.desfazer + 1] = copia
   if #E.desfazer > 30 then table.remove(E.desfazer, 1) end
 end
@@ -268,12 +269,14 @@ local function seletor_categoria()
 end
 
 local LADOS = { { "dir", "Direita" }, { "frente", "Frente" }, { "fundo", "Fundo" }, { "oeste", "Esquerda" } }
+local SALAS = { { "jardim_l", "Jardim: largura" }, { "jardim_p", "Jardim: fundo" }, { "cerv_l", "Cervejaria: largura" },
+  { "cerv_p", "Cervejaria: fundo" }, { "circ_l", "Invocação: largura" }, { "circ_p", "Invocação: fundo" } }
 
-local function desenhar_tamanho()
+local function desenhar_tamanho(titulo, lados, passo)
   local y = LISTA.y + 48
-  motor.texto("Tamanho do salão", LISTA.x + 10, y, 13, cor.texto, "esquerda", true)
+  motor.texto(titulo, LISTA.x + 10, y, 13, cor.texto, "esquerda", true)
   y = y + 20
-  for _, l in ipairs(LADOS) do
+  for _, l in ipairs(lados) do
     local lado = l[1]
     local tam_lado = L.tamanho[lado]
     motor.texto(l[2] .. ": +" .. tam_lado .. " m", LISTA.x + 10, y, 13, tam_lado > 0 and cor.ouro or cor.texto, "esquerda", tam_lado > 0)
@@ -290,9 +293,11 @@ local function desenhar_tamanho()
     end
     U.botao("editor_tam_menos_" .. lado, LISTA.x + 6, y + 18, bw, 40, "-1 m", estilo(tam_lado > 0), function() muda(-1) end)
     U.botao("editor_tam_mais_" .. lado, LISTA.x + 12 + bw, y + 18, bw, 40, "+1 m", estilo(tam_lado < L.TAMANHO_MAX), function() muda(1) end)
-    y = y + 66
+    y = y + passo
   end
-  U.paragrafo("As paredes acompanham. Depois, ligue \"FPS e fluxo\" nas Configurações para medir.", LISTA.x + 10, y + 2, LISTA.w - 20, 13, cor.texto_fraco)
+  if lados == LADOS then
+    U.paragrafo("As paredes acompanham. Depois, ligue \"FPS e fluxo\" nas Configurações para medir.", LISTA.x + 10, y + 2, LISTA.w - 20, 13, cor.texto_fraco)
+  end
 end
 
 local function desenhar_lista(sob, maximo)
@@ -300,7 +305,10 @@ local function desenhar_lista(sob, maximo)
   U.zona("editor_fundo_lista", LISTA)
   seletor_categoria()
   if E.cat == "Tamanho" then
-    desenhar_tamanho()
+    desenhar_tamanho("Tamanho do salão", LADOS, 66)
+    return
+  elseif E.cat == "Salas" then
+    desenhar_tamanho("Tamanho das salas", SALAS, 62)
     return
   end
   local objetos = itens()

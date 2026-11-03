@@ -10,7 +10,7 @@ local L = {}
 
 -- cat: categoria na lista do editor. pai: o objeto acompanha outro objeto ou uma
 -- parede ("@fundo", "@oeste", "@leste", "@frente", "@canto") quando a taverna muda de tamanho.
-L.CATEGORIAS = { "Tamanho", "Móveis", "Balcão", "Paredes", "Decoração", "Áreas", "Jardim", "Cervejaria", "Círculo" }
+L.CATEGORIAS = { "Tamanho", "Salas", "Móveis", "Balcão", "Paredes", "Decoração", "Áreas", "Jardim", "Cervejaria", "Círculo" }
 L.OBJETOS = {}
 L.POR_ID = {}
 local function ob(id, nome, x, z, cat, pai)
@@ -68,7 +68,7 @@ ob("bardo", "Bardo", -5.1, -1.25, "Decoração")
 ob("barraca", "Mercadinho", 9.3, -2.2, "Áreas", "@leste")
 ob("estantes", "Estantes de venda", 9.3, -4.3, "Áreas", "@leste")
 ob("jardim", "Jardim", -3, 6.75, "Áreas", "@frente")
-ob("cervejaria", "Cervejaria", 3.5, 6.75, "Áreas", "@frente")
+ob("cervejaria", "Cervejaria", 3.5, 6.75, "Áreas", "@cerv")
 ob("circulo", "Círculo de invocação", 9.25, 6.75, "Áreas", "@canto")
 
 ob("canteiros", "Canteiros", -3.2, 6.3, "Jardim", "jardim")
@@ -94,7 +94,10 @@ ob("pilar3", "Pilar 3", 7.59, 5.51, "Círculo", "circulo")
 ob("pilar4", "Pilar 4", 10.91, 5.51, "Círculo", "circulo")
 
 -- metros acrescentados em cada lado do salão
-L.tamanho = { dir = 0, frente = 0, fundo = 0, oeste = 0 }
+local function tamanho_zero()
+  return { dir = 0, frente = 0, fundo = 0, oeste = 0, jardim_l = 0, jardim_p = 0, cerv_l = 0, cerv_p = 0, circ_l = 0, circ_p = 0 }
+end
+L.tamanho = tamanho_zero()
 L.TAMANHO_MAX = 40
 
 L.dados = {}
@@ -114,8 +117,10 @@ local function ancora(pai)
   if pai == "@fundo" then return 0, -s.fundo
   elseif pai == "@oeste" then return -s.oeste, 0
   elseif pai == "@leste" then return s.dir, 0
-  elseif pai == "@frente" then return 0, s.frente
-  elseif pai == "@canto" then return s.dir, s.frente end
+  elseif pai == "@frente" then return -s.oeste, s.frente                         -- jardim
+  elseif pai == "@cerv" then return s.jardim_l - s.oeste, s.frente               -- depois do jardim
+  elseif pai == "@canto" then return s.jardim_l + s.cerv_l - s.oeste, s.frente   -- depois da cervejaria
+  end
   return 0, 0
 end
 
@@ -160,6 +165,14 @@ function L.limitar(id)
   local z = util.limitar(wz, za - 0.5, zb + (externo and 5.3 or 0.55))
   if x ~= wx or z ~= wz then L.colocar(id, x, z) end
   d.y = util.limitar(d.y, -1, 6)
+end
+
+-- limites de cada sala (já com o tamanho escolhido), em coordenadas de origem do objeto
+function L.sala(id)
+  local s = L.tamanho
+  if id == "jardim" then return -6.5, 0.5 + s.jardim_l, 4.8, 8.7 + s.jardim_p end
+  if id == "cervejaria" then return 0.5, 6.5 + s.cerv_l, 4.8, 8.7 + s.cerv_p end
+  return 6.5, 12 + s.circ_l, 4.8, 8.7 + s.circ_p
 end
 
 function L.mudar_tamanho(lado, delta)
@@ -213,7 +226,7 @@ end
 -- as posições oficiais vêm primeiro; as editadas neste computador têm prioridade
 function L.carregar()
   L.dados = {}
-  L.tamanho = { dir = 0, frente = 0, fundo = 0, oeste = 0 }
+  L.tamanho = tamanho_zero()
   aplicar_tabela(require("layout_padrao"))
   aplicar_tabela(util.desserializar(motor.layout_carregar()))
 end
@@ -225,7 +238,7 @@ function L.restaurar(id)
     if padrao[id] then aplicar_tabela({ [id] = padrao[id] }) end
   else
     L.dados = {}
-    L.tamanho = { dir = 0, frente = 0, fundo = 0, oeste = 0 }
+    L.tamanho = tamanho_zero()
     aplicar_tabela(padrao)
   end
 end

@@ -395,10 +395,56 @@ static int l_chao(lua_State* L) {
 }
 
 // Posições editadas: ficam fora da pasta do jogo, assim sobrevivem às atualizações.
-static fs::path arquivoLayout() {
-    fs::path p = M.arquivoSave;
-    p += ".layout";
-    return p;
+static fs::path g_layout;
+static fs::path arquivoLayout() { return g_layout; }
+
+// Vagas de save: só nomes simples, sempre dentro da pasta de dados.
+static bool nomeValido(const std::string& n) {
+    if (n.empty() || n.size() > 40 || n.find("..") != std::string::npos) return false;
+    for (char c : n) {
+        if (!isalnum((unsigned char)c) && c != '_' && c != '.') return false;
+    }
+    return true;
+}
+
+static int l_usar_save(lua_State* L) {
+    std::string n = luaL_checkstring(L, 1);
+    if (nomeValido(n)) M.arquivoSave = g_layout.parent_path() / n;
+    return 0;
+}
+
+static int l_ler_save(lua_State* L) {
+    std::string n = luaL_checkstring(L, 1), d;
+    if (nomeValido(n) && lerArquivo(g_layout.parent_path() / n, d)) lua_pushlstring(L, d.data(), d.size());
+    else lua_pushnil(L);
+    return 1;
+}
+
+static int l_gravar_save(lua_State* L) {
+    std::string n = luaL_checkstring(L, 1);
+    size_t t = 0;
+    const char* d = luaL_checklstring(L, 2, &t);
+    if (!nomeValido(n)) return 0;
+    std::error_code ec;
+    fs::create_directories(g_layout.parent_path(), ec);
+    std::ofstream f(g_layout.parent_path() / n, std::ios::binary | std::ios::trunc);
+    if (f) f.write(d, (std::streamsize)t);
+    return 0;
+}
+
+static int l_apagar_save(lua_State* L) {
+    std::string n = luaL_checkstring(L, 1);
+    std::error_code ec;
+    if (nomeValido(n)) fs::remove(g_layout.parent_path() / n, ec);
+    return 0;
+}
+
+// motor.ler_asset("saves/metade.sav"): arquivos que acompanham o jogo
+static int l_ler_asset(lua_State* L) {
+    std::string n = luaL_checkstring(L, 1), d;
+    if (n.find("..") == std::string::npos && lerArquivo(M.pastaAssets / fs::u8path(n), d)) lua_pushlstring(L, d.data(), d.size());
+    else lua_pushnil(L);
+    return 1;
 }
 
 static int l_layout_salvar(lua_State* L) {
@@ -450,7 +496,9 @@ static void registrarApi(lua_State* L) {
         {"minimizar", l_minimizar}, {"sair", l_sair},
         {"alternar_tela_cheia", l_alternar_tela_cheia}, {"tela_cheia", l_tela_cheia},
         {"mouse_baixo", l_mouse_baixo}, {"roda", l_roda},
-        {"chao", l_chao},           {"layout_salvar", l_layout_salvar},
+        {"usar_save", l_usar_save}, {"ler_save", l_ler_save},
+        {"gravar_save", l_gravar_save}, {"apagar_save", l_apagar_save},
+        {"ler_asset", l_ler_asset}, {"chao", l_chao},           {"layout_salvar", l_layout_salvar},
         {"layout_carregar", l_layout_carregar}, {"copiar", l_copiar},
         {"recorte", l_recorte},     {"sombras", l_sombras},     {"som", l_som}, {"volume", l_volume},
         {nullptr, nullptr},
@@ -833,6 +881,8 @@ int main() {
     M.arquivoSave = pastaDeDados() / "progresso_v2.sav";  // o save do jogo 2D fica intacto
     if (const char* teste = getenv("TAVERNA_TESTE")) M.arquivoTeste = teste;
     if (const char* save = getenv("TAVERNA_SAVE")) M.arquivoSave = save;
+    g_layout = M.arquivoSave;
+    g_layout += ".layout";
 
     M.fonteNormal = carregarFonte(M.pastaAssets / "fontes" / "Poppins-Regular.ttf");
     M.fonteNegrito = carregarFonte(M.pastaAssets / "fontes" / "Poppins-Bold.ttf");

@@ -8,6 +8,8 @@ local raiz, parte, semente, arquivo = arg[1], tonumber(arg[2]), tonumber(arg[3])
 package.path = raiz .. "/scripts/?.lua;" .. raiz .. "/tests/?.lua;" .. package.path
 require("motor_falso")
 dofile(raiz .. "/scripts/main.lua")
+require("jogo").pular_menu = true
+motor._raiz = raiz
 
 local J = require("jogo")
 local T = require("telas")
