@@ -52,7 +52,7 @@ local n = {
   { id = "canteiro", pai = "jardim", ramo = "bebidas", p = 3, l = -2, nome = "Mais canteiros", desc = "+1 canteiro", custo = 2500, mult = 3, max = 8, ef = { canteiros = 1 } },
   { id = "adubo", pai = "jardim", ramo = "bebidas", p = 3, l = -1, nome = "Adubo", desc = "Colheitas rendem +30%", custo = 5000, mult = 3.2, max = 8, ef = { x_colheita = 1.3 } },
   { id = "irrigacao", pai = "canteiro", ramo = "bebidas", p = 4, l = -2, nome = "Irrigação", desc = "As plantas crescem 15% mais rápido", custo = 16000, mult = 3, max = 6, ef = { x_ciclo = 0.85 } },
-  { id = "cervejaria", pai = "cardapio", ramo = "bebidas", p = 2, l = 1, req = "cozinha", nome = "Cervejaria", desc = "Faz a própria cerveja: a bebida custa bem menos", custo = 1800, mult = 5, max = 6, ef = { a_cerveja = 1, bebida_casa = 1 } },
+  { id = "cervejaria", pai = "cardapio", ramo = "bebidas", p = 2, l = 1, req = "cozinha", nome = "Cervejaria", desc = "Faz a própria cerveja: a bebida custa bem menos", custo = 1200, mult = 5, max = 6, ef = { a_cerveja = 1, bebida_casa = 1 } },
   { id = "especiais", pai = "cervejaria", ramo = "bebidas", p = 3, l = 1, nome = "Pratos especiais", desc = "Pedidos rendem +25%", custo = 2000000, mult = 4, max = 8, ef = { x_pedido = 1.25 } },
 
   -- GUILDA -----------------------------------------------------------------------------------

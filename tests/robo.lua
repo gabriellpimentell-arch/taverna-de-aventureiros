@@ -8,6 +8,9 @@ local R = {}
 local CHAVE = { "fornecedor", "cozinha", "cervejaria", "prateleira", "mercadinho", "jardim", "rank_e", "merc_e", "rank_d", "cozinha", "cozinheiro", "cervejaria", "merc_d", "rank_c", "recrutador", "merc_c", "venda", "rank_b", "party", "merc_b", "rank_a", "heroi", "propaganda", "merc_a", "rank_s", "invocacao", "merc_s", "rank_ss", "merc_ss" }
 
 local function comprar_melhor()
+  -- como uma pessoa: sem despensa e sem fornecedor, guarda o ouro para ela
+  local em = J.estado.mantimentos
+  if em and J.ef("fornecedor") < 1 and (em.comida < 3 or em.bebida < 3) then return false end
   local rps = math.max(J.estado.rps, 1)
   -- na reta final, guarda ouro para invocar os heróis
   if J.invocacao_aberta() and J.estado.invocados_feitos < 4 then return false end

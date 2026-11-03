@@ -1075,6 +1075,13 @@ local function janela_noticia()
     U.botao("noticia_depois", x + 312, y + h - 76, 168, 54, "Depois", { cor = "#4a3627", cor_texto = cor.texto }, function() J.noticia = nil end)
     return
   end
+  if n.id == "historia" then
+    U.botao("noticia_emprestimo", x + w / 2 - 150, y + h - 76, 300, 54, "Pegar o empréstimo", { tam = 17, som = "compra" }, function()
+      J.pegar_emprestimo()
+      J.noticia = nil
+    end)
+    return
+  end
   local no = A.POR_ID[n.id]
   local custo = J.custo_no(no)
   local rotulo_custo = "Custa " .. fmt(custo) .. " de ouro"

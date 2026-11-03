@@ -7,3 +7,4 @@ dist/
 build/
 .testes/
 !assets/saves/*.sav
+.claude/worktrees/

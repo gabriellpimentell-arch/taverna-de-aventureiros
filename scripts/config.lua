@@ -20,10 +20,10 @@ C.velocidade_pessoa = 2.6
 C.divida_inicial = 200
 C.emprestimo = 40
 C.juros_emprestimo = 1.25      -- quanto se deve por ouro emprestado
-C.parcela_divida = 0.2         -- parte de cada ganho que vai direto para o agiota
+C.parcela_divida = 0.15        -- parte de cada ganho que vai direto para o agiota
 C.lote_mantimentos = 10
-C.fracao_comida = { comprada = 0.5, cozinha = 0.35, jardim = 0.2 }
-C.fracao_bebida = { comprada = 0.4, cervejaria = 0.25, jardim = 0.1 }
+C.fracao_comida = { comprada = 0.4, cozinha = 0.25, jardim = 0.1 }
+C.fracao_bebida = { comprada = 0.3, cervejaria = 0.2, jardim = 0.05 }
 
 -- Equipe -------------------------------------------------------------------------
 C.garcom_intervalo = 4.0

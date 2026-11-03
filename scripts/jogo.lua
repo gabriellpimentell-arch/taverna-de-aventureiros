@@ -297,7 +297,8 @@ function J.pode_emprestimo()
   if (e.emprestimos or 0) == 0 then return true end
   -- socorro: sem ouro para comprar nem comida para vender, o jogo não pode travar
   local m = e.mantimentos
-  return m.comida < 1 and m.bebida < 1 and e.ouro < J.preco_mantimento("bebida") * C.lote_mantimentos
+  local lote = J.ef("fornecedor") > 0 and 1 or C.lote_mantimentos
+  return m.comida < 1 and m.bebida < 1 and e.ouro < J.preco_mantimento("bebida") * lote
 end
 
 function J.pegar_emprestimo()
