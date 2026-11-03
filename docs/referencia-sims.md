@@ -50,6 +50,52 @@ Especificação para `scripts/editor.lua` e `scripts/layout.lua`. "Lá" vem das 
 - Cada arrasto inteiro é um Desfazer; manter a pilha de 30 passos. Salvar ao soltar, nunca a cada quadro. Testar save estragado, item removido após atualização e encolher com móvel na faixa que sumiu.
 ## Evitar
 - Pressão longa para mover; botão de modo para mover ou vender; confirmar cada ação; item que some ao encolher; custo ou regras de adjacência entre cômodos, como em [7].
+## Fase 2: obras durante o jogo (proposta, ainda não testada)
+Onde houver conflito, esta seção vale mais que as acima: agora há custo em ouro e nem tudo acontece em um modo separado. Números são pontos de partida a calibrar.
+### Base técnica: o que impede hoje
+- `J.editando` pausa o jogo, `J.previa` mostra coisas não compradas, `E.fechar` chama `M.iniciar` (zera a câmera), e `J.aplicar_layout` faz `J.pessoas = {}` (expulsa todo mundo). Obras não podem usar nenhum dos quatro.
+- Criar `J.aplicar_obra`: atualiza mesas, porta, quadro e barraca, reconstrói lugares e mapa, mantém `l.dono` quando o lugar continua existindo, recalcula rotas e tira da parede quem ficou preso. É o maior risco desta fase.
+- Abrir a aba Obras mostra alças e caminhos para mover salas, com o jogo rodando. Fechar a aba esconde tudo, sem tela de carregamento.
+### 1. Puxar parede pagando ouro
+- Lá: seta na parede para puxar ou empurrar [1]; móvel junto à parede vai com ela [8]; material é cobrado ou reembolsado [1]; no FreePlay, verde ou vermelho, preço na tela e confirmação [7]. Nas fontes, não confirmei como The Sims 4 mostra o preço durante o arrasto.
+- Aqui: durante o arrasto só um fantasma anda (retângulo no chão e parede translúcida); `L.mudar_tamanho` roda ao soltar. Etiqueta junto à alça, sem ficar sob o dedo: "+3 m · 450 ouro" ou "-2 m · +100 ouro".
+- Sem ouro: o fantasma para no último metro pago, com "faltam 120", vermelho e sem cobrança. Ouro é conferido de novo ao soltar, pois o jogo segue rodando.
+- Preço: por m² de diferença, crescendo com a área total da construção, como as cópias que encarecem em [14]. Exemplo: `preco_m2 = base * (1 + area_total / 100)`.
+- Reembolso: 50% do valor pago ao encolher, em ordem inversa da compra (guardar `L.pago_obras`). Encolher abaixo do tamanho original devolve 0. Assim, crescer e encolher nunca dá lucro.
+- Desfazer: devolve 100% só nas últimas ações da aba aberta. `guardar` e `E.voltar` precisam registrar a diferença de ouro, nunca restaurar o saldo: o jogo continua ganhando e gastando.
+- Objetos no caminho: lá vão para o inventário [1]. Aqui, `L.limitar` empurra para dentro e `d.orig` tenta devolver. Pintar de âmbar, no fantasma, o que vai ser empurrado. Se não couber sem sobrepor, ainda empurra: pessoas atravessam móveis por escolha (`historico-de-bugs.md`).
+- Mesa ocupada empurrada: cliente acompanha o lugar. Parede que cruzaria pessoa: quem está ali anda até a célula livre mais próxima.
+- Bug conhecido a resolver antes: balcão e estantes não acompanham o fundo ao recuar (`historico-de-bugs.md`).
+- A nota "`L.mudar_tamanho` limita a 0..40" acima está velha: já aceita negativo via `minimo(lado)`.
+### 2. Mover salas inteiras
+- Lá: seleciona-se o cômodo e ele vai inteiro, com móveis, revestimentos, portas e janelas entre cômodos [1]. Cômodo também gira [8][11]. Colocar sobre objetos manda-os para o inventário e ajusta o custo do material [1]. Peça aceita ou recusada: ladrilhos verdes ou vermelhos [13]. Mover coluna cobrada como compra nova é relatado como defeito [9]: mover não deve pedir fundos.
+- Aqui: botão Mover na sala selecionada, sem pressão longa. Arrastar leva só o fantasma da sala (contorno e piso), em passos de 1 m; ao soltar em verde, a sala vai com seus filhos e `J.aplicar_obra` roda.
+- Dados: `cursor` calcula a fileira e o buraco é fechado sozinho. Trocar por `L.pos_sala[id] = { x, z }` salvo; em save antigo, gravar a posição atual na primeira carga, para nada saltar. `ancora`, `sala_mundo`, `recuo_externo` e `limites_externos` passam a usá-lo. Salão: `L.salao` ganha um deslocamento, somado também aos objetos sem `pai`.
+- Vermelho, com motivo na etiqueta: sobrepõe outra sala; não encosta em nada (sem acesso); parede comum menor que 2 m (`LARG_PORTA` 1,4 + folgas de 0,3); fecha a porta de entrada `porta`.
+- Soltar em vermelho: volta ao lugar anterior. Mover é grátis (a confirmar com o dono). Decoração solta no destino é empurrada para fora, não some.
+- Portas: geradas, não posicionadas. Depois de soltar, cada vizinho ganha uma porta no centro do maior trecho de parede comum; `casca_sala` hoje tem porta fixa à esquerda e precisa receber os vãos por parâmetro; `porta_x` sai.
+- Evitar girar salas na primeira versão. `casca_sala` não tem paredes de frente nem direita, porque a câmera é fixa; girar poria parede na frente da cena. Girar continua valendo para móveis. A porta gerada elimina o principal motivo de girar a sala.
+- Mapa e rotas (`J.montar_mapa`): depois de mover, testar `J.lugares_sem_rota`; se aparecer lugar sem rota, avisar e permitir Desfazer.
+### 3. Catálogo e loja
+- Lá: seções por função [2][3]; ladrilhos verdes ou vermelhos, com a compra ao soltar [13]; Shift repete sem reabrir o catálogo [4][13]; itens perdem valor com o tempo [13]. No celular, depósito guarda o que sai e não vende [15].
+- Aqui, 960x540: barra lateral direita com 240 de largura (25% da tela). Trilho de 60 com até 6 categorias de 60 de altura, ao lado de 2 colunas de cartões 84x84 com rolagem. Cartão: miniatura, nome curto e preço. Sem ouro: fica à vista, com preço em vermelho. Fechada, sobra um botão de 60x60.
+- Duas formas de comprar. Arrastar do cartão para a cena: ao soltar em verde, compra. Tocar no cartão: a barra se recolhe, o fantasma nasce em lugar livre perto do centro e aparece uma barra com Confirmar, Girar e Cancelar. Em tela de toque, tocar sem querer nunca gasta ouro.
+- Fantasma: modelo translúcido e pegada verde ou vermelha, levantado 60 unidades acima do dedo para ficar visível. Vermelho nunca cobra.
+- Repetir: depois de Confirmar, nasce outro fantasma ao lado e a barra troca para Mais um, Girar e Pronto. No PC, Shift faz o mesmo. Para quando o ouro acaba ou chega em `L.MAX_EXTRAS`, avisando o motivo.
+- Devolver: botão Devolver na barra do item, em uma ação e com Desfazer. 100% na mesma aba aberta, 50% depois. Salvar o `pago` em cada extra (`L.adicionar` e `L.texto`), pois o preço de catálogo muda. Sem depreciação diária nem depósito: em um incremental isso só cria trabalho.
+- Devolver, repetir e mover nunca atingem os protegidos: `L.removivel` continua valendo. Item da árvore aparece no catálogo só como "Compre na árvore", com atalho para lá.
+### 4. Andares e subsolo
+- Lá: botões na tela e Page Up/Page Down trocam o andar [11][12]; botões separados mudam a vista das paredes [12]. Escada liga de baixo para cima, exige espaço e abre o vão no piso [10]. Subsolo: até 2 níveis, feito com ferramenta própria ou descendo um nível [10][16].
+- Aqui: três botões de 60x60 na borda esquerda, centralizados em altura (+1, Térreo, Subsolo); o atual fica aceso. Teclado: Page Up e Page Down. Limite inicial de -1 a +1. Andar sem acesso aparece como cadeado com o preço.
+- Truque da câmera: desenhar sempre o andar ativo em y = 0 e omitir os demais. `motor.chao`, `motor.projetar`, alças e toque seguem iguais, e a câmera nunca se move. Na troca, deslizar 4,5 m e esmaecer em 0,2 s; o andar de baixo pode aparecer só como sombra da pegada.
+- Paredes: sem seletor de vistas. A casca já corta frente e direita, e isso serve em todo andar. Fundo e esquerda só baixam (1,2 m) enquanto há arrasto perto delas ou item atrás delas.
+- Jogo em outro andar continua: pontinho no botão quando há ouro para coletar, pedido ou alerta. Trocar de andar nunca pausa.
+- Escada: item de 2x3 m, comprado no catálogo e colocado de baixo para cima; ocupa a mesma pegada nos dois andares; verde só se couber nos dois. Toque na escada dá atalho para o outro andar. Os `quartos`, que já têm escada desenhada, são o primeiro uso natural.
+- Dados: `andar` em sala, objeto e pessoa; `Cam` com um mapa por andar; rota entre andares passa pela escada mais próxima. Pessoa na escada é teleporte com fade na primeira versão.
+- Regras: andar de cima precisa estar sobre sala existente. Subsolo livre, com paleta escura e sem janelas (bom para Cervejaria e Invocação, a confirmar). Excluir escada só com o andar vazio.
+- Ordem sugerida: entregar 1, 3 e 2 primeiro. O 4 mexe em rotas e desenho: fazer por último, começando com um único andar extra sem clientes.
+### Evitar nesta fase
+- Pausar o jogo para obras; expulsar clientes; cobrar antes de soltar ou confirmar; reembolso que dê lucro; restaurar saldo no Desfazer; mover ou alterar salas sem mostrar antes o resultado; `J.previa` ligado com o jogo rodando.
 ## Fontes
 1. [Carl's Sims 4 Guide: Building Basics](https://www.carls-sims-4-guide.com/tutorials/building/houses.php)
 2. [The Sims Wiki: Build mode (The Sims 4)](https://www.thesimswiki.com/wiki/Build_mode_(The_Sims_4))
@@ -58,3 +104,12 @@ Especificação para `scripts/editor.lua` e `scripts/layout.lua`. "Lá" vem das 
 5. [Twinfinite: mover móveis em The Sims Mobile](https://twinfinite.net/?p=337137)
 6. [Twinfinite: girar móveis em The Sims Mobile](https://twinfinite.net/?p=290899)
 7. [The Girl Who Games: FreePlay, redimensionar e apagar cômodos](https://thegirlwhogames.blog/2014/07/05/the-sims-freeplay-building-deleting-and-resizing-rooms/)
+8. [Platinum Simmers: The Sims 4, cômodos como objetos](https://www.platinumsimmers.com/articles/the-sims-4-build-mode-frustrations-are-gone)
+9. [Fórum EA: mover coluna exige fundos (relato de defeito)](https://forums.ea.com/idea/the-sims-4-bug-reports-en/build-mode-prevents-moving-columns-without-sufficient-funds/13315315)
+10. [Carl's Sims 4 Guide: escadas e subsolos](https://carls-sims-4-guide.com/tutorials/building/stairs-basements.php)
+11. [Carl's Sims 4 Guide: controles](https://carls-sims-4-guide.com/controls.php)
+12. [Fórum EA: alternar vistas de parede](https://forums.ea.com/discussions/the-sims-4-gameplay-en/how-do-i-switch-between-wall-views/8663011)
+13. [StrategyWiki: The Sims 2, Buy Mode](https://strategywiki.org/wiki/The_Sims_2/Buy_Mode)
+14. [Gamepressure: The Sims Mobile, Build mode](https://www.gamepressure.com/the-sims-mobile/build-mode/z9ac3b)
+15. [Gamepressure: The Sims Mobile, Featured and Storage](https://www.gamepressure.com/the-sims-mobile/featured-and-storage/zaac3c)
+16. [EA: dicas de subsolo em The Sims 4](https://www.ea.com/en/games/the-sims/the-sims-4/news/basement-tips)
