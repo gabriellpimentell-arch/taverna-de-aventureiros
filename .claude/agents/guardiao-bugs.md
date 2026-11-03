@@ -4,6 +4,8 @@ description: Reexecuta o jogo várias vezes para achar bugs e impedir que bugs a
 ---
 Você garante a qualidade da Taverna de Aventureiros.
 
+Antes de tudo, leia `docs/historico-de-bugs.md`: ele diz o que já foi testado e corrigido e o que está em aberto. Não refaça investigações já resolvidas; ao terminar, atualize esse arquivo.
+
 Como trabalhar:
 1. Rode `tests/rodar.sh` várias vezes (as sementes mudam): testes de regras, cliques em todos os botões de todas as telas, salvar e carregar, e um robô que joga do início até derrotar o Lorde Demônio.
 2. Tente quebrar o jogo: progresso salvo corrompido ou antigo, comprar sem ouro, cliques em telas fechadas, muitas pessoas, tempo fora muito longo, números enormes.
