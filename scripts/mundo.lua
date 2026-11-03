@@ -1648,16 +1648,23 @@ end
 
 local function equipe_fixa()
   local g = J.gerente
-  if g and not J.gerente_na_guilda() then
+  if g and J.gerente_na_guilda() then
+    -- virou chefe da guilda: fica sentado na sala dele, de enfeite
+    if L.andar_de("sala_guilda") == L.andar_ativo then
+      grupo("cadeira_guilda")
+      M.boneco({ x = 53, z = -3, giro = 0, fase = 0, sentado = true, y = 0.42, pele = "#d8a06e", tipo = T_GERENTE, chapeu = "#3a2a20" })
+      grupo(nil)
+    end
+  elseif g and L.andar_ativo == 0 then
     M.boneco({ x = g.x, z = g.z, giro = g.giro, fase = g.fase, andando = g.andando, pele = "#d8a06e", tipo = T_GERENTE, chapeu = "#3a2a20" })
   end
   local m = J.moco
-  if m and m.visivel then
+  if m and m.visivel and L.andar_ativo == 0 then
     M.boneco({ x = m.x, z = m.z, giro = m.giro, fase = m.fase, andando = m.andando, pele = "#e0ac7e", tipo = T_MOCO, levando = m.leva })
   end
   -- prato pronto na ponta do balcão esperando o garçom
   for _, w in ipairs(J.garcons or {}) do
-    if w.estado == "buscando" then
+    if w.estado == "buscando" and L.andar_ativo == 0 then
       grupo("balcao")
       cilindro(0.45, 1.13, -2.2, 0.34, 0.04, "#efe6d2")
       esfera(0.45, 1.2, -2.2, 0.2, "#c98a4e", 0.12)

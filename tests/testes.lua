@@ -2646,7 +2646,7 @@ do
     porta = { x = 0, z = -1, y = 0, g = 0 }, _tamanho = { frente = 2, fundo = 1 } })
   J.previa = false
   novo()
-  abre("cozinha")
+  abre("cozinha", "jardim")
   ok("antigo: mesa onde estava", perto(L.dados.mesa1.x, 1))
   local aj, ajz = L.pos_sala("jardim")
   local ax, _, _, az1 = L.salao()

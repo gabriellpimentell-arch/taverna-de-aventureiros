@@ -985,22 +985,48 @@ local function atualizar_gerente(g, dt)
   end
 end
 
--- o moço vai e volta entre a cozinha e o balcão com os pratos
+-- o moço vai até a porta da cozinha (ou a escada, se ela estiver em outro andar), some lá dentro e volta com o prato
+local function porta_cozinha()
+  if L.andar_de("cozinha") == 0 then
+    for _, d in ipairs(L.portas(0)) do
+      if (d.dono == "cozinha" and d.vizinho == "taverna") or (d.dono == "taverna" and d.vizinho == "cozinha") then
+        local xa, xb, za, zb = L.salao()
+        if d.eixo == "x" then return d.c, util.limitar(d.plano, za + 0.5, zb - 0.5) end
+        return util.limitar(d.plano, xa + 0.5, xb - 0.5), d.c
+      end
+    end
+  end
+  return L.t("quartos", -4.6, -3)
+end
+
 local function atualizar_moco(m, dt)
   if J.ef("moco") < 1 or not L.aberta("cozinha") then m.visivel = false; return end
+  if m.na_cozinha then
+    m.visivel = false
+    m.t = (m.t or 0) - dt
+    if m.t <= 0 then
+      m.na_cozinha, m.leva, m.indo = false, true, false
+      m.visivel = true
+      local x, z = L.t("balcao", 2.5, -3.25)
+      if Cam.rota(m.x, m.z, x, z) then J.caminho(m, x, z) end
+    end
+    return
+  end
   m.visivel, m.andando = true, true
   if seguir_rota(m, dt, 3) then
     m.andando = false
     m.t = (m.t or 0) - dt
     if m.t <= 0 then
-      m.t = 1.5
-      m.na_cozinha = not m.na_cozinha
-      m.leva = m.na_cozinha == false
-      local x, z
-      if m.na_cozinha then x, z = L.t("mesa_preparo", 15, -0.1)
-      else x, z = L.t("balcao", 6.2, -3.25) end
-      -- sem porta até lá (a cozinha pode estar em outro andar), ele espera no lugar
-      if Cam.rota(m.x, m.z, x, z) then J.caminho(m, x, z) else m.na_cozinha = not m.na_cozinha end
+      if m.indo then
+        m.na_cozinha, m.t = true, 2
+      else
+        m.t, m.leva = 1, false
+        local x, z = porta_cozinha()
+        if Cam.rota(m.x, m.z, x, z) then
+          m.indo = true
+          J.caminho(m, x, z)
+        end
+      end
     end
   end
 end
