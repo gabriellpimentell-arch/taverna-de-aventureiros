@@ -360,6 +360,23 @@ end
 -- Monta os caminhos desviando dos objetos; se não houver saída, a pessoa atravessa
 function J.caminho(p, x, z)
   local r = Cam.rota(p.x, p.z, x, z)
+  if not r then
+    -- empurrado para dentro de um móvel: sai pelo ponto livre mais próximo e segue a rota dali
+    for raio = 0.3, 0.6, 0.3 do
+      for k = 0, 7 do
+        local a = k * math.pi / 4
+        local ax, az = p.x + math.cos(a) * raio, p.z + math.sin(a) * raio
+        if not Cam.bloqueado(ax, az) then
+          r = Cam.rota(ax, az, x, z)
+          if r then
+            table.insert(r, 1, { x = ax, z = az })
+            break
+          end
+        end
+      end
+      if r then break end
+    end
+  end
   p.sem_rota = not r
   p.fantasma = not r or nil
   if not r then

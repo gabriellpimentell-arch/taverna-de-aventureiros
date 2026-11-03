@@ -65,7 +65,8 @@ local function jogar_contratados()
   if J.pode_final() then J.iniciar_final() end
 end
 
-function R.jogar(limite_horas, passo, marcos)
+-- cada(t): chamada a cada passo; se devolver true, o robô para ali
+function R.jogar(limite_horas, passo, marcos, cada)
   passo = passo or 0.25
   local t, marcado = 0, {}
   while not J.estado.fim and t < limite_horas * 3600 do
@@ -84,6 +85,7 @@ function R.jogar(limite_horas, passo, marcos)
       while comprar_melhor() do end
       jogar_contratados()
     end
+    if cada and cada(t) then break end
     if marcos then
       for _, m in ipairs(marcos) do
         if not marcado[m] and J.nivel(m) > 0 then

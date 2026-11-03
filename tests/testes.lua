@@ -1435,6 +1435,29 @@ do
   limpa_layout()
 end
 
+-- Achados pelos robôs das duas metades: toda a frente da barraca é alcançável,
+-- e quem for empurrado para dentro de um móvel consegue sair
+do
+  motor._layout = false
+  novo()
+  libera("prateleira", "mercadinho", "mesa", "mesa", "mesa", "mesa", "mesa")
+  for x = -1.25, 1.25, 0.25 do
+    local p = { x = J.PORTA.x, z = J.PORTA.z }
+    J.caminho(p, J.BARRACA.x + x, J.BARRACA.z)
+    ok("frente da barraca alcançável em " .. x, not p.sem_rota)
+    local q = { x = J.BARRACA.x + x, z = J.BARRACA.z }
+    J.caminho(q, J.PORTA.x, J.PORTA.z)
+    ok("sai da frente da barraca em " .. x, not q.sem_rota)
+  end
+  local m = J.POS_MESAS[1]
+  for _, d in ipairs({ { 0.7, -0.2 }, { -0.7, 0.2 }, { 0, 0.75 } }) do
+    local p = { x = m.x + d[1], z = m.z + d[2] }
+    J.caminho(p, J.QUADRO.x, J.QUADRO.z)
+    ok("quem está dentro da mesa consegue sair", not p.sem_rota)
+  end
+  novo()
+end
+
 -- Jogo completo: robô chega ao final ---------------------------------------------------------------
 if arg[3] ~= "rapido" then
   novo()

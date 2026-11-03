@@ -10,6 +10,15 @@ Memória do projeto para quem for testar o jogo. Leia antes de começar, para n�
 | Jogo inteiro pelo robô, até derrotar o Lorde Demônio | `lua5.4 tests/robo_so.lua . 40` (cerca de 6 min) | Mudou regra ou balanceamento |
 | Jogo real, com uma imagem de cada tela | `JOGO_BIN=<executável> tests/capturar.sh <pasta>` | Mudou tela ou cena |
 
+Os dois agentes de bugs dividem o jogo ao meio, na compra do Recrutador:
+
+| Agente | Parte | Comando |
+| --- | --- | --- |
+| `guardiao-bugs` | Do início até o Recrutador: taverna, missões, mercadinho e produção | `tests/parte.sh 1` |
+| `guardiao-final` | Do Recrutador até o final: contratados, parties, heróis, invocação e Lorde Demônio | `tests/parte.sh 2` |
+
+Eles trabalham ao mesmo tempo. Quando o `guardiao-bugs` corrige um bug, roda `tests/reiniciar_parte2.sh`: o `guardiao-final` recomeça da metade, porque o ponto de partida dele mudou.
+
 O GitHub repete os testes rápidos antes de cada publicação no `main`. Se falharem, a versão não é publicada.
 
 Só rode o que a mudança pode ter afetado. Os testes em `tests/testes.lua` já cobrem os bugs abaixo: não é preciso investigá-los de novo à mão, basta os testes passarem.
@@ -24,6 +33,7 @@ Só rode o que a mudança pode ter afetado. Os testes em `tests/testes.lua` já 
 
 - **Bonecos se encostando:** "bonecos quase nunca se sobrepõem" falha às vezes (69 casos em 3000 passos, limite de 60). Causa não encontrada.
 - **Por dentro da mesa:** "ninguém anda por dentro de mesa" falhou uma vez (41 casos) e não voltou em 120 sementes. Causa não encontrada. `iniciar` ressemeia pelo relógio, então a semente não reproduz a falha.
+- **Pessoa sem caminho:** os robôs das duas metades acusam isso de vez em quando (`tests/parte.sh`), quando alguém é empurrado fundo para dentro de um móvel. A pessoa atravessa o móvel para se soltar; o jogo não trava.
 - **Layout que fecha o caminho:** com a porta tapada ou móveis fechando o corredor, as pessoas atravessam os móveis. É proposital, para o jogo não travar, e o editor avisa.
 - **Editor:** balcão e estantes de venda não acompanham a parede do fundo quando ela recua.
 - **Notícia:** fechar o jogo com a tela de novidade aberta faz aquela novidade não voltar.
@@ -64,6 +74,8 @@ Só rode o que a mudança pode ter afetado. Os testes em `tests/testes.lua` já 
 - O banco direito da mesa 8 não tinha caminho, e todos cruzavam as mesas 7 e 8.
 - Com mesa ou balcão girados, o garçom parava dentro do móvel.
 - Garçons em casa ficavam presos ao lado de quem estava sentado no balcão.
+- O caixote da ala leste fechava a passagem atrás da barraca, e quem vendia ali ficava sem caminho.
+- Quem era empurrado para dentro de um móvel ficava sem caminho; agora sai pelo ponto livre mais próximo.
 - Bancos das mesas 7 e 8 a 0,2 m um do outro causavam o maior congestionamento.
 
 ### Editor e posições
