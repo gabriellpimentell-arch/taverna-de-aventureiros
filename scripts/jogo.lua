@@ -351,7 +351,6 @@ function J.montar_mapa()
     circulo(o.id, o.x, o.z, 0.43)
   end
   caixa("carga", 5.5, 4.1, 1.4, 0.8)
-  if J.ef("cozinheiro") > 0 then caixa("fogao", 0.95, -3.55, 1.1, 0.9) end
   if J.ef("bardo") > 0 then circulo("bardo", -5.1, -1.25, 0.32) end
   if J.nivel("quartos") > 0 then caixa("quartos", -4.65, -3.9, 1.4, 0.8) end
   local sa, sb, sc, sd = L.salao()

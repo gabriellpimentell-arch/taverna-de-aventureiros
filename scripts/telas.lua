@@ -1251,7 +1251,7 @@ end
 -- o toque virou pinça: sem soltar, nada de disparar o botão que estava sob o dedo
 function T.cancelar_toque()
   if T.tela then return end
-  if Ed.ativo then Ed.soltar() return end
+  if Ed.ativo then Ed.soltar(true) return end
   T.toque = nil
 end
 

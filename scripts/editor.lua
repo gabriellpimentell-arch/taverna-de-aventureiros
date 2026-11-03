@@ -1,7 +1,8 @@
 -- =============================================================================
---  MODO DE EDIÇÃO (F2 ou Configurações)
---  Arraste os objetos direto na taverna. As posições ficam salvas neste
---  computador e continuam valendo depois das atualizações do jogo.
+--  MODO DE EDIÇÃO (F2 ou Configurações), no estilo The Sims
+--  A cena é o editor: tocar seleciona qualquer item, arrastar move, as alças das
+--  paredes mudam o tamanho. Os painéis só aparecem quando pedidos e somem ao arrastar.
+--  As posições ficam salvas no aparelho e continuam valendo depois das atualizações.
 -- =============================================================================
 
 local J = require("jogo")
@@ -13,35 +14,263 @@ local cor = util.cores
 
 local E = { ativo = false }
 
-local LISTA = { x = 8, y = 56, w = 158, h = 448 }
-local ACOES = { x = 810, y = 56, w = 142, h = 440 }
-local ITEM = U.celular() and 44 or 40   -- altura da linha (alvo de toque)
-local VISIVEIS = U.celular() and 7 or 8 -- linhas inteiras visíveis na lista
-local LISTA_TOPO = 74 -- categoria e título acima das linhas
-
--- objetos da categoria escolhida
-local function itens()
-  local l = {}
-  for _, o in ipairs(L.OBJETOS) do
-    if o.cat == E.cat then l[#l + 1] = o end
+local MAX_EXTRAS, MAX_DESFAZER = 60, 30
+-- salas inteiras: no toque, só contam se nada menor estiver perto
+local SALAS = {}
+do
+  local internas, externas = L.salas()
+  for _, lista in ipairs({ internas, externas }) do
+    for _, b in ipairs(lista) do SALAS[b.id] = true end
   end
-  return l
+end
+
+-- Medidas do toque: no celular (S24 FE deitado) 60 de tela virtual são cerca de 8 mm
+local function alvo() return U.celular() and 60 or 40 end
+local function folga() return U.celular() and 26 or 14 end       -- quão perto do item o toque ainda vale
+local function raio_alca() return U.celular() and 34 or 22 end
+local function saiu_do_toque() return U.celular() and 12 or 4 end
+local function fundo_tela() return 540 - alvo() - 8 end          -- onde começa a fileira de baixo
+local function topo_tela() return 8 + alvo() end                 -- onde termina a fileira de cima
+
+-- Caixa de cada objeto, em metros, para o toque acertar o que se vê:
+-- { meia largura, meio fundo, altura de cima, altura de baixo }
+local CAIXAS = {
+  palco = { 0.6, 0.6, 0.15 }, carga = { 0.6, 0.5, 1.0 }, carga_leste = { 0.6, 0.5, 1.0 },
+  balcao = { 2.75, 0.5, 1.1 }, barrilete = { 0.25, 0.25, 1.6, 1.1 },
+  fogao = { 0.7, 0.45, 1.3 }, cozinheiro = { 0.3, 0.3, 1.7 }, prateleira = { 2.4, 0.15, 2.6, 0.8 },
+  porta = { 0.15, 0.6, 2.4 }, lampiao_porta = { 0.15, 0.15, 2.4, 1.9 },
+  lareira = { 0.5, 0.9, 2.6 }, lenha = { 0.3, 0.3, 0.6 }, quadro = { 1.0, 0.1, 2.4, 1.2 },
+  quartos = { 0.8, 0.6, 3.0 }, vassoura = { 0.15, 0.15, 1.4 }, bardo = { 0.3, 0.3, 1.7 },
+  tapete1 = { 1.5, 1.0, 0.05 }, tapete2 = { 1.5, 1.0, 0.05 },
+  barraca = { 2.4, 1.0, 2.6 }, estantes = { 2.0, 0.4, 2.0 },
+  canteiros = { 2.5, 1.2, 0.4 }, cerca = { 3.4, 0.1, 0.8 },
+  celeiro = { 2.0, 1.8, 3.6 }, cocho = { 0.9, 0.3, 0.5 }, feno = { 0.7, 0.7, 1.0 }, cesto = { 0.3, 0.3, 0.5 },
+  panelas = { 1.0, 0.1, 2.6, 1.8 }, mesa_preparo = { 1.0, 0.5, 0.9 }, despensa = { 0.6, 0.5, 1.8 },
+  tina = { 0.65, 0.65, 1.2 }, barril_grande = { 0.7, 0.7, 1.6 }, bancada = { 0.8, 0.35, 1.0 },
+}
+local CAIXAS_NOME = {  -- família: nome sem o número no fim
+  mesa = { 0.88, 0.88, 0.8 }, vela = { 0.1, 0.1, 1.2, 0.9 }, barril = { 0.43, 0.43, 1.0 },
+  caneca = { 0.1, 0.1, 1.3, 1.1 }, garrafa = { 0.08, 0.08, 1.8, 1.4 },
+  lampiao = { 0.15, 0.15, 2.4, 1.9 }, janela = { 0.1, 0.6, 2.4, 1.2 }, flamula = { 0.25, 0.05, 3.0, 2.0 },
+  moita = { 0.35, 0.35, 0.7 }, abobora = { 0.25, 0.25, 0.35 }, barril_c = { 0.36, 0.36, 1.0 },
+  malte = { 0.3, 0.3, 0.5 }, pilar = { 0.25, 0.25, 1.0 }, arvore = { 0.7, 0.7, 3.0 }, vaca = { 0.7, 0.35, 1.1 },
+}
+local CAIXAS_EXTRA = {
+  barril = { 0.43, 0.43, 1.0 }, caixote = { 0.42, 0.42, 0.76 }, planta = { 0.25, 0.25, 1.1 }, vela = { 0.2, 0.2, 1.3 },
+  tapete = { 1.3, 0.85, 0.05 }, estante = { 0.75, 0.25, 2.0 }, banco = { 0.25, 0.25, 0.5 }, quadro = { 0.5, 0.1, 2.0, 1.2 },
+}
+
+local function caixa_de(o)
+  if o.extra then return CAIXAS_EXTRA[o.extra] or { 0.4, 0.4, 1 } end
+  return CAIXAS[o.id] or CAIXAS_NOME[o.id:gsub("%d+$", "")] or { 0.4, 0.4, 1 }
 end
 
 local function msg(t) E.mensagem, E.tempo_msg = t, 3 end
 
+-- Contorno na tela --------------------------------------------------------------------
+
+-- contorno convexo de uma lista de pontos da tela
+local function envoltoria(p)
+  table.sort(p, function(a, b) return a[1] < b[1] or (a[1] == b[1] and a[2] < b[2]) end)
+  local function giro(o, a, b) return (a[1] - o[1]) * (b[2] - o[2]) - (a[2] - o[2]) * (b[1] - o[1]) end
+  local function metade(de, ate, passo)
+    local h = {}
+    for i = de, ate, passo do
+      while #h >= 2 and giro(h[#h - 1], h[#h], p[i]) <= 0 do h[#h] = nil end
+      h[#h + 1] = p[i]
+    end
+    h[#h] = nil
+    return h
+  end
+  local h = metade(1, #p, 1)
+  for _, v in ipairs(metade(#p, 1, -1)) do h[#h + 1] = v end
+  return h
+end
+
+-- o que o objeto ocupa na tela: a caixa dele, ou o chão inteiro, se for uma sala
+local function contorno(o)
+  local p = {}
+  local function ponto(bx, bz, y)
+    local wx, wz = L.t(o.id, bx, bz)
+    local sx, sy = motor.projetar(wx, y, wz)
+    if sx then p[#p + 1] = { sx, sy } end
+  end
+  if SALAS[o.id] then
+    local xa, xb, za, zb = L.sala(o.id)
+    ponto(xa, za, 0); ponto(xb, za, 0); ponto(xb, zb, 0); ponto(xa, zb, 0)
+  else
+    local c = caixa_de(o)
+    local y = L.altura(o.id)
+    for _, sx in ipairs({ -1, 1 }) do
+      for _, sz in ipairs({ -1, 1 }) do
+        ponto(o.x + sx * c[1], o.z + sz * c[2], y + (c[4] or 0))
+        ponto(o.x + sx * c[1], o.z + sz * c[2], y + c[3])
+      end
+    end
+  end
+  if #p < 3 then return nil end
+  return envoltoria(p)
+end
+
+E.contorno = contorno
+
+-- sala ainda fechada não existe na cena, nem o que está dentro dela
+local function fechado(o)
+  local sala = SALAS[o.id] and o.id
+  local p = o
+  while not sala and p and p.pai and p.pai:sub(1, 1) ~= "@" do
+    if SALAS[p.pai] then sala = p.pai end
+    p = L.POR_ID[p.pai]
+  end
+  return sala and not L.aberta(sala)
+end
+
+local function dist_segmento(x, y, a, b)
+  local dx, dy = b[1] - a[1], b[2] - a[2]
+  local n = dx * dx + dy * dy
+  local t = n > 0 and util.limitar(((x - a[1]) * dx + (y - a[2]) * dy) / n, 0, 1) or 0
+  return util.distancia(x, y, a[1] + t * dx, a[2] + t * dy)
+end
+
+-- distância do ponto até o contorno (0 = dentro) e a área que ele ocupa na tela
+local function medir(h, x, y)
+  local dentro, menor, area = true, math.huge, 0
+  for i, a in ipairs(h) do
+    local b = h[i % #h + 1]
+    local lado = (b[1] - a[1]) * (y - a[2]) - (b[2] - a[2]) * (x - a[1])
+    if lado < 0 then dentro = false end
+    menor = math.min(menor, dist_segmento(x, y, a, b))
+    area = area + a[1] * b[2] - b[1] * a[2]
+  end
+  return dentro and 0 or menor, math.abs(area) / 2
+end
+
+-- Seleção -----------------------------------------------------------------------------
+
+-- Tudo o que está sob o ponto, de QUALQUER tipo, do melhor para o pior: mais perto
+-- vem antes e o menor desempata (vela antes da mesa). As salas só depois de tudo o mais.
+function E.candidatos(x, y)
+  local itens, salas = {}, {}
+  for _, o in ipairs(L.OBJETOS) do
+    if not L.oculto(o.id) and not fechado(o) then
+      local h = contorno(o)
+      if h then
+        local d, area = medir(h, x, y)
+        if SALAS[o.id] then
+          if d == 0 then salas[#salas + 1] = { id = o.id, nota = area } end
+        elseif d <= folga() then
+          itens[#itens + 1] = { id = o.id, nota = 1.5 * d + 0.12 * math.sqrt(area) }
+        end
+      end
+    end
+  end
+  local function por_nota(a, b)
+    if a.nota ~= b.nota then return a.nota < b.nota end
+    return a.id < b.id
+  end
+  table.sort(itens, por_nota)
+  table.sort(salas, por_nota)
+  local r = {}
+  for _, c in ipairs(itens) do r[#r + 1] = c.id end
+  for _, c in ipairs(salas) do r[#r + 1] = c.id end
+  return r
+end
+
+function E.pegar(x, y) return E.candidatos(x, y)[1] end
+
+-- a sala em que o objeto está, se ele é carregado por uma
+local function sala_de(id)
+  local o = L.POR_ID[id]
+  while o and o.pai and o.pai:sub(1, 1) ~= "@" do
+    if SALAS[o.pai] then return o.pai end
+    o = L.POR_ID[o.pai]
+  end
+end
+
+-- Alças das paredes -------------------------------------------------------------------
+
+-- Sem nada selecionado, todas à vista; com uma sala selecionada, só as dela. Com um
+-- item selecionado, nenhuma: a alça não rouba o toque de móveis junto à parede.
+function E.alcas()
+  if not L.paredes then return {} end
+  if E.sel and not SALAS[E.sel] then return {} end
+  local prefixo = E.sel and (E.sel .. "_")
+  local r = {}
+  local raio = raio_alca()
+  for _, p in ipairs(L.paredes()) do
+    if not prefixo or p.id:sub(1, #prefixo) == prefixo then
+      local sx, sy = motor.projetar(p.x, 0.1, p.z)
+      if sx then
+        -- passou da borda, encosta na borda: nunca fica debaixo dos botões
+        r[#r + 1] = { p = p, ox = sx, oy = sy,
+          x = util.limitar(sx, raio + 4, 956 - raio),
+          y = util.limitar(sy, topo_tela() + raio + 4, fundo_tela() - raio - 4) }
+      end
+    end
+  end
+  return r
+end
+
+local function alca_em(x, y)
+  local melhor, md = nil, raio_alca()
+  for _, a in ipairs(E.alcas()) do
+    local d = util.distancia(x, y, a.x, a.y)
+    if d <= md then melhor, md = a, d end
+  end
+  return melhor
+end
+
+-- Desfazer ----------------------------------------------------------------------------
+
+local function guardar()
+  local dados = {}
+  for id, d in pairs(L.dados) do dados[id] = { x = d.x, z = d.z, y = d.y, g = d.g, oculto = d.oculto } end
+  local tamanho = {}
+  for k, v in pairs(L.tamanho) do tamanho[k] = v end
+  E.desfazer[#E.desfazer + 1] = { dados = dados, _tamanho = tamanho, _extras = L.lista_extras() }
+  if #E.desfazer > MAX_DESFAZER then table.remove(E.desfazer, 1) end
+end
+
+local function mudou()
+  E.mudou = true
+  L.salvar()
+end
+
+function E.voltar()
+  local u = table.remove(E.desfazer)
+  if not u then return end
+  L.limpar_extras()
+  for _, x in ipairs(u._extras) do L.adicionar(x.tipo, x.x, x.z, x.id) end
+  L.dados = u.dados
+  L.tamanho = u._tamanho
+  if E.sel and (not L.POR_ID[E.sel] or L.oculto(E.sel)) then E.sel = nil end
+  mudou()
+  J.aplicar_visual()
+end
+
+local function acao(fn)
+  if not E.sel then return end
+  guardar()
+  fn(L.de(E.sel))
+  L.limitar(E.sel)
+  mudou()
+  J.aplicar_visual()
+end
+
+-- Abrir e fechar ----------------------------------------------------------------------
+
 function E.abrir()
   E.ativo = true
-  E.sel, E.arrasto, E.confirmar = nil, nil, false
-  E.rolagem, E.desfazer, E.grade, E.painel = 0, {}, true, true
-  E.mudou = false
-  E.cat = "Móveis"
+  E.sel, E.arrasto, E.alca, E.pan, E.confirmar, E.painel = nil, nil, nil, nil, false, nil
+  E.desfazer, E.grade, E.mudou = {}, true, false
+  E.passo_giro, E.pagina_exc, E.dica = 45, 0, true
+  E.ultimo_toque, E.mensagem, E.tempo_msg, E.camera = nil, nil, nil, nil
   J.editando, J.previa = true, true
 end
 
 function E.fechar()
   E.ativo = false
-  E.arrasto = nil
+  E.arrasto, E.alca, E.pan, E.camera = nil, nil, nil, nil
   J.editando, J.previa = false, false
   L.salvar()
   J.aplicar_layout()
@@ -57,27 +286,7 @@ function E.fechar()
   if sem > 0 then J.avisar(sem .. " lugar(es) sem caminho livre: a pessoa atravessa os móveis para chegar.", 5) end
 end
 
-local function guardar()
-  local copia = {}
-  for id, d in pairs(L.dados) do copia[id] = { x = d.x, z = d.z, y = d.y, g = d.g } end
-  copia._tamanho = {}
-  for k, v in pairs(L.tamanho) do copia._tamanho[k] = v end
-  E.desfazer[#E.desfazer + 1] = copia
-  if #E.desfazer > 30 then table.remove(E.desfazer, 1) end
-end
-
-local function mudou()
-  E.mudou = true
-  L.salvar()
-end
-
-local function acao(fn)
-  if not E.sel then return end
-  guardar()
-  fn(L.de(E.sel))
-  L.limitar(E.sel)
-  mudou()
-end
+-- Mover, excluir, adicionar -----------------------------------------------------------
 
 function E.mover_para(id, x, z)
   if E.grade then
@@ -89,42 +298,193 @@ function E.mover_para(id, x, z)
   J.aplicar_visual()
 end
 
-function E.pegar(x, y)
-  local melhor, md = nil, 34
-  for _, o in ipairs(itens()) do
-    local dx, dz = L.desloc(o.id)
-    local sx, sy = motor.projetar(o.x + dx, 0.3, o.z + dz)
-    if sx then
-      local dist = util.distancia(x, y, sx, sy)
-      if dist < md then melhor, md = o.id, dist end
+local function filhos(id)
+  local r = {}
+  for _, o in ipairs(L.OBJETOS) do
+    if o.pai == id then r[#r + 1] = o.id end
+  end
+  return r
+end
+
+function E.excluir(id)
+  if not L.removivel(id) then return false end
+  guardar()
+  -- quem está em cima sai junto: garrafa não fica flutuando sem a prateleira
+  local function tirar(i)
+    for _, f in ipairs(filhos(i)) do tirar(f) end
+    if L.removivel(i) then L.excluir(i) end
+  end
+  tirar(id)
+  if E.sel == id then E.sel = nil end
+  mudou()
+  J.aplicar_visual()
+  msg("Excluído. Desfazer traz de volta.")
+  return true
+end
+
+function E.devolver(id)
+  guardar()
+  local function por(i)
+    L.devolver(i)
+    for _, f in ipairs(filhos(i)) do por(f) end
+  end
+  por(id)
+  E.sel = id
+  mudou()
+  J.aplicar_visual()
+end
+
+function E.excluidos()
+  local r = {}
+  for _, o in ipairs(L.OBJETOS) do
+    local pai = o.pai and o.pai:sub(1, 1) ~= "@" and o.pai
+    if L.oculto(o.id) and not (pai and L.oculto(pai)) then r[#r + 1] = o end
+  end
+  return r
+end
+
+-- lugar livre mais próximo do centro da vista, para o item novo não nascer dentro de outro
+local function lugar_livre(x, z)
+  local function livre(px, pz)
+    for _, o in ipairs(L.OBJETOS) do
+      if not SALAS[o.id] and not L.oculto(o.id) then
+        local dx, dz = L.desloc(o.id)
+        if util.distancia(px, pz, o.x + dx, o.z + dz) < 0.8 then return false end
+      end
+    end
+    return true
+  end
+  if livre(x, z) then return x, z end
+  for anel = 1, 6 do
+    for i = 0, 7 do
+      local a = i * math.pi / 4
+      local px, pz = x + math.cos(a) * anel * 0.75, z + math.sin(a) * anel * 0.75
+      if livre(px, pz) then return px, pz end
     end
   end
-  return melhor
+  return x, z
+end
+
+function E.adicionar(tipo)
+  local n = 0
+  for _, o in ipairs(L.OBJETOS) do if o.extra then n = n + 1 end end
+  if n >= MAX_EXTRAS then
+    msg("Limite de " .. MAX_EXTRAS .. " itens novos. Exclua algum para pôr outro.")
+    return nil
+  end
+  guardar()
+  local cx, cz = motor.chao(480, 270)
+  local x, z = lugar_livre(cx or 0, cz or 0)
+  local o = L.adicionar(tipo, x, z)
+  if not o then
+    table.remove(E.desfazer)
+    return nil
+  end
+  E.mover_para(o.id, x, z)
+  E.sel, E.painel, E.dica = o.id, nil, false
+  mudou()
+  msg("Arraste para o lugar certo.")
+  return o.id
+end
+
+-- Toque na cena -----------------------------------------------------------------------
+
+-- a câmera recua conforme a taverna cresce: congelada no arrasto, a parede não foge do dedo
+local function congelar_camera()
+  local q = M.quadro
+  if q then E.camera = { x = q.x, z = q.z, escala = q.escala } end
+end
+
+local function comecar_arrasto(id, x, y, cands, era_sel)
+  local o = L.POR_ID[id]
+  local gx, gz = motor.chao(x, y)
+  local ax, az = L.desloc(id)
+  E.arrasto = { id = id, ox = (gx or 0) - (o.x + ax), oz = (gz or 0) - (o.z + az), moveu = false, sx = x, sy = y,
+    cands = cands, era_sel = era_sel }
+  congelar_camera()
 end
 
 function E.tocar(x, y)
-  local id = E.pegar(x, y)
-  if id then
-    E.sel = id
-    guardar()
-    local d = L.de(id)
-    local o = L.POR_ID[id]
+  E.painel, E.confirmar, E.dica = nil, false, false
+  local cands = E.candidatos(x, y)
+  local a = alca_em(x, y)
+  if a then
     local gx, gz = motor.chao(x, y)
-    local ax, az = L.desloc(id)
-    E.arrasto = { id = id, ox = (gx or 0) - (o.x + ax), oz = (gz or 0) - (o.z + az), moveu = false, sx = x, sy = y }
+    E.alca = { p = a.p, gx = gx or 0, gz = gz or 0, sx = x, sy = y, inicio = L.tamanho[a.p.chave] or 0,
+      moveu = false, cands = cands }
+    congelar_camera()
+    return
+  end
+  local atual
+  for _, id in ipairs(cands) do if id == E.sel then atual = id end end
+  local id = atual or cands[1]
+  if id then
+    local era_sel = E.sel == id
+    E.sel = id
+    comecar_arrasto(id, x, y, cands, era_sel)
   else
-    E.sel = nil
-    E.arrasto = nil
-    E.pan = { x = x, y = y }   -- arrastar o chão vazio move a câmera (com zoom)
+    E.pan = { x = x, y = y, sx = x, sy = y, moveu = false }   -- arrastar o chão vazio move a câmera (com zoom)
   end
 end
 
-function E.soltar()
-  E.pan = nil
-  if E.arrasto then
-    if E.arrasto.moveu then mudou() else table.remove(E.desfazer) end
-    E.arrasto = nil
+-- toque curto: o melhor item do ponto; de novo no mesmo ponto, o que estiver empilhado embaixo
+local function escolher(a, cx, cy)
+  local u = E.ultimo_toque
+  local mesmo = u and util.distancia(u.x, u.y, cx, cy) <= 16
+  E.ultimo_toque = { x = cx, y = cy }
+  if mesmo and a.era_sel and #a.cands > 1 then
+    for i, id in ipairs(a.cands) do
+      if id == E.sel then
+        E.sel = a.cands[i % #a.cands + 1]
+        return
+      end
+    end
   end
+  E.sel = a.cands[1]
+end
+
+function E.soltar(cancelado)
+  local p = E.pan
+  E.pan, E.camera = nil, nil
+  if p and not p.moveu and not cancelado then
+    E.sel, E.ultimo_toque = nil, nil
+  end
+  local h = E.alca
+  if h then
+    E.alca = nil
+    if h.moveu then
+      if (L.tamanho[h.p.chave] or 0) == h.inicio and h.guardou then table.remove(E.desfazer)
+      elseif h.guardou then mudou() end
+    elseif not cancelado and h.cands[1] then
+      -- tocou numa alça sem puxar, mas tinha um móvel ali: o toque era para ele
+      E.sel = h.cands[1]
+      E.ultimo_toque = { x = h.sx, y = h.sy }
+    end
+  end
+  local a = E.arrasto
+  if a then
+    E.arrasto = nil
+    if a.moveu then mudou()
+    elseif not cancelado then escolher(a, a.sx, a.sy) end
+  end
+end
+
+local function puxar_alca(h, mx, my)
+  if math.abs(mx - h.sx) + math.abs(my - h.sy) > saiu_do_toque() then h.moveu = true end
+  if not h.moveu then return end
+  local gx, gz = motor.chao(mx, my)
+  if not gx then return end
+  local andou = (h.p.eixo == "x" and gx - h.gx or gz - h.gz) * h.p.sinal
+  local passos = andou >= 0 and math.floor(andou + 0.5) or -math.floor(-andou + 0.5)
+  local alvo_m = h.inicio + passos
+  local chave = h.p.chave
+  local agora = L.tamanho[chave] or 0
+  if alvo_m ~= agora then
+    if not h.guardou then guardar(); h.guardou = true end
+    L.mudar_tamanho(chave, alvo_m - agora)
+    J.aplicar_visual()
+  end
+  h.limite = (L.tamanho[chave] or 0) ~= alvo_m
 end
 
 function E.atualizar(dt)
@@ -132,299 +492,300 @@ function E.atualizar(dt)
     E.tempo_msg = E.tempo_msg - dt
     if E.tempo_msg <= 0 then E.mensagem, E.tempo_msg = nil, nil end
   end
-  if E.arrasto and motor.mouse_baixo() then
-    local mx, my = motor.mouse()
-    local gx, gz = motor.chao(mx, my)
-    local a = E.arrasto
-    -- só um clique, sem arrastar, seleciona: não pode encaixar o objeto na grade
-    if math.abs(mx - a.sx) + math.abs(my - a.sy) > (U.celular() and 12 or 4) then a.saiu = true end
-    if gx and a.saiu then
-      E.mover_para(a.id, gx - a.ox, gz - a.oz)
-      a.moveu = true
-    end
-  elseif E.arrasto then
-    -- soltou com o mouse fora da janela
-    E.soltar()
+  if E.camera and M.quadro then
+    M.quadro.x, M.quadro.z, M.quadro.escala = E.camera.x, E.camera.z, E.camera.escala
+    M.aplicar_camera()
   end
-  if E.pan and motor.mouse_baixo() then
-    local px, py = motor.mouse()
-    M.arrastar(px - E.pan.x, py - E.pan.y)
-    E.pan.x, E.pan.y = px, py
+  local baixo = motor.mouse_baixo()
+  local mx, my = motor.mouse()
+  if E.alca then
+    if baixo then puxar_alca(E.alca, mx, my) else E.soltar() end
+  elseif E.arrasto then
+    if baixo then
+      local gx, gz = motor.chao(mx, my)
+      local a = E.arrasto
+      -- só um clique, sem arrastar, seleciona: não pode encaixar o objeto na grade
+      if math.abs(mx - a.sx) + math.abs(my - a.sy) > saiu_do_toque() then a.saiu = true end
+      if gx and a.saiu then
+        if not a.moveu then guardar() end
+        E.mover_para(a.id, gx - a.ox, gz - a.oz)
+        a.moveu = true
+      end
+    else
+      E.soltar()   -- soltou com o mouse fora da janela
+    end
   elseif E.pan then
-    E.pan = nil
+    if baixo then
+      if math.abs(mx - E.pan.sx) + math.abs(my - E.pan.sy) > saiu_do_toque() then E.pan.moveu = true end
+      if E.pan.moveu then M.arrastar(mx - E.pan.x, my - E.pan.y) end
+      E.pan.x, E.pan.y = mx, my
+    else
+      E.soltar()
+    end
   end
   local r = motor.roda()
-  if r ~= 0 then
-    local mx = motor.mouse()
-    if E.painel and mx < LISTA.x + LISTA.w then E.rolagem = E.rolagem - r * ITEM
+  if r ~= 0 and not E.arrasto and not E.alca then
+    if E.painel == "excluidos" and mx < 340 then E.pagina_exc = E.pagina_exc - (r > 0 and 1 or -1)
     else M.rolar(r) end
   end
 end
 
-local function botao(id, y, texto, fn, o)
-  U.botao(id, ACOES.x + 8, y, ACOES.w - 16, 40, texto, o or { cor = "#4a3627", cor_texto = cor.texto, tam = 14 }, fn)
-end
+-- Desenho na cena ---------------------------------------------------------------------
 
-local function pill(txt, tam)
-  local cx = (LISTA.x + LISTA.w + ACOES.x) / 2
-  local w = motor.largura_texto(txt, tam, true) + 28
-  return cx, w
-end
-
--- nome do objeto junto do marcador, sempre dentro da área livre da tela
-local function etiqueta(nome, sx, sy, destaque)
-  local w = motor.largura_texto(nome, 14, true) + 20
-  local esq, dir = 8, 952
-  if E.painel and not E.arrasto then esq, dir = LISTA.x + LISTA.w + 6, ACOES.x - 6 end
-  local x = util.limitar(sx - w / 2, esq, math.max(esq, dir - w))
-  local y = sy - 46
-  if y < 52 then y = sy + 20 end
+local function etiqueta(texto, sx, sy, destaque)
+  local w = motor.largura_texto(texto, 14, true) + 20
+  local x = util.limitar(sx - w / 2, 8, 952 - w)
+  local y = util.limitar(sy - 36, 8, 504)
   motor.retangulo(x, y, w, 28, destaque and cor.ouro or "#21150ef5", 8)
-  motor.texto(nome, x + w / 2, y + 5, 14, destaque and cor.texto_ouro or "#ffffff", "centro", true)
+  motor.texto(texto, x + w / 2, y + 5, 14, destaque and cor.texto_ouro or "#ffffff", "centro", true)
 end
 
--- o que está sob o mouse: linha da lista ou marcador da cena
-local function achar_sob_mouse()
-  if motor.plataforma ~= "desktop" or E.arrasto then return nil end
+local function destacar(id, forte)
+  local o = L.POR_ID[id]
+  local h = o and contorno(o)
+  if not h then return end
+  local topo, cx, n = math.huge, 0, 0
+  for i, a in ipairs(h) do
+    local b = h[i % #h + 1]
+    if forte then motor.linha(a[1], a[2], b[1], b[2], 5, "#000000a0") end
+    motor.linha(a[1], a[2], b[1], b[2], forte and 3 or 2, forte and cor.ouro or "#ffffff")
+    topo = math.min(topo, a[2])
+    cx, n = cx + a[1], n + 1
+  end
+  etiqueta(o.nome, cx / n, topo, forte)
+end
+
+local function desenhar_alca(a, ativa)
+  local r = raio_alca() * 0.68
+  motor.circulo(a.x, a.y, r + 2, "#000000b0")
+  motor.circulo(a.x, a.y, r, ativa and cor.ouro or "#3d291b")
+  motor.anel(a.x, a.y, r - 2, r, cor.ouro)
+  -- setas no rumo da parede, como aparece na tela
+  local ex, ez = 0, 0
+  if a.p.eixo == "x" then ex = 1 else ez = 1 end
+  local px, py = motor.projetar(a.p.x + ex, 0.1, a.p.z + ez)
+  local dx, dy = 1, 0
+  if px then
+    local n = math.max(util.distancia(px, py, a.ox, a.oy), 0.001)
+    dx, dy = (px - a.ox) / n, (py - a.oy) / n
+  end
+  local c = ativa and cor.texto_ouro or "#ffffff"
+  local s, t = r * 0.6, r * 0.32
+  for _, l in ipairs({ 1, -1 }) do
+    local bx, by = a.x + dx * s * l, a.y + dy * s * l
+    motor.linha(a.x, a.y, bx, by, 2, c)
+    motor.linha(bx, by, bx - dx * t * l - dy * t, by - dy * t * l + dx * t, 2, c)
+    motor.linha(bx, by, bx - dx * t * l + dy * t, by - dy * t * l - dx * t, 2, c)
+  end
+end
+
+local function medida(p)
+  local v = L.tamanho[p.chave] or 0
+  return string.format("%s: %+d m", p.nome, v)
+end
+
+local function desenhar_cena_editor()
+  local alcas = E.alcas()
   local mx, my = motor.mouse()
-  if E.painel then
-    if util.dentro(mx, my, LISTA) then
-      local topo = LISTA.y + LISTA_TOPO
-      if my >= topo and my < topo + VISIVEIS * ITEM then
-        local o = itens()[math.floor((my - topo + E.rolagem) / ITEM) + 1]
-        return o and o.id
-      end
-      return nil
-    end
-    if util.dentro(mx, my, ACOES) then return nil end
+  local sob_alca
+  if motor.plataforma == "desktop" and not E.alca and not E.arrasto and not U.achar(mx, my) then
+    sob_alca = alca_em(mx, my)
   end
-  if my < 52 then return nil end
-  return E.pegar(mx, my)
+  for _, a in ipairs(alcas) do
+    local ativa = E.alca and E.alca.p.chave == a.p.chave and E.alca.p.sinal == a.p.sinal
+    if not E.alca or ativa then desenhar_alca(a, ativa or (sob_alca and sob_alca.p == a.p)) end
+    if ativa then
+      local txt = medida(a.p) .. (E.alca.limite and " (limite)" or "")
+      etiqueta(txt, a.x, a.y - raio_alca(), not E.alca.limite)
+    end
+  end
+  -- no PC, o que está sob o mouse aparece antes do clique
+  if motor.plataforma == "desktop" and not E.arrasto and not E.alca and not E.pan and not sob_alca and my > topo_tela() then
+    local sob = E.pegar(mx, my)
+    if sob and sob ~= E.sel and not U.achar(mx, my) then destacar(sob, false) end
+  end
+  if E.sel and L.POR_ID[E.sel] then destacar(E.sel, true) end
 end
 
-local function desenhar_marcadores(sob)
-  local function posicao(o)
-    local dx, dz = L.desloc(o.id)
-    return motor.projetar(o.x + dx, 0.3, o.z + dz)
-  end
-  for _, o in ipairs(itens()) do
-    if o.id ~= E.sel and o.id ~= sob then
-      local sx, sy = posicao(o)
-      if sx then
-        motor.circulo(sx, sy, 6, "#000000b0")
-        motor.circulo(sx, sy, 4, cor.ouro)
-      end
-    end
-  end
-  if E.sel then
-    local o = L.POR_ID[E.sel]
-    local sx, sy = posicao(o)
-    if sx then
-      motor.circulo(sx, sy, 10, cor.ouro)
-      motor.anel(sx, sy, 10, 13, "#ffffff")
-      etiqueta(o.nome, sx, sy, true)
-    end
-  end
-  if sob and sob ~= E.sel then
-    local o = L.POR_ID[sob]
-    local sx, sy = posicao(o)
-    if sx then
-      motor.circulo(sx, sy, 8, "#ffffff")
-      motor.anel(sx, sy, 8, 11, cor.ouro)
-      etiqueta(o.nome, sx, sy, false)
-    end
-  end
+-- Painéis -----------------------------------------------------------------------------
+
+local ESC = { cor = "#4a3627", cor_texto = cor.texto, tam = 14 }
+local function estilo(ativo)
+  return { ativo = ativo, cor = ativo and "#4a3627" or "#2a2019", cor_texto = ativo and cor.texto or cor.texto_fraco, tam = 14 }
+end
+local function alternar(nome)
+  E.painel = E.painel ~= nome and nome or nil
+  E.confirmar = false
 end
 
--- rolagem sempre em linhas inteiras, para nenhum nome aparecer cortado
-local function ajustar_rolagem()
-  local alt = VISIVEIS * ITEM
-  if E.sel ~= E.sel_visto then
-    E.sel_visto = E.sel
-    for i, o in ipairs(itens()) do
-      if o.id == E.sel then
-        if (i - 1) * ITEM < E.rolagem then E.rolagem = (i - 1) * ITEM
-        elseif i * ITEM > E.rolagem + alt then E.rolagem = i * ITEM - alt end
-      end
-    end
-  end
-  local maximo = math.max(0, #itens() * ITEM - alt)
-  E.rolagem = util.limitar(math.floor(E.rolagem / ITEM + 0.5) * ITEM, 0, maximo)
-  return maximo
-end
-
--- escolha do que editar: uma categoria de objetos ou o tamanho da taverna
-local function seletor_categoria()
-  local w = (LISTA.w - 18) / 2
-  local function trocar(delta)
-    local n = #L.CATEGORIAS
-    for i, c in ipairs(L.CATEGORIAS) do
-      if c == E.cat then
-        E.cat = L.CATEGORIAS[(i - 1 + delta) % n + 1]
-        E.rolagem, E.sel, E.sel_visto = 0, nil, nil
-        break
-      end
-    end
-  end
-  U.botao("editor_cat_ant", LISTA.x + 4, LISTA.y + 4, 40, 40, "<", { cor = "#4a3627", cor_texto = cor.texto, tam = 15 }, function() trocar(-1) end)
-  U.botao("editor_cat_prox", LISTA.x + LISTA.w - 44, LISTA.y + 4, 40, 40, ">", { cor = "#4a3627", cor_texto = cor.texto, tam = 15 }, function() trocar(1) end)
-  motor.texto(E.cat, LISTA.x + LISTA.w / 2, LISTA.y + 5, 13, cor.ouro, "centro", true)
-  local pos = 1
-  for i, c in ipairs(L.CATEGORIAS) do if c == E.cat then pos = i end end
-  motor.texto(pos .. " de " .. #L.CATEGORIAS, LISTA.x + LISTA.w / 2, LISTA.y + 24, 13, cor.texto_fraco, "centro")
-  return w
-end
-
-local LADOS = { { "dir", "Direita" }, { "frente", "Frente" }, { "fundo", "Fundo" }, { "oeste", "Esquerda" } }
-local SALAS = { { "jardim_l", "Jardim: largura" }, { "jardim_p", "Jardim: fundo" }, { "cerv_l", "Cervejaria: largura" },
-  { "cerv_p", "Cervejaria: fundo" }, { "circ_l", "Invocação: largura" }, { "circ_p", "Invocação: fundo" } }
-
-local function desenhar_tamanho(titulo, lados, passo)
-  local y = LISTA.y + 48
-  motor.texto(titulo, LISTA.x + 10, y, 13, cor.texto, "esquerda", true)
-  y = y + 20
-  for _, l in ipairs(lados) do
-    local lado = l[1]
-    local tam_lado = L.tamanho[lado]
-    motor.texto(l[2] .. ": +" .. tam_lado .. " m", LISTA.x + 10, y, 13, tam_lado > 0 and cor.ouro or cor.texto, "esquerda", tam_lado > 0)
-    if tam_lado >= L.TAMANHO_MAX then motor.texto("máx", LISTA.x + LISTA.w - 10, y, 13, cor.ouro, "direita", true) end
-    local bw = (LISTA.w - 18) / 2
-    local function estilo(ativo)
-      return { ativo = ativo, cor = ativo and "#4a3627" or "#2a2019", cor_texto = ativo and cor.texto or cor.texto_fraco, tam = 15 }
-    end
-    local function muda(delta)
-      guardar()
-      L.mudar_tamanho(lado, delta)
-      mudou()
-      J.aplicar_visual()
-    end
-    U.botao("editor_tam_menos_" .. lado, LISTA.x + 6, y + 18, bw, 40, "-1 m", estilo(tam_lado > 0), function() muda(-1) end)
-    U.botao("editor_tam_mais_" .. lado, LISTA.x + 12 + bw, y + 18, bw, 40, "+1 m", estilo(tam_lado < L.TAMANHO_MAX), function() muda(1) end)
-    y = y + passo
-  end
-  if lados == LADOS then
-    U.paragrafo("As paredes acompanham. Depois, ligue \"FPS e fluxo\" nas Configurações para medir.", LISTA.x + 10, y + 2, LISTA.w - 20, 13, cor.texto_fraco)
-  end
-end
-
-local function desenhar_lista(sob, maximo)
-  U.painel(LISTA.x, LISTA.y, LISTA.w, LISTA.h, "#21150ef0")
-  U.zona("editor_fundo_lista", LISTA)
-  seletor_categoria()
-  if E.cat == "Tamanho" then
-    desenhar_tamanho("Tamanho do salão", LADOS, 66)
-    return
-  elseif E.cat == "Salas" then
-    desenhar_tamanho("Tamanho das salas", SALAS, 62)
-    return
-  end
-  local objetos = itens()
-  local primeiro = E.rolagem / ITEM + 1
-  local ultimo = math.min(#objetos, primeiro + VISIVEIS - 1)
-  motor.texto(string.format("Itens %d-%d de %d", primeiro, ultimo, #objetos), LISTA.x + 10, LISTA.y + 50, 13, cor.texto)
-  local topo = LISTA.y + LISTA_TOPO
-  local largura = LISTA.w - 20
-  for i = primeiro, ultimo do
-    local o = objetos[i]
-    local y = topo + (i - primeiro) * ITEM
-    local sel = o.id == E.sel
-    motor.retangulo(LISTA.x + 6, y + 1, largura, ITEM - 3, sel and cor.ouro or (o.id == sob and "#5e4330" or "#3d291b"), 7)
-    motor.texto(o.nome, LISTA.x + 12, y + 10, 13, sel and cor.texto_ouro or cor.texto, "esquerda", sel)
-    U.zona("editor_item_" .. o.id, { x = LISTA.x + 6, y = y, w = largura, h = ITEM }, function() E.sel = o.id end)
-  end
-  -- barra de rolagem
-  local alt = VISIVEIS * ITEM
-  local bx = LISTA.x + LISTA.w - 11
-  motor.retangulo(bx, topo, 5, alt - 3, "#00000060", 2)
-  local h = math.min(alt - 3, math.max(24, alt * VISIVEIS / math.max(1, #objetos)))
-  local p = maximo > 0 and E.rolagem / maximo or 0
-  motor.retangulo(bx, topo + p * (alt - 3 - h), 5, h, cor.ouro, 2)
-  -- botões de página, para quem não usa a roda
-  local by = topo + alt + 6
-  local bw = (LISTA.w - 18) / 2
-  local function pagina(id, x, texto, ativo, delta)
-    U.botao(id, x, by, bw, 40, texto, { ativo = ativo, cor = ativo and "#4a3627" or "#2a2019", cor_texto = ativo and cor.texto or cor.texto_fraco, tam = 13 },
-      function() E.rolagem = E.rolagem + delta end)
-  end
-  pagina("editor_lista_acima", LISTA.x + 6, "Acima", E.rolagem > 0, -(VISIVEIS - 1) * ITEM)
-  pagina("editor_lista_abaixo", LISTA.x + 12 + bw, "Abaixo", E.rolagem < maximo, (VISIVEIS - 1) * ITEM)
-end
-
-local function desenhar_acoes()
-  U.painel(ACOES.x, ACOES.y, ACOES.w, ACOES.h, "#21150ef0")
-  U.zona("editor_fundo_acoes", ACOES)
-  local ax = ACOES.x + 8
-  local meia = (ACOES.w - 22) / 2
-  local ax2 = ax + meia + 6
-  local ativo = E.sel ~= nil
-  local od = { ativo = ativo, cor = ativo and "#4a3627" or "#2a2019", cor_texto = ativo and cor.texto or cor.texto_fraco, tam = 14 }
-  motor.texto("Girar", ax, ACOES.y + 8, 13, cor.texto)
-  U.botao("editor_girar_menos", ax, ACOES.y + 28, meia, 40, "-15°", od, function() acao(function(d) d.g = d.g - math.rad(15) end) J.aplicar_visual() end)
-  U.botao("editor_girar_mais", ax2, ACOES.y + 28, meia, 40, "+15°", od, function() acao(function(d) d.g = d.g + math.rad(15) end) J.aplicar_visual() end)
-  motor.texto("Altura", ax, ACOES.y + 74, 13, cor.texto)
-  U.botao("editor_descer", ax, ACOES.y + 94, meia, 40, "Descer", od, function() acao(function(d) d.y = d.y - 0.1 end) end)
-  U.botao("editor_subir", ax2, ACOES.y + 94, meia, 40, "Subir", od, function() acao(function(d) d.y = d.y + 0.1 end) end)
-  botao("editor_restaurar", ACOES.y + 144, "Posição original", function()
-    guardar(); L.restaurar(E.sel); mudou(); J.aplicar_visual()
-  end, od)
-  botao("editor_desfazer", ACOES.y + 190, "Desfazer (" .. #E.desfazer .. ")", function()
-    local ultimo = table.remove(E.desfazer)
-    if ultimo then
-      L.tamanho = ultimo._tamanho
-      ultimo._tamanho = nil
-      L.dados = ultimo
-      mudou()
-      J.aplicar_visual()
-    end
+local function painel_mais()
+  local a = alvo()
+  local x, y, w = 8, topo_tela() + 6, 280
+  local linhas = 4 + (E.sel and 1 or 0)
+  local passo = a + 6
+  U.painel(x, y, w, linhas * passo + 12, "#21150ef5")
+  U.zona("editor_fundo_mais", { x = x, y = y, w = w, h = linhas * passo + 12 })
+  local bx, bw, by = x + 8, w - 16, y + 8
+  U.botao("editor_grade", bx, by, bw, a, E.grade and "Encaixe na grade: ligado" or "Encaixe na grade: desligado", ESC, function() E.grade = not E.grade end)
+  by = by + passo
+  U.botao("editor_passo_giro", bx, by, bw, a, "Girar de " .. E.passo_giro .. " em " .. E.passo_giro .. " graus", ESC, function()
+    E.passo_giro = E.passo_giro == 45 and 15 or 45
   end)
-  botao("editor_grade", ACOES.y + 236, E.grade and "Encaixe: ligado" or "Encaixe: desligado", function() E.grade = not E.grade end)
-  botao("editor_copiar", ACOES.y + 282, "Copiar posições", function()
+  by = by + passo
+  U.botao("editor_copiar", bx, by, bw, a, "Copiar posições", ESC, function()
     motor.copiar(L.texto())
     msg("Copiado! Cole na conversa para virar oficial.")
   end)
-
+  by = by + passo
+  if E.sel then
+    U.botao("editor_restaurar", bx, by, bw, a, "Posição original deste item", ESC, function()
+      guardar(); L.restaurar(E.sel); mudou(); J.aplicar_visual()
+    end)
+    by = by + passo
+  end
   if E.confirmar then
-    motor.texto("Apagar tudo?", ax, ACOES.y + 330, 13, "#ff9a8a", "esquerda", true)
-    U.botao("editor_tudo_nao", ax, ACOES.y + 350, meia, 40, "Não", { tam = 14 }, function() E.confirmar = false end)
-    U.botao("editor_tudo_sim", ax2, ACOES.y + 350, meia, 40, "Sim", { cor = cor.vermelho, cor_texto = "#ffffff", tam = 14 }, function()
-      guardar(); L.restaurar(); mudou(); J.aplicar_visual(); E.confirmar = false
+    motor.texto("Apagar tudo?", bx, by + a / 2 - 9, 14, "#ffb0a2", "esquerda", true)
+    local nx = bx + 104
+    local bm = (bw - 104 - 6) / 2
+    U.botao("editor_tudo_nao", nx, by, bm, a, "Não", { tam = 14 }, function() E.confirmar = false end)
+    U.botao("editor_tudo_sim", nx + bm + 6, by, bm, a, "Sim", { cor = cor.vermelho, cor_texto = "#ffffff", tam = 14 }, function()
+      guardar(); L.restaurar(); E.sel = nil; mudou(); J.aplicar_visual(); E.confirmar = false; E.painel = nil
     end)
   else
-    botao("editor_tudo", ACOES.y + 340, "Restaurar tudo", function() E.confirmar = true end, { cor = "#5a2a22", cor_texto = "#ffb0a2", tam = 14 })
+    U.botao("editor_tudo", bx, by, bw, a, "Restaurar tudo", { cor = "#5a2a22", cor_texto = "#ffb0a2", tam = 14 }, function() E.confirmar = true end)
   end
-  motor.texto(U.celular() and "Pinça: zoom" or "Roda: zoom", ax, ACOES.y + 398, 13, cor.texto)
-  motor.texto("Jogo pausado", ax, ACOES.y + 416, 13, cor.texto)
+end
+
+local function painel_adicionar()
+  local tipos = {}
+  for t, d in pairs(L.TIPOS_EXTRAS) do tipos[#tipos + 1] = { tipo = t, nome = d.nome } end
+  table.sort(tipos, function(a, b) return a.nome < b.nome end)
+  local a = alvo()
+  local fil = math.ceil(#tipos / 2)
+  local w, h = 348, fil * (a + 6) + 42
+  local x, y = 952 - w, fundo_tela() - h - 6
+  U.painel(x, y, w, h, "#21150ef5")
+  U.zona("editor_fundo_adicionar", { x = x, y = y, w = w, h = h })
+  motor.texto("Adicionar (nasce no centro da vista)", x + 12, y + 10, 14, cor.ouro, "esquerda", true)
+  local bw = (w - 22) / 2
+  for i, t in ipairs(tipos) do
+    local c = (i - 1) % 2
+    local l = math.floor((i - 1) / 2)
+    U.botao("editor_add_" .. t.tipo, x + 8 + c * (bw + 6), y + 36 + l * (a + 6), bw, a, t.nome, ESC, function() E.adicionar(t.tipo) end)
+  end
+end
+
+local function painel_excluidos()
+  local a = alvo()
+  local lista = E.excluidos()
+  local por_pagina = U.celular() and 4 or 6
+  local paginas = math.max(1, math.ceil(#lista / por_pagina))
+  E.pagina_exc = util.limitar(E.pagina_exc, 0, paginas - 1)
+  local x, y, w = 8, topo_tela() + 6, 324
+  local h = 42 + math.min(#lista, por_pagina) * (a + 6) + (paginas > 1 and a + 6 or 0)
+  if paginas > 1 then h = 42 + por_pagina * (a + 6) + a + 6 end
+  if #lista == 0 then h = 76 end
+  U.painel(x, y, w, h, "#21150ef5")
+  U.zona("editor_fundo_excluidos", { x = x, y = y, w = w, h = h })
+  motor.texto("Excluídos: toque para devolver", x + 12, y + 10, 14, cor.ouro, "esquerda", true)
+  if #lista == 0 then
+    motor.texto("Nada foi excluído.", x + 12, y + 40, 14, cor.texto, "esquerda")
+    return
+  end
+  local by = y + 36
+  for i = E.pagina_exc * por_pagina + 1, math.min(#lista, (E.pagina_exc + 1) * por_pagina) do
+    local o = lista[i]
+    U.botao("editor_devolver_" .. o.id, x + 8, by, w - 16, a, o.nome, ESC, function() E.devolver(o.id) end)
+    by = by + a + 6
+  end
+  if paginas > 1 then
+    local by2 = y + 36 + por_pagina * (a + 6)
+    local bw = 86
+    U.botao("editor_exc_ant", x + 8, by2, bw, a, "Acima", estilo(E.pagina_exc > 0), function() E.pagina_exc = E.pagina_exc - 1 end)
+    U.botao("editor_exc_prox", x + w - 8 - bw, by2, bw, a, "Abaixo", estilo(E.pagina_exc < paginas - 1), function() E.pagina_exc = E.pagina_exc + 1 end)
+    motor.texto((E.pagina_exc + 1) .. " de " .. paginas, x + w / 2, by2 + a / 2 - 9, 14, cor.texto, "centro")
+  end
+end
+
+-- barra fina do item selecionado: mover é arrastar, o resto são estes botões
+local function barra_item(meio_x, meio_w)
+  local o = L.POR_ID[E.sel]
+  if not o then return end
+  local a = alvo()
+  local h = contorno(o)
+  local baixo = 0
+  if h then for _, p in ipairs(h) do baixo = math.max(baixo, p[2]) end end
+  -- item lá embaixo: a barra sobe, para não cobrir o que se está editando
+  local y = baixo > fundo_tela() - 8 and not SALAS[E.sel] and topo_tela() + 6 or fundo_tela()
+  local bw, gap = 88, 6
+  local sala = sala_de(E.sel)
+  local n = sala and 5 or 4
+  local nome_w = meio_w - n * (bw + gap) - 8
+  U.painel(meio_x, y, meio_w, a, "#21150ef0")
+  U.zona("editor_fundo_barra", { x = meio_x, y = y, w = meio_w, h = a })
+  local tam = 14
+  local linhas = motor.largura_texto(o.nome, tam, true) > nome_w - 16 and 2 or 1
+  U.paragrafo(o.nome, meio_x + 10, y + a / 2 - (linhas == 2 and 19 or 9), nome_w - 16, tam, cor.ouro, true)
+  local x = meio_x + nome_w
+  if sala then
+    U.botao("editor_sala", x, y + 2, bw, a - 4, "Sala inteira", ESC, function() E.sel = sala end)
+    x = x + bw + gap
+  end
+  U.botao("editor_girar", x, y + 2, bw, a - 4, "Girar", ESC, function()
+    acao(function(d) d.g = d.g + math.rad(E.passo_giro) end)
+  end)
+  x = x + bw + gap
+  local d = L.dados[E.sel]
+  local yo = d and d.y or 0
+  U.botao("editor_subir", x, y + 2, bw, a - 4, "Subir", estilo(yo < 6), function() acao(function(k) k.y = k.y + 0.1 end) end)
+  x = x + bw + gap
+  U.botao("editor_descer", x, y + 2, bw, a - 4, "Descer", estilo(yo > -1), function() acao(function(k) k.y = k.y - 0.1 end) end)
+  x = x + bw + gap
+  if L.removivel(E.sel) then
+    U.botao("editor_excluir", x, y + 2, bw, a - 4, "Excluir", { cor = "#5a2a22", cor_texto = "#ffb0a2", tam = 14 }, function() E.excluir(E.sel) end)
+  else
+    local cabe = motor.largura_texto("Só pode mover", 14) <= bw
+    U.paragrafo("Só pode mover", x, y + a / 2 - (cabe and 9 or 19), bw, 14, cor.texto, false, "centro")
+  end
 end
 
 function E.desenhar()
-  local maximo = ajustar_rolagem()
-  local sob = achar_sob_mouse()
-  desenhar_marcadores(sob)
-
+  if E.sel and not L.POR_ID[E.sel] then E.sel = nil end
+  desenhar_cena_editor()
   U.limpar()
-  U.botao("editor_painel", LISTA.x, 8, LISTA.w, 40, E.painel and "Esconder painéis" or "Mostrar painéis", { cor = "#21150ee8", cor_texto = cor.texto, tam = 14 },
-    function() E.painel = not E.painel end)
-  U.botao("editor_sair", ACOES.x, 8, ACOES.w, 40, "Sair e salvar", { tam = 15 }, function() E.fechar() end)
+  -- enquanto arrasta, tudo some e a taverna fica inteira à vista
+  if E.arrasto and E.arrasto.saiu or E.alca and E.alca.moveu or E.pan and E.pan.moveu then return end
 
-  local txt, tam, fundo, frente = nil, 14, "#21150ee8", cor.texto
+  local a = alvo()
+  -- fileira de cima
+  local x = 8
+  local n_exc = #E.excluidos()
+  U.botao("editor_excluidos", x, 8, 124, a, "Excluídos (" .. n_exc .. ")", ESC, function() alternar("excluidos") end)
+  x = x + 124 + 8
+  U.botao("editor_mais", x, 8, 80, a, "Mais", ESC, function() alternar("mais") end)
+  U.botao("editor_sair", 952 - 136, 8, 136, a, "Sair e salvar", { tam = 15 }, function() E.fechar() end)
+  local msgx, msgw = x + 88, 952 - 136 - 8 - (x + 88)
+  local txt, fundo, frente
   if E.mensagem then
     txt, fundo, frente = E.mensagem, cor.ouro, cor.texto_ouro
-  elseif E.sel then
-    local o = L.POR_ID[E.sel]
-    local dx, dz = L.desloc(E.sel)
-    txt = o.nome .. string.format("  x %.2f  z %.2f", o.x + dx, o.z + dz):gsub("%.", ",")
-  else
-    -- no toque não há nome ao passar o mouse: tocar no ponto seleciona e mostra o nome
-    txt = U.celular() and "Toque num ponto dourado para ver o nome; arraste para mover" or "Arraste um ponto dourado para mover o objeto"
+  elseif E.dica then
+    txt, fundo, frente = "Toque num item e arraste. Puxe as alças das paredes.", "#21150ee8", cor.texto
   end
-  local cx, w = pill(txt, tam)
-  motor.retangulo(cx - w / 2, 12, w, 32, fundo, 10)
-  motor.texto(txt, cx, 18, tam, frente, "centro", true)
+  if txt then
+    local w = math.min(msgw, motor.largura_texto(txt, 14, true) + 24)
+    motor.retangulo(msgx + (msgw - w) / 2, 8 + a / 2 - 16, w, 32, fundo, 10)
+    motor.texto(txt, msgx + msgw / 2, 8 + a / 2 - 10, 14, frente, "centro", true)
+  end
 
-  -- enquanto arrasta, os painéis somem e a taverna fica inteira à vista
-  if not E.painel or E.arrasto then return end
-  desenhar_lista(sob, maximo)
-  desenhar_acoes()
+  -- fileira de baixo: polegares nos cantos, item selecionado no meio
+  local canto = 118
+  U.botao("editor_desfazer", 8, fundo_tela(), canto, a, "Desfazer (" .. #E.desfazer .. ")", estilo(#E.desfazer > 0), function() E.voltar() end)
+  U.botao("editor_adicionar", 952 - canto, fundo_tela(), canto, a, "Adicionar", ESC, function() alternar("adicionar") end)
+  if E.sel then barra_item(8 + canto + 8, 960 - 2 * (8 + canto + 8)) end
+
+  if E.painel == "mais" then painel_mais()
+  elseif E.painel == "adicionar" then painel_adicionar()
+  elseif E.painel == "excluidos" then painel_excluidos() end
 end
 
 return E

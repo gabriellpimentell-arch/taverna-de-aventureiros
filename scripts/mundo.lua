@@ -42,6 +42,7 @@ local function caixa(x, y, z, ex, ey, ez, c, giro) peca("caixa", x, y + ey / 2, 
 local function cilindro(x, y, z, d, a, c) peca("cilindro", x, y, z, d, a, d, 0, c) end
 local function cone(x, y, z, d, a, c) peca("cone", x, y, z, d, a, d, 0, c) end
 local function brilho(f, x, y, z, ex, ey, ez, c, b) peca(f, x, y, z, ex, ey, ez, 0, c, 0, 0, b or 1.5) end
+local function esfera(x, y, z, d, c, ey) peca("esfera", x, y, z, d, ey or d, d, 0, c) end
 
 -- Paleta (docs/estilo-visual.md): poucos tons por família, cor forte só no destaque da área
 local PISO_A, PISO_B, CORREDOR = "#6b4a30", "#62442b", "#7d5a3a"
@@ -62,18 +63,22 @@ function M.iniciar()
   M.pan_x, M.pan_z = 0, 0
   M.dt_cena = 0
   M.fazendeiro = { x = -5.7, z = 6.35, giro = 0, fase = 0, t = 0, i = 1 }
-  M.anim = { leste = 0, jardim = 0, cerveja = 0, circulo = 0 }
+  M.anim = { leste = 0, jardim = 0, cerveja = 0, circulo = 0, cozinha = 0, pomar = 0, fazenda = 0 }
   local a = M.alvos()
   for k, v in pairs(a) do M.anim[k] = v end
   M.quadro = M.calcular_enquadramento(M.anim)
 end
 
 function M.alvos()
+  local function aberta(id) return L.aberta(id) and 1 or 0 end
   return {
-    leste = (J.ef("a_leste") > 0 or J.mercadinho_aberto()) and 1 or 0,
-    jardim = J.ef("a_jardim") > 0 and 1 or 0,
-    cerveja = J.ef("a_cerveja") > 0 and 1 or 0,
-    circulo = J.ef("a_circulo") > 0 and 1 or 0,
+    leste = L.leste_aberta() and 1 or 0,
+    jardim = aberta("jardim"),
+    cerveja = aberta("cervejaria"),
+    circulo = aberta("circulo"),
+    cozinha = aberta("cozinha"),
+    pomar = aberta("pomar"),
+    fazenda = aberta("fazenda"),
   }
 end
 
@@ -84,14 +89,15 @@ function M.calcular_enquadramento(a)
   local xmax = xb + util.lerp(0.2, 5.7, a.leste)
   local zmax = zb + 0.2
   -- cada sala aberta entra no quadro com o tamanho e a posição que tem agora
-  for id, k in pairs({ jardim = a.jardim, cervejaria = a.cerveja, circulo = a.circulo }) do
-    local _, sx, _, sz = L.sala(id)
-    local dx, dz = L.desloc(id)
-    xmax = math.max(xmax, util.lerp(xb + 0.2, sx + dx + 0.2, k))
-    zmax = math.max(zmax, util.lerp(zb + 0.2, sz + dz + 0.6, k))
+  for id, k in pairs({ jardim = a.jardim, pomar = a.pomar, fazenda = a.fazenda, cozinha = a.cozinha, cervejaria = a.cerveja, circulo = a.circulo }) do
+    local _, sx, _, sz = L.sala_mundo(id)
+    xmax = math.max(xmax, util.lerp(xb + 0.2, sx + 0.2, k))
+    zmax = math.max(zmax, util.lerp(zb + 0.2, sz + 0.6, k))
   end
   local cx, cz = (xmin + xmax) / 2, (zmin + zmax) / 2
-  local escala = math.max((xmax - xmin) / 13.6, (zmax - zmin) / 9.8)
+  -- a fileira de salas é larga e rasa: aproveita melhor a tela do que o salão sozinho
+  local w = xmax - xmin
+  local escala = math.max(w / (13.6 + 0.13 * math.max(0, w - 14)), (zmax - zmin) / 9.8)
   return { x = cx, z = cz, escala = escala, largura = xmax - xmin, fundo = zmax - zmin }
 end
 
@@ -202,6 +208,7 @@ local function carga(x, z)
   peca("esfera", x - 0.72, 0.54, z + 0.1, 0.18, 0.18, 0.18, 0, "#a8946c")
 end
 
+local CIRC_X, CIRC_Z = 25.95, 0.1   -- centro de origem do círculo de invocação
 local PORTA_GIRO = 1.75   -- pouco mais de 90 graus: as folhas abertas não escondem quem passa
 
 local function salao()
@@ -446,33 +453,9 @@ end
 
 -- Cômodos ------------------------------------------------------------------------------
 
-local PAREDE_ESP = 0.18
-local ALT_FUNDO, ALT_LADO, ALT_FRENTE = 1.4, 0.85, 0.5   -- baixam em direção à câmera, para não esconder nada
-
--- alvenaria: bloco sólido com pedras salientes em fiadas desencontradas e arremate no topo
-local function muro(x0, z0, x1, z1, h, c1, c2, topo)
-  local lx, lz = x1 - x0, z1 - z0
-  if lx <= 0.01 or lz <= 0.01 then return end
-  caixa((x0 + x1) / 2, 0, (z0 + z1) / 2, lx, h, lz, c1)
-  local em_x = lx >= lz
-  local comp = em_x and lx or lz
-  local passo = math.max(0.75, comp / 16)
-  local fiadas = math.max(1, math.floor(h / 0.42 + 0.5))
-  local ah = h / fiadas
-  for f = 0, fiadas - 1 do
-    local s, i = -(f % 2) * passo / 2, 0
-    while s < comp do
-      local a, b = math.max(s, 0), math.min(s + passo, comp)
-      if i % 2 == 0 and b - a > 0.15 then
-        local m = (a + b) / 2
-        if em_x then caixa(x0 + m, f * ah + 0.015, (z0 + z1) / 2, b - a - 0.04, ah - 0.03, lz + 0.03, c2)
-        else caixa((x0 + x1) / 2, f * ah + 0.015, z0 + m, lx + 0.03, ah - 0.03, b - a - 0.04, c2) end
-      end
-      s, i = s + passo, i + 1
-    end
-  end
-  caixa((x0 + x1) / 2, h, (z0 + z1) / 2, lx + 0.05, 0.06, lz + 0.05, topo)
-end
+local ALT_PAREDE = 4.2     -- igual à do salão: todas as paredes da taverna têm esta altura
+local ESP_PAREDE = 0.4
+local ALT_PORTA, LARG_PORTA = 2.5, 1.4
 
 -- piso em lajes sobre a base; as lajes crescem com a sala para não pesar no desenho
 local function lajes(x0, x1, z0, z1, c1, c2, o)
@@ -499,29 +482,39 @@ local function porta_x(id, desejado, x0, x1, l)
   return util.limitar(desejado, a, b)
 end
 
--- batentes, verga, soleira e folha aberta. lado: -1 dobradiça à esquerda, 1 à direita; ang: quanto abriu
-local function porta_comodo(xd, zm, l, h, ang, lado, o, c)
-  caixa(xd, 0, zm - 0.05, l + 0.1, 0.03, 0.55, c.topo)
-  for s = -1, 1, 2 do caixa(xd + s * (l / 2 + 0.07), 0, zm, 0.14, h * o, 0.3, c.batente) end
-  caixa(xd, h * o, zm, l + 0.34, 0.18, 0.34, c.batente)
-  local hx = xd + lado * l / 2
-  local g = lado > 0 and -ang or ang
-  local ux, uz = lado * math.cos(ang), math.sin(ang)
-  local fx, fz = hx + ux * l * 0.5, zm + uz * l * 0.5
-  caixa(fx, 0.02, fz, l - 0.04, (h - 0.06) * o, 0.06, c.folha, g)
-  for _, y in ipairs({ 0.3, h - 0.42 }) do caixa(fx, y * o, fz, l - 0.04, 0.07, 0.08, FERRO, g) end
-  local mx, mz = hx + ux * l * 0.84, zm + uz * l * 0.84
-  caixa(mx, 0.72 * o, mz, 0.09, 0.09, 0.12, c.acento, g)
-end
-
--- paredes dos quatro lados, com vão para a porta na que dá para o salão
-local function paredes_comodo(x0, x1, z0, z1, xd, l, o, c)
-  local e = PAREDE_ESP
-  muro(x0, z0, xd - l / 2 - 0.1, z0 + e, ALT_FUNDO * o, c.a, c.b, c.topo)
-  muro(xd + l / 2 + 0.1, z0, x1, z0 + e, ALT_FUNDO * o, c.a, c.b, c.topo)
-  muro(x0, z0 + e, x0 + e, z1 - e, ALT_LADO * o, c.a, c.b, c.topo)
-  muro(x1 - e, z0 + e, x1, z1 - e, ALT_LADO * o, c.a, c.b, c.topo)
-  muro(x0, z1 - e, x1, z1, ALT_FRENTE * o, c.a, c.b, c.topo)
+-- Sala interna, em corte de casa de bonecas como o salão: parede de fundo e parede esquerda
+-- com porta para a sala vizinha; sem parede de frente nem direita.
+local function casca_sala(x0, x1, z0, z1, o, c)
+  local cx, w = (x0 + x1) / 2, x1 - x0
+  local h, e = ALT_PAREDE * o, ESP_PAREDE
+  lajes(x0, x1, z0, z1, c.piso1, c.piso2, o)
+  -- fundo
+  caixa(cx, 0, z0 - e / 2, w, h, e, c.parede)
+  caixa(cx, 0, z0 + 0.02, w, 0.75 * o, 0.08, c.rodape)
+  for x = x0 + 1.5, x1 - 0.2, 3 do caixa(x, 0, z0 + 0.05, 0.26, h, 0.2, c.viga) end
+  caixa(cx, 3.75 * o, z0 + 0.08, w, 0.26, 0.2, c.viga)
+  -- esquerda: porta sempre na mesma altura da sala, longe do fundo onde ficam as coisas altas
+  local d = z1 - z0
+  local zm = z0 + util.limitar(d * 0.55, LARG_PORTA / 2 + 0.3, d - LARG_PORTA / 2 - 0.3)
+  local xp = x0 + e / 2
+  local za, zb = zm - LARG_PORTA / 2, zm + LARG_PORTA / 2
+  caixa(xp, 0, (z0 - e + za) / 2, e, h, za - z0 + e, c.parede_lado)
+  caixa(xp, 0, (zb + z1) / 2, e, h, z1 - zb, c.parede_lado)
+  caixa(xp, ALT_PORTA * o, zm, e, (ALT_PAREDE - ALT_PORTA) * o, LARG_PORTA, c.parede_lado)
+  for z = z0 + 1.5, z1 - 0.2, 2.5 do
+    if math.abs(z - zm) > LARG_PORTA / 2 + 0.2 then caixa(x0 + e + 0.05, 0, z, 0.2, h, 0.26, c.viga) end
+  end
+  caixa(x0 + e + 0.08, 3.75 * o, (z0 + z1) / 2, 0.2, 0.26, d, c.viga)
+  caixa(x0 + e + 0.02, 0, (z0 + z1) / 2, 0.08, 0.75 * o, d, c.rodape)
+  -- batentes, verga, soleira e folha aberta para dentro da sala
+  caixa(xp, 0, zm, e + 0.1, 0.04, LARG_PORTA, c.rodape)
+  for s = -1, 1, 2 do caixa(x0 + e + 0.04, 0, zm + s * (LARG_PORTA / 2 + 0.06), 0.12, ALT_PORTA * o, 0.12, c.viga) end
+  caixa(x0 + e + 0.04, ALT_PORTA * o, zm, 0.12, 0.16, LARG_PORTA + 0.24, c.viga)
+  local ang, lf = 1.2, LARG_PORTA - 0.05
+  local si, co = math.sin(ang), math.cos(ang)
+  local hx = x0 + e + 0.03
+  caixa(hx + lf / 2 * si, 0.02, za + 0.02 + lf / 2 * co, 0.06, (ALT_PORTA - 0.08) * o, lf, c.folha, ang)
+  caixa(hx + lf * 0.85 * si + 0.05 * co, 1.0 * o, za + lf * 0.85 * co, 0.08, 0.14, 0.14, c.acento, ang)
 end
 
 local function cerca_trecho(x0, z0, x1, z1, o)
@@ -537,40 +530,52 @@ local function cerca_trecho(x0, z0, x1, z1, o)
   end
 end
 
+-- Porteira aberta na cerca do fundo, que dá para a frente da taverna, e caminho de pedras
+local function porteira(xd, z, l, o)
+  for s = -1, 1, 2 do caixa(xd + s * (l / 2 + 0.08), 0, z, 0.16, 0.95 * o, 0.16, MAD_ESC) end
+  local hx = xd - l / 2
+  for _, y in ipairs({ 0.22, 0.56 }) do caixa(hx + 0.08, y * o, z + l / 2, 0.06, 0.1, l, TAMPO) end
+  caixa(hx + 0.08, 0, z + l, 0.1, 0.72 * o, 0.1, MAD_ESC)
+  -- soleira de pedra emendando no piso do salão, depois as pedras pela grama
+  caixa(xd, 0, z - 0.1, l + 0.2, 0.05, 0.4, PEDRA)
+  local pz, i = z + 0.45, 0
+  while i < 5 do
+    cilindro(xd + (i % 2 == 0 and 0.08 or -0.1), 0, pz, 0.48 + (i % 3) * 0.04, 0.03, i % 2 == 0 and PEDRA_CLARA or "#8f8a7e")
+    pz, i = pz + 0.55, i + 1
+  end
+end
+
+-- Área ao ar livre: grama, cerca baixa nos quatro lados e porteira no lado da taverna
+local function area_externa(id, x0, x1, z0, z1, o, g1, g2, gc)
+  lajes(x0, x1, z0, z1, g1, g2, o)
+  if o > 0.9 then
+    -- tufos soltos, sempre nos mesmos lugares
+    local w, d = x1 - x0, z1 - z0
+    for k = 1, math.floor(w * d * 0.35) do
+      cone(x0 + 0.3 + (k * 37 % 97) / 97 * (w - 0.6), 0, z0 + 0.5 + (k * 61 % 89) / 89 * (d - 0.9), 0.12, 0.17, gc)
+    end
+  end
+  local l = 1.3
+  local xd = porta_x(id, x0 + math.min(2, (x1 - x0) / 2), x0, x1, l)
+  local zf = z0 + 0.15
+  cerca_trecho(x0 + 0.12, zf, xd - l / 2 - 0.08, zf, o)
+  cerca_trecho(xd + l / 2 + 0.08, zf, x1 - 0.12, zf, o)
+  cerca_trecho(x0 + 0.12, z1 - 0.15, x1 - 0.12, z1 - 0.15, o)
+  cerca_trecho(x0 + 0.12, zf, x0 + 0.12, z1 - 0.15, o)
+  cerca_trecho(x1 - 0.12, zf, x1 - 0.12, z1 - 0.15, o)
+  porteira(xd, zf, l, o)
+  return xd
+end
+
 local function jardim(e)
   if e <= 0 then return end
   local o = e + math.sin(e * math.pi) * 0.12
   local x0, x1, z0, z1 = L.sala("jardim")
-  -- grama aberta, sem lajes nem paredes: é o lado de fora
+  -- lado de fora: grama, cerca baixa e porteira, sem parede
   lajes(x0, x1, z0, z1, "#5b8f44", "#558a40", o)
-  -- parede externa da taverna: alicerce de pedra, tábuas claras, beiral e janela acesa
-  local l, xd = 0.7, porta_x("jardim", x1 - 0.9, x0, x1, 0.7)
-  local ze = z0 + 0.2
-  for _, t in ipairs({ { x0, xd - l / 2 - 0.1 }, { xd + l / 2 + 0.1, x1 } }) do
-    muro(t[1], z0, t[2], ze, 0.34 * o, PEDRA_ESC, PEDRA, PEDRA_CLARA)
-    caixa((t[1] + t[2]) / 2, 0.38 * o, z0 + 0.1, t[2] - t[1], 1.02 * o, 0.2, "#6d4c31")
-    -- o beiral para antes da porta, para ela ficar à vista
-    if t[2] > t[1] then peca("caixa", (t[1] + t[2]) / 2, 1.46 * o, z0 + 0.2, t[2] - t[1], 0.07, 0.42, 0, "#7a3f2c", 0.5) end
-  end
-  local v = x0 + 0.1
-  while v < x1 do
-    if math.abs(v - xd) > l / 2 + 0.2 then caixa(v, 0.38 * o, ze + 0.01, 0.14, 1.02 * o, 0.05, VIGA) end
-    v = v + 1.6
-  end
-  caixa(x0 + 1.4, 0.58 * o, ze + 0.01, 0.8, 0.58 * o, 0.04, VIGA)
-  brilho("caixa", x0 + 1.4, 0.87 * o, ze + 0.04, 0.62, 0.42 * o, 0.02, "#ffc96b", 1.2)
-  -- a portinha, com degrau, e o caminho de pedras que sai dela pela grama
-  porta_comodo(xd, z0 + 0.1, l, 1.55, 1.3, 1, o, { topo = PEDRA_CLARA, batente = VIGA, folha = MAD_MED, acento = OURO })
-  caixa(xd, 0, ze + 0.2, l + 0.1, 0.14, 0.4, PEDRA_CLARA)
-  caixa(xd, 0, ze + 0.34, l + 0.1, 0.07, 0.34, PEDRA)
-  caixa(xd - l / 2 - 0.28, 1.04 * o, ze + 0.04, 0.05, 0.05, 0.18, FERRO)
-  brilho("esfera", xd - l / 2 - 0.28, 0.96 * o, ze + 0.14, 0.14, 0.18, 0.14, VELA, 1.5)
-  local pz, i = ze + 0.72, 0
-  while pz < z1 - 1.1 do
-    cilindro(xd + (i % 2 == 0 and 0.06 or -0.08), 0, pz, 0.42 + (i % 3) * 0.04, 0.03, i % 2 == 0 and PEDRA_CLARA or "#8f8a7e")
-    pz, i = pz + 0.52, i + 1
-  end
-  for k = 1, 3 do cilindro(xd - k * 0.58, 0, z1 - 0.98 + (k % 2) * 0.05, 0.4, 0.03, k % 2 == 0 and PEDRA_CLARA or "#8f8a7e") end
+  local l = 1.3
+  local xd = porta_x("jardim", x1 - 1.1, x0, x1, l)
+  local zf = z0 + 0.15
   if e > 0.9 then
     -- tufos e florzinhas soltas, sempre nos mesmos lugares
     local w, d = x1 - x0, z1 - z0
@@ -582,9 +587,12 @@ local function jardim(e)
   end
   -- cerca em volta do que é lado de fora
   grupo("cerca")
+  cerca_trecho(x0 + 0.12, zf, xd - l / 2 - 0.08, zf, o)
+  cerca_trecho(xd + l / 2 + 0.08, zf, x1 - 0.12, zf, o)
   cerca_trecho(x0 + 0.12, z1 - 0.15, x1 - 0.12, z1 - 0.15, o)
-  cerca_trecho(x0 + 0.12, ze + 0.05, x0 + 0.12, z1 - 0.15, o)
-  cerca_trecho(x1 - 0.12, ze + 0.05, x1 - 0.12, z1 - 0.15, o)
+  cerca_trecho(x0 + 0.12, zf, x0 + 0.12, z1 - 0.15, o)
+  cerca_trecho(x1 - 0.12, zf, x1 - 0.12, z1 - 0.15, o)
+  porteira(xd, zf, l, o)
   -- moitas e abóboras na faixa livre diante da cerca
   if e > 0.9 then
     grupo("moita1")
@@ -639,29 +647,171 @@ local function jardim(e)
   end
 end
 
+-- Vaca low poly (olha para +x). `passo` afasta as patas alternadamente: 0 = parada.
+local function vaca(x, z, giro, passo)
+  giro, passo = giro or 0, passo or 0
+  local co, si = math.cos(giro), math.sin(giro)
+  local function p(f, lx, y, lz, ex, ey, ez, c)
+    peca(f, x + lx * co + lz * si, y, z - lx * si + lz * co, ex, ey, ez, giro, c)
+  end
+  local function cx(lx, y, lz, ex, ey, ez, c) p("caixa", lx, y + ey / 2, lz, ex, ey, ez, c) end
+  cx(0, 0.55, 0, 1.2, 0.6, 0.6, "#ece4d4")
+  for i, q in ipairs({ { -0.42, -0.2 }, { 0.42, -0.2 }, { -0.42, 0.2 }, { 0.42, 0.2 } }) do
+    local anda = (i == 1 or i == 4) and passo or -passo
+    cx(q[1] + anda * 0.08, 0, q[2], 0.16, 0.57, 0.16, "#ece4d4")
+  end
+  cx(-0.2, 0.9, 0, 0.5, 0.27, 0.62, "#3a302b")
+  cx(0.3, 0.7, 0, 0.3, 0.47, 0.62, "#3a302b")
+  cx(0.75, 0.8, 0, 0.4, 0.4, 0.4, "#ece4d4")
+  cx(0.97, 0.8, 0, 0.12, 0.2, 0.34, "#e8a6a0")
+  p("cone", 0.75, 1.2, -0.14, 0.08, 0.14, 0.08, "#e8dcc0")
+  p("cone", 0.75, 1.2, 0.14, 0.08, 0.14, 0.08, "#e8dcc0")
+  cx(-0.63, 0.55, 0, 0.08, 0.55, 0.08, "#3a302b")
+end
+M.vaca = vaca
+
+local function pomar(e)
+  if e <= 0 then return end
+  local o = e + math.sin(e * math.pi) * 0.12
+  local x0, x1, z0, z1 = L.sala("pomar")
+  area_externa("pomar", x0, x1, z0, z1, o, "#6f9a48", "#6a9444", "#86b552")
+  -- as frutas só aparecem perto da colheita: a árvore mostra o estado do jogo
+  local maduras = J.estado.ciclo / J.ciclo_jardim() > 0.5
+  for i = 1, math.min(J.ef("frutas") + 2, #L.ARVORES) do
+    local x, z = L.ARVORES[i][1], L.ARVORES[i][2]
+    grupo("arvore" .. i)
+    if i % 2 == 1 then
+      -- macieira
+      cilindro(x, 0, z, 0.34, 1.2 * o, "#5b3a22")
+      esfera(x, 1.75 * o, z, 1.7, "#5a8f42", 1.4 * o)
+      esfera(x - 0.35, 2.15 * o, z - 0.15, 0.9, "#3f6b34", 0.7 * o)
+      if maduras then
+        for _, f in ipairs({ { 0.55, 1.95, 0.55 }, { -0.4, 2.2, 0.5 }, { 0.1, 2.35, 0.35 }, { -0.65, 1.75, 0.5 }, { 0.75, 1.6, 0.3 } }) do
+          esfera(x + f[1], f[2] * o, z + f[3], 0.18, "#c8382e")
+        end
+      end
+    else
+      -- pereira, copa alta
+      cilindro(x, 0, z, 0.3, 1.05 * o, "#5b3a22")
+      esfera(x, 1.9 * o, z, 1.3, "#3f6b34", 1.7 * o)
+      if maduras then
+        for _, f in ipairs({ { 0.45, 1.75, 0.45 }, { -0.5, 2, 0.4 }, { 0.1, 2.5, 0.45 } }) do
+          esfera(x + f[1], f[2] * o, z + f[3], 0.18, "#d9c24a")
+          cone(x + f[1], (f[2] + 0.06) * o, z + f[3], 0.1, 0.14, "#d9c24a")
+        end
+      end
+    end
+  end
+  -- cesto de vime
+  grupo("cesto")
+  local x, z = 1.3, 5.9
+  cilindro(x, 0, z, 0.6, 0.3, "#a87a42")
+  cilindro(x, 0.12, z, 0.63, 0.08, "#7b4a26")
+  if maduras then esfera(x, 0.3, z, 0.5, "#c8382e", 0.2) end
+  caixa(x - 0.27, 0.3, z, 0.08, 0.28, 0.08, "#7b4a26")
+  caixa(x + 0.27, 0.3, z, 0.08, 0.28, 0.08, "#7b4a26")
+  caixa(x, 0.58, z, 0.62, 0.08, 0.08, "#7b4a26")
+end
+
+local function fazenda(e)
+  if e <= 0 then return end
+  local o = e + math.sin(e * math.pi) * 0.12
+  local x0, x1, z0, z1 = L.sala("fazenda")
+  area_externa("fazenda", x0, x1, z0, z1, o, "#739c4c", "#6d9647", "#86b552")
+  -- celeiro: bem para dentro da área, senão os 3,1 m esconderiam a frente da taverna
+  grupo("celeiro")
+  local x, z = 15.6, 8
+  caixa(x, 0, z, 4, 2 * o, 3, "#8f3a2c")
+  caixa(x, 2 * o, z, 4, 0.2, 2.4, "#8f3a2c")
+  caixa(x, 2.2 * o, z, 4, 0.3, 1.4, "#8f3a2c")
+  caixa(x, 2.5 * o, z, 4, 0.35, 0.5, "#8f3a2c")
+  peca("caixa", x, 2.55 * o, z + 0.82, 4.4, 0.14, 2, 0, PEDRA_ESC, 0.6)
+  peca("caixa", x, 2.55 * o, z - 0.82, 4.4, 0.14, 2, 0, PEDRA_ESC, -0.6)
+  caixa(x, 0, z + 1.5, 1.4, 1.5 * o, 0.06, "#6b2a20")
+  peca("caixa", x, 0.75 * o, z + 1.55, 0.1, 1.6 * o, 0.04, 0, "#efe2c4", 0, 0.75)
+  peca("caixa", x, 0.75 * o, z + 1.55, 0.1, 1.6 * o, 0.04, 0, "#efe2c4", 0, -0.75)
+  -- cocho
+  grupo("cocho")
+  x, z = 11.2, 6.2
+  caixa(x - 0.55, 0, z, 0.1, 0.18, 0.5, MAD_ESC)
+  caixa(x + 0.55, 0, z, 0.1, 0.18, 0.5, MAD_ESC)
+  caixa(x, 0.18, z, 1.4, 0.08, 0.5, MAD_MED)
+  caixa(x, 0.18, z - 0.25, 1.5, 0.3, 0.08, MAD_MED)
+  caixa(x, 0.18, z + 0.25, 1.5, 0.3, 0.08, MAD_MED)
+  caixa(x - 0.72, 0.18, z, 0.08, 0.3, 0.58, MAD_MED)
+  caixa(x + 0.72, 0.18, z, 0.08, 0.3, 0.58, MAD_MED)
+  caixa(x, 0.26, z, 1.3, 0.14, 0.42, "#d3ad4f")
+  -- feno: dois fardos embaixo, um em cima
+  grupo("feno")
+  x, z = 13.3, 10
+  for _, f in ipairs({ { -0.52, 0, "#d3ad4f" }, { 0.52, 0, "#b8923c" }, { 0, 0.55, "#d3ad4f" } }) do
+    caixa(x + f[1], f[2], z, 1, 0.55, 0.6, f[3])
+    caixa(x + f[1] - 0.25, f[2], z, 0.08, 0.57, 0.64, MAD_MED)
+    caixa(x + f[1] + 0.25, f[2], z, 0.08, 0.57, 0.64, MAD_MED)
+  end
+  for i = 1, math.min(J.ef("vacas"), #L.VACAS) do
+    local v = L.VACAS[i]
+    grupo("vaca" .. i)
+    vaca(v[1], v[2], v[3], 0)
+  end
+end
+
+local function cozinha(e)
+  if e <= 0 then return end
+  local o = e + math.sin(e * math.pi) * 0.12
+  local x0, x1, z0, z1 = L.sala_mundo("cozinha")
+  casca_sala(x0, x1, z0, z1, o, { piso1 = "#6e675c", piso2 = "#645d53", parede = PAREDE, parede_lado = "#47301f", rodape = "#2b2523",
+    viga = VIGA, folha = MAD_MED, acento = OURO })
+  -- faixa de azulejo atrás do fogão: é a cor que diz "cozinha"
+  caixa((x0 + x1) / 2, 0.75 * o, z0 + 0.03, x1 - x0, 1.0 * o, 0.06, "#c9bda6")
+  -- fogão a lenha
+  grupo("fogao")
+  local x, z = 14, -3.95
+  caixa(x, 0, z, 1.4, 0.85 * o, 0.8, PEDRA_ESC)
+  caixa(x, 0.85 * o, z, 1.5, 0.08, 0.9, "#2b2523")
+  caixa(x - 0.3, 0.15, z + 0.39, 0.5, 0.4, 0.06, "#201a18")
+  brilho("caixa", x - 0.3, 0.28, z + 0.41, 0.36, 0.2, 0.06, FOGO, 1.3)
+  cilindro(x - 0.3, 0.93 * o, z, 0.5, 0.3, COBRE)
+  cilindro(x - 0.3, 1.23 * o, z, 0.54, 0.05, FERRO)
+  cilindro(x + 0.45, 0.93 * o, z - 0.2, 0.26, 3.27 * o, FERRO)
+  -- panelas penduradas na parede
+  grupo("panelas")
+  x, z = 16, -4.32
+  caixa(x, 2.5 * o, z, 2, 0.08, 0.08, FERRO)
+  for i, dx in ipairs({ -0.6, 0, 0.6 }) do
+    local d = 0.28 + i * 0.06
+    caixa(x + dx, 2.25 * o, z, 0.08, 0.25, 0.08, FERRO)
+    cilindro(x + dx, (2.25 - d * 0.7) * o, z, d, d * 0.7, COBRE)
+  end
+  -- mesa de preparo no meio
+  grupo("mesa_preparo")
+  x, z = 15, -0.9
+  for _, q in ipairs({ { -0.9, -0.35 }, { 0.9, -0.35 }, { -0.9, 0.35 }, { 0.9, 0.35 } }) do
+    caixa(x + q[1], 0, z + q[2], 0.12, 0.72 * o, 0.12, MAD_ESC)
+  end
+  caixa(x, 0.72 * o, z, 2, 0.1, 0.9, TAMPO)
+  caixa(x, 0.25 * o, z, 1.8, 0.08, 0.7, MAD_MED)
+  caixa(x - 0.4, 0.82 * o, z + 0.05, 0.6, 0.06, 0.4, MAD_MED)
+  cone(x - 0.4, 0.88 * o, z + 0.05, 0.14, 0.24, "#e08a3c")
+  esfera(x + 0.5, 0.94 * o, z, 0.24, "#86b552")
+  -- despensa: baixa, porque fica na parte da frente da sala
+  grupo("despensa")
+  x, z = 16.2, 3.4
+  carga(x, z)
+  barril(x - 2.2, z + 0.1, 0.8)
+end
+
 local function cervejaria(e)
   if e <= 0 then return end
   local o = e + math.sin(e * math.pi) * 0.12
-  local x0, x1, z0, z1 = L.sala("cervejaria")
+  local x0, x1, z0, z1 = L.sala_mundo("cervejaria")
   -- cômodo de pedra com detalhes de cobre
-  lajes(x0, x1, z0, z1, PEDRA, "#635f5a", o)
-  local c = { a = PEDRA_ESC, b = PEDRA, topo = PEDRA_CLARA, batente = PEDRA_CLARA, folha = "#5b3a22", acento = COBRE_CLARO }
-  local l = 1.0
-  local xd = porta_x("cervejaria", 4.7, x0, x1, l)
-  paredes_comodo(x0, x1, z0, z1, xd, l, o, c)
-  porta_comodo(xd, z0 + 0.09, l, 1.75, 0.7, -1, o, c)
-  -- cano de cobre correndo pela parede do fundo e placa com a caneca sobre a porta
-  local ci = z0 + PAREDE_ESP + 0.05
-  for _, t in ipairs({ { x0 + 0.2, xd - l / 2 - 0.15 }, { xd + l / 2 + 0.15, x1 - 0.2 } }) do
-    if t[2] > t[1] then
-      caixa((t[1] + t[2]) / 2, 1.05 * o, ci, t[2] - t[1], 0.08, 0.08, COBRE)
-      for _, x in ipairs({ t[1] + 0.05, t[2] - 0.05 }) do caixa(x, 1.0 * o, ci, 0.14, 0.18, 0.12, COBRE_CLARO) end
-    end
-  end
-  cilindro(xd, 1.93 * o, z0 + 0.09, 0.3, 0.28, COBRE_CLARO)
-  cilindro(xd, 2.21 * o, z0 + 0.09, 0.32, 0.06, ESPUMA)
+  casca_sala(x0, x1, z0, z1, o, { piso1 = PEDRA, piso2 = "#635f5a", parede = PEDRA_ESC, parede_lado = "#46423f", rodape = PEDRA_CLARA,
+    viga = "#3a3634", folha = "#5b3a22", acento = COBRE_CLARO })
+  -- cano de cobre correndo pela parede do fundo
+  caixa((x0 + x1) / 2, 2.6 * o, z0 + 0.06, x1 - x0 - 0.1, 0.08, 0.08, COBRE)
   -- tina de cobre com domo, cano e fogo embaixo
-  local tx, tz = 1.9, 6.2
+  local tx, tz = 19, -3.2
   grupo("tina")
   cilindro(tx, 0, tz, 1.5, 0.16 * o, FERRO)
   cilindro(tx, 0.16 * o, tz, 1.3, 1.1 * o, COBRE)
@@ -674,25 +824,25 @@ local function cervejaria(e)
   brilho("caixa", tx, 0.12, tz + 0.72, 0.5, 0.2, 0.12, "#ffb347", 1.3)
   -- barril que recebe o cano
   grupo("barril_grande")
-  cilindro(3.5, 0, tz, 1.1 * o, 1.2 * o, MAD_MED)
-  cilindro(3.5, 0.2, tz, 1.14, 0.08, FERRO)
-  cilindro(3.5, 0.9, tz, 1.14, 0.08, FERRO)
+  cilindro(20.6, 0, tz, 1.1 * o, 1.2 * o, MAD_MED)
+  cilindro(20.6, 0.2, tz, 1.14, 0.08, FERRO)
+  cilindro(20.6, 0.9, tz, 1.14, 0.08, FERRO)
   for i = 0, 2 do
     grupo("barril_c" .. (i + 1))
-    barril(4.45 + i * 0.72, 7.6, 0.9 * o)
+    barril(19.2 + i * 0.9, 2.6, 0.9 * o)
   end
   grupo("bancada")
-  caixa(2.7, 0, 7.8, 2.0, 0.85 * o, 0.7, MAD_MED)
-  caixa(2.7, 0.85 * o, 7.8, 2.1, 0.08, 0.78, TAMPO)
+  caixa(20.1, 0, -1.2, 2.0, 0.85 * o, 0.7, MAD_MED)
+  caixa(20.1, 0.85 * o, -1.2, 2.1, 0.08, 0.78, TAMPO)
   -- sacos de malte
   grupo("malte1")
-  peca("esfera", 5.5, 0.26, 5.6, 0.6, 0.52, 0.6, 0, "#c9b58b")
+  peca("esfera", 22.1, 0.26, -3.8, 0.6, 0.52, 0.6, 0, "#c9b58b")
   grupo("malte2")
-  peca("esfera", 6.05, 0.22, 5.75, 0.5, 0.44, 0.5, 0, "#a8946c")
+  peca("esfera", 22.3, 0.22, -3.1, 0.5, 0.44, 0.5, 0, "#a8946c")
   -- cervejeiro: aparece junto com a cervejaria e vai da tina à bancada
   grupo("cervejaria")
   local c = (math.sin(M.tempo * 0.5) + 1) / 2
-  local bx, bz = 2.7 + c * 1.6, 7.05
+  local bx, bz = 19.3 + c * 1.6, -2.05
   local d = math.cos(M.tempo * 0.5)
   M.boneco({ x = bx, z = bz, giro = math.abs(d) > 0.2 and (d > 0 and math.pi / 2 or -math.pi / 2) or math.pi, fase = M.tempo,
     andando = math.abs(d) > 0.2, pele = "#e0ac7e", chapeu = "#7a3a3a",
@@ -706,24 +856,14 @@ local function circulo(e)
   if e <= 0 then return end
   local t = M.tempo
   local o = e
-  local x0, x1, z0, z1 = L.sala("circulo")
-  -- cômodo de pedra escura com a magia escapando pelas frestas
-  lajes(x0, x1, z0, z1, "#39344e", "#322d46", o)
-  local cs = { a = "#2c2838", b = "#3a3548", topo = "#54497a", batente = PEDRA_ESC, folha = "#2a2030", acento = VIOLETA }
-  local l = 1.0
-  local xd = porta_x("circulo", 9.25, x0, x1, l)
-  paredes_comodo(x0, x1, z0, z1, xd, l, o, cs)
-  porta_comodo(xd, z0 + 0.09, l, 1.75, 0.45, -1, o, cs)
-  brilho("caixa", xd - l / 2 + math.cos(0.45) * l * -0.5, 1.0 * o, z0 + 0.09 + math.sin(0.45) * l * 0.5 + 0.05, 0.16, 0.34, 0.02, VIOLETA, 1.4)
-  brilho("esfera", xd, 2.05 * o, z0 + 0.09, 0.2, 0.26, 0.2, VIOLETA, 1.6)
-  local ci = z0 + PAREDE_ESP + 0.02
-  for _, t in ipairs({ { x0 + 0.2, xd - l / 2 - 0.15 }, { xd + l / 2 + 0.15, x1 - 0.2 } }) do
-    if t[2] > t[1] then brilho("caixa", (t[1] + t[2]) / 2, 1.05 * o, ci, t[2] - t[1], 0.05, 0.02, VIOLETA, 1.2) end
-  end
-  for _, q in ipairs({ { x0 + 0.09, z0 + 0.09 }, { x1 - 0.09, z0 + 0.09 } }) do
-    brilho("cone", q[1], ALT_FUNDO * o + 0.06, q[2], 0.2, 0.34, 0.2, VIOLETA, 1.4)
-  end
-  local cx, cz = 9.25, 6.75
+  local x0, x1, z0, z1 = L.sala_mundo("circulo")
+  -- cômodo de pedra escura com a magia escapando pela parede
+  casca_sala(x0, x1, z0, z1, o, { piso1 = "#39344e", piso2 = "#322d46", parede = "#2c2838", parede_lado = "#322e40", rodape = "#54497a",
+    viga = "#1f1c29", folha = "#2a2030", acento = VIOLETA })
+  brilho("caixa", (x0 + x1) / 2, 1.05 * o, z0 + 0.03, x1 - x0, 0.05, 0.05, VIOLETA, 1.2)
+  -- o círculo em si é um objeto: anda no editor, os pilares acompanham
+  grupo("circulo")
+  local cx, cz = CIRC_X, CIRC_Z
   cilindro(cx, 0, cz, 3.3, 0.08, PEDRA_ESC)
   peca("cilindro", cx, 0.07, cz, 2.95, 0.03, 2.95, 0, VIOLETA, 0, 0, 1.2)
   cilindro(cx, 0.09, cz, 2.7, 0.03, FUNDO_MAGIA)
@@ -873,9 +1013,9 @@ end
 local function equipe_fixa()
   grupo("cozinheiro")
   if J.ef("cozinheiro") > 0 then
-    local x = 0.95 + math.sin(M.tempo * 0.8) * 0.15
-    M.boneco({ x = x, z = -2.75, giro = math.pi, fase = 0, pele = "#e0ac7e", tipo = T_COZINHEIRO, chapeu = "#f4f4f0" })
-    cilindro(x, 2.08, -2.75, 0.42, 0.24, "#f4f4f0")
+    -- parado por enquanto, de frente para o fogão
+    M.boneco({ x = 14, z = -2.5, giro = math.pi, fase = 0, pele = "#e0ac7e", tipo = T_COZINHEIRO, chapeu = "#f4f4f0" })
+    cilindro(14, 2.08, -2.5, 0.42, 0.24, "#f4f4f0")
   end
   grupo("bardo")
   if J.ef("bardo") > 0 then
@@ -943,7 +1083,7 @@ function M.desenhar_cena()
   motor.cena_luz(3, 3.0, 2.4, -3.0, 0.75, 0.5, 0.26, 5.5)
   local c = a.circulo
   if c > 0 then
-    local cirx, cirz = L.t("circulo", 9.25, 6.75)
+    local cirx, cirz = L.t("circulo", CIRC_X, CIRC_Z)
     motor.cena_luz(4, cirx, 1.2, cirz, 0.9 * c, 0.6 * c, 1.5 * c, 6)
   else
     local l = a.leste
@@ -956,9 +1096,15 @@ function M.desenhar_cena()
   ala_leste(a.leste)
   grupo("jardim")
   jardim(a.jardim)
-  grupo("cervejaria")
+  grupo("pomar")
+  pomar(a.pomar)
+  grupo("fazenda")
+  fazenda(a.fazenda)
+  grupo(nil)
+  cozinha(a.cozinha)
+  grupo(nil)
   cervejaria(a.cerveja)
-  grupo("circulo")
+  grupo(nil)
   circulo(a.circulo)
   grupo(nil)
 
@@ -978,7 +1124,7 @@ function M.desenhar_cena()
         i = i + 1
         local ang = i * math.pi / 2
         grupo("circulo")
-        M.boneco({ x = 9.25 + math.cos(ang) * 0.9, z = 6.75 + math.sin(ang) * 0.7, giro = -ang + math.pi / 2, fase = 0,
+        M.boneco({ x = CIRC_X + math.cos(ang) * 0.9, z = CIRC_Z + math.sin(ang) * 0.7, giro = -ang + math.pi / 2, fase = 0,
           pele = ch.pele, tipo = J.TIPOS_POR_NOME(ch.tipo), contratado = ch })
       end
     end
