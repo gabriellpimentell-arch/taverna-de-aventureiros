@@ -29,6 +29,8 @@ end
 math.randomseed(7)
 motor._save = false
 iniciar()
+J.comecar_endividado()
+J.noticia = nil
 gravar("comeco")
 
 motor._save = false

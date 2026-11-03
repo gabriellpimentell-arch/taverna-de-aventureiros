@@ -1,7 +1,7 @@
 {
-["brigas"] = 67,
-["ciclo"] = 6,
-["colhido"] = 308896.13049858506,
+["brigas"] = 68,
+["ciclo"] = 5.5,
+["colhido"] = 309915.06659106544,
 ["contratados"] = {
 [1] = {
 ["arma"] = 14,
@@ -10,7 +10,7 @@
 ["fama"] = 0,
 ["id"] = 1,
 ["magia"] = 13,
-["missoes"] = 158,
+["missoes"] = 160,
 ["nome"] = "Bruno",
 ["pele"] = "#f1c9a5",
 ["tipo"] = "guerreiro"
@@ -22,7 +22,7 @@
 ["fama"] = 0,
 ["id"] = 2,
 ["magia"] = 13,
-["missoes"] = 148,
+["missoes"] = 142,
 ["nome"] = "Lia",
 ["pele"] = "#e0ac7e",
 ["tipo"] = "mago"
@@ -34,57 +34,61 @@
 ["fama"] = 0,
 ["id"] = 3,
 ["magia"] = 13,
-["missoes"] = 36,
+["missoes"] = 37,
 ["nome"] = "Tomás",
 ["pele"] = "#c68a5a",
 ["tipo"] = "arqueiro"
 }
 },
-["espolios"] = 652,
-["estoque"] = 896,
+["espolios"] = 621,
+["estoque"] = 897,
 ["fama"] = 0,
-["feitas"] = 1465,
+["feitas"] = 1476,
 ["feitas_rank"] = {
 [1] = 18,
-[2] = 116,
-[3] = 179,
-[4] = 818,
-[5] = 334
+[2] = 114,
+[3] = 201,
+[4] = 792,
+[5] = 351
 },
 ["fim"] = false,
 ["invocados_feitos"] = 0,
-["lucro_espolios"] = 432040.95966000302,
+["lucro_espolios"] = 408661.1609700027,
 ["missoes"] = {
 [1] = {
 ["rank"] = 5,
-["resta"] = 5.1080750000000066
+["resta"] = 3.1080750000000066
 },
 [2] = {
 ["contratado"] = 2,
 ["rank"] = 5,
-["resta"] = 6.1080750000000066
+["resta"] = 9.3580750000000066
 },
 [3] = {
-["contratado"] = 1,
 ["rank"] = 5,
-["resta"] = 6.3580750000000066
+["resta"] = 12.108075000000007
 },
 [4] = {
 ["rank"] = 5,
-["resta"] = 14.108075000000007
+["resta"] = 21.108075000000007
 },
 [5] = {
+["contratado"] = 1,
 ["rank"] = 5,
-["resta"] = 23.108075000000007
+["resta"] = 24.858075000000007
 },
 [6] = {
-["contratado"] = 3,
 ["rank"] = 5,
-["resta"] = 31.108075000000007
+["resta"] = 30.108075000000007
 },
 [7] = {
 ["rank"] = 5,
-["resta"] = 32.108075000000007
+["resta"] = 39.108075000000007
+},
+[8] = {
+["contratado"] = 3,
+["rank"] = 5,
+["resta"] = 39.858075000000007
 }
 },
 ["nos"] = {
@@ -120,7 +124,7 @@
 ["negociar"] = 4,
 ["party"] = 1,
 ["placa"] = 10,
-["pocoes"] = 3,
+["pocoes"] = 2,
 ["pomar"] = 4,
 ["prateleira"] = 1,
 ["quartos"] = 7,
@@ -158,6 +162,9 @@
 ["recrutador"] = true,
 ["venda"] = true
 },
+["obras"] = {
+
+},
 ["opcoes"] = {
 ["efeitos"] = 0.69999999999999996,
 ["fluxo"] = false,
@@ -165,14 +172,14 @@
 ["musica"] = 0.40000000000000002,
 ["sombras"] = true
 },
-["ouro"] = 13967.822704542894,
+["ouro"] = 80860.82648595795,
 ["parties"] = {
 
 },
 ["prox_id"] = 4,
-["rps"] = 18920.485824508905,
-["servidos"] = 6411,
-["tempo"] = 12972,
-["total"] = 66920791.822704472,
+["rps"] = 26377.581831071046,
+["servidos"] = 6433,
+["tempo"] = 12954,
+["total"] = 65777684.82648614,
 ["versao"] = 2
 }

@@ -5,6 +5,8 @@
 ["contratados"] = {
 
 },
+["divida"] = 200,
+["emprestimos"] = 0,
 ["espolios"] = 0,
 ["estoque"] = 0,
 ["fama"] = 0,
@@ -15,6 +17,10 @@
 ["fim"] = false,
 ["invocados_feitos"] = 0,
 ["lucro_espolios"] = 0,
+["mantimentos"] = {
+["bebida"] = 0,
+["comida"] = 0
+},
 ["missoes"] = {
 
 },
@@ -22,6 +28,9 @@
 
 },
 ["noticias"] = {
+
+},
+["obras"] = {
 
 },
 ["opcoes"] = {

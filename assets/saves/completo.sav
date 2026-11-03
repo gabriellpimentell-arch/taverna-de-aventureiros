@@ -382,6 +382,9 @@
 ["recrutador"] = true,
 ["venda"] = true
 },
+["obras"] = {
+
+},
 ["opcoes"] = {
 ["efeitos"] = 0.69999999999999996,
 ["fluxo"] = false,

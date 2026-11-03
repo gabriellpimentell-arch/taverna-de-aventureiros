@@ -50,6 +50,31 @@ O ouro da taverna compra habilidades na árvore, que ampliam a taverna e liberam
 - **Aventureiros (aba)**: contratação, evolução e parties.
 - **Propaganda (aba ou ramo da árvore)**: fama dos heróis e reputação da taverna.
 
+## Começo endividado
+
+Você herda a taverna com 200 de ouro em dívidas e a despensa vazia. Bartolo, o agiota, empresta 40 (deve-se 50). Parte de tudo que entra paga a dívida, e o botão Pagar quita antes. Se faltar ouro e comida, o agiota socorre de novo, com os mesmos juros.
+
+Vender gasta mantimentos, comprados em lotes. O Fornecedor fixo passa a comprar sozinho.
+
+| Etapa | Efeito |
+| --- | --- |
+| Tudo comprado de fora | Comida custa 40% do pedido, bebida 30% |
+| Cozinha (pão) | Comida custa 25% |
+| Cervejaria | Bebida custa 20% |
+| Jardim (trigo e lúpulo) | Comida 10%, bebida 5% |
+| Jardim de frutas e fazenda | Pratos novos, pedidos rendem mais |
+
+## Equipe do balcão
+
+O gerente fica atrás do balcão e, no começo, vai até o cliente a cada toque. Com garçom, ele prepara os pratos e o garçom pega na ponta do balcão e leva. O moço de cozinha traz a comida da cozinha. Com missões, segundo andar e sala do chefe postos, o gerente sobe e fica sentado na sala da guilda.
+
+## Loja, obras e andares
+
+A aba Loja abre um painel lateral com o jogo rodando.
+- **Itens:** o que a árvore libera fica "para colocar"; decoração é paga em ouro.
+- **Cômodos:** mover salas e a porta é grátis, em qualquer lado da taverna. Salas internas encostam com 2 m de parede comum; áreas externas ficam sempre fora. Aumentar custa ouro; diminuir devolve 50% do pago por aquele metro.
+- **Andares:** segundo andar (quartos e sala do chefe da guilda) e subsolo, na árvore. Salas internas podem ir para qualquer andar.
+
 ## Economia
 
 **Tudo custa ouro.** A reputação não é gasta como dinheiro: ela é um nível da taverna que sobe sozinho e atrai aventureiros de rank mais alto.
