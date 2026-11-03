@@ -1654,6 +1654,46 @@ do
   J.sem_noticias = true
 end
 
+-- Celular: voltar do segundo plano e pinça ----------------------------------------------------------
+do
+  J.em_menu = false
+  novo()
+  libera("garcom")
+  J.estado.rps = 100
+  J.salvar()
+  J.estado.salvo_em = os.time() - 3600
+  J.ao_voltar()
+  ok("voltar do segundo plano paga o tempo parado", J.offline ~= nil and J.offline.ganho > 0)
+  local g = J.offline and J.offline.ganho
+  J.ao_voltar()
+  ok("voltar de novo não conta duas vezes", J.offline and J.offline.ganho == g)
+  J.salvar()   -- ir para o segundo plano com a janela aberta guarda o ganho
+  ok("salvar recolhe o ganho", not J.offline)
+  J.estado.salvo_em = os.time() - 3600
+  J.em_menu = true
+  J.ao_voltar()
+  ok("no menu não há ganho", not J.offline)
+  J.em_menu = false
+
+  T.iniciar(); T.tela = nil; T.modal = nil; T.aba = "taverna"; J.offline = nil
+  J.estado.salvo_em = os.time()
+  desenhar()
+  T.tocar(480, 300)
+  ok("toque começou", T.toque ~= nil)
+  T.cancelar_toque()
+  ok("pinça cancela o toque", T.toque == nil)
+  local apertou = false
+  U.limpar()
+  U.zona("teste_solto", { x = 400, y = 200, w = 80, h = 80 }, function() apertou = true end, true)
+  T.tocar(440, 240)
+  T.cancelar_toque()
+  T.soltar(440, 240)
+  ok("pinça não dispara o botão ao soltar", not apertou)
+  ok("função da pinça existe para o motor", type(_G.cancelar_toque) == "function" and type(_G.ao_voltar) == "function")
+  novo()
+  J.sem_noticias = true
+end
+
 -- Jogo completo: robô chega ao final ---------------------------------------------------------------
 if arg[3] ~= "rapido" then
   novo()

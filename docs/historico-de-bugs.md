@@ -10,7 +10,7 @@ O branch `dupla-agentes` guarda a primeira rodada da dupla, interrompida e com 2
 
 | O que | Comando | Quando |
 | --- | --- | --- |
-| Testes rápidos (regras, todos os botões, saves estragados, colisões, editor) | `LUA_BIN=lua5.4 tests/rodar.sh 5 rapido` | Toda mudança |
+| Testes rápidos (regras, todos os botões, saves estragados, colisões, editor, Android sem aparelho) | `LUA_BIN=lua5.4 tests/rodar.sh 5 rapido` | Toda mudança |
 | Jogo inteiro pelo robô, até derrotar o Lorde Demônio | `lua5.4 tests/robo_so.lua . 40` (cerca de 6 min) | Mudou regra ou balanceamento |
 | Jogo real, com uma imagem de cada tela | `JOGO_BIN=<executável> tests/capturar.sh <pasta>` | Mudou tela ou cena |
 
@@ -43,6 +43,12 @@ Só rode o que a mudança pode ter afetado. Os testes em `tests/testes.lua` já 
 - **Notícia:** fechar o jogo com a tela de novidade aberta faz aquela novidade não voltar.
 - **Desempenho em salão enorme:** com +40 m, uma rota leva 19 ms e uma busca sem caminho, 350 ms.
 - **Balanceamento:** o robô leva cerca de 31 h e o ouro por segundo dele cai no fim.
+
+- **Android, só dá para ver no aparelho:** nenhum dos itens de Android foi rodado em celular. Conferir: abrir, tocar, pinça, minimizar e voltar (sombras e fontes), botão voltar, Sair e abrir de novo, copiar no editor, desempenho (sombra de 2048 e uma chamada de desenho por peça).
+- **Android, sem tratamento:** janela que muda de tamanho com o jogo aberto (dobráveis; a raylib ignora), contexto OpenGL perdido pelo sistema, aparelho sem configuração MSAA 4x. A barra de navegação fica visível, porque esconder muda o tamanho da janela.
+- **`MOTOR_ANDROID`:** ao mudar o motor, aumente o número em `src/main.cpp` e em `build.yml`; `tests/android.lua` confere. Como as correções acima estão no motor, quem já tiver um APK precisa instalar o novo (ainda não houve APK publicado).
+
+- **Teste instável sem causa conhecida:** cerca de 1 em 50 rodadas parou em `não comprou <nó>` (`libera` em `tests/testes.lua`, linhas diferentes). A mesma semente passa depois; ocorreu com outro agente editando scripts ao mesmo tempo, o que pode ser a causa.
 
 ## Já corrigidos (com teste)
 
@@ -95,6 +101,21 @@ Só rode o que a mudança pode ter afetado. Os testes em `tests/testes.lua` já 
 - Notícia, faixa e medidor eram zerados a cada 12 missões; a notícia sobrevivia a apagar o progresso.
 - O menestrel cantava no meio do caminho em salão enorme e perdia a história ao aplicar o layout.
 - O robô ficava pausado para sempre na primeira notícia.
+
+### Android (revisão sem aparelho; conferido em `tests/android.lua`, `tests/toques_teste.cpp` e `tests/testes.lua`)
+- O APK não abria: faltava `-u ANativeActivity_onCreate` (a opção da raylib só vale para os alvos da pasta dela). O build agora confere o símbolo.
+- Fontes próprias nunca carregavam: a raylib redefine `fopen` e não abre caminho absoluto. Agora são lidas pela memória.
+- Sair e abrir de novo no mesmo processo: o jogo fechava sozinho (`g_sair`) ou usava Lua e OpenGL já fechados. Agora tudo é zerado.
+- Fechar derrubava o app: linha presa à Java (JNI) sem `DetachCurrentThread`.
+- Minimizar não salvava, e a música seguia tocando. Agora salva e pausa em `APP_CMD_PAUSE`; ao voltar, conta o tempo parado como tempo fora.
+- Pinça apertava o botão sob o primeiro dedo e fazia a tela pular. Toque rápido entre quadros se perdia. Agora passam por `src/toques.h`.
+- Gesto de voltar aperta e solta no mesmo quadro e se perdia.
+- Baixar a atualização travava o jogo ("o app não responde"); agora baixa em outra linha.
+- APK de teste trocava os próprios scripts pelos do `main` ou avisava "APK velho" à toa; internet ruim também contava como APK velho. Só a versão publicada se atualiza, e só o 404 avisa.
+- Instalar APK novo mantinha os scripts baixados pelo antigo. Disco cheio na extração destruía a versão que funcionava.
+- Textura de sombra usava formato sem tamanho, inválido no ES 3 puro; profundidade da tela passou de 16 para 24 bits (`android/ajustar_raylib.sh`, que falha se a raylib mudar).
+- Zoom da pinça dependia da resolução; uma segunda abertura podia criar outra instância (`singleTask`).
+- Sombreadores conferidos em contexto ES 3 real (Mesa): compilam e ligam. O motor Linux com `-DTAVERNA_ES3` desenha a cena certa.
 
 ## Como manter
 

@@ -15,8 +15,10 @@
         <activity
             android:name="android.app.NativeActivity"
             android:exported="true"
+            android:launchMode="singleTask"
+            android:resizeableActivity="false"
             android:screenOrientation="sensorLandscape"
-            android:configChanges="orientation|keyboardHidden|screenSize|screenLayout|uiMode|keyboard|navigation">
+            android:configChanges="orientation|keyboardHidden|screenSize|smallestScreenSize|screenLayout|uiMode|keyboard|navigation|touchscreen|density|fontScale|locale|layoutDirection|mcc|mnc">
             <meta-data android:name="android.app.lib_name" android:value="taverna" />
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

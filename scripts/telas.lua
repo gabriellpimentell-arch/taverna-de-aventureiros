@@ -1248,6 +1248,13 @@ function T.soltar(x, y)
   end
 end
 
+-- o toque virou pinça: sem soltar, nada de disparar o botão que estava sob o dedo
+function T.cancelar_toque()
+  if T.tela then return end
+  if Ed.ativo then Ed.soltar() return end
+  T.toque = nil
+end
+
 function T.f2()
   if T.tela then return end
   if J.offline or J.estado.fim then return end

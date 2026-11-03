@@ -28,6 +28,7 @@
 #include "cena3d.h"
 #include "sons.h"
 #include "android_sistema.h"
+#include "toques.h"
 
 extern "C" {
 #include "lua.h"
@@ -36,6 +37,7 @@ extern "C" {
 }
 
 #include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
@@ -43,8 +45,10 @@ extern "C" {
 #include <filesystem>
 #include <fstream>
 #include <map>
+#include <memory>
 #include <sstream>
 #include <string>
+#include <thread>
 #include <vector>
 
 namespace fs = std::filesystem;
@@ -379,8 +383,9 @@ static int l_alternar_tela_cheia(lua_State*) { return 0; }
 static int l_alternar_tela_cheia(lua_State*) { ToggleBorderlessWindowed(); return 0; }
 #endif
 static int l_tela_cheia(lua_State* L) { lua_pushboolean(L, IsWindowState(FLAG_BORDERLESS_WINDOWED_MODE)); return 1; }
-static int l_mouse_baixo(lua_State* L) { lua_pushboolean(L, IsMouseButtonDown(MOUSE_BUTTON_LEFT)); return 1; }
 #if defined(__ANDROID__)
+static toques::Rastreador g_toques;
+static int l_mouse_baixo(lua_State* L) { lua_pushboolean(L, g_toques.baixo()); return 1; }
 // no celular, o zoom vem do movimento de pinça com dois dedos
 static int l_roda(lua_State* L) {
     static float distanciaAntes = -1;
@@ -388,7 +393,8 @@ static int l_roda(lua_State* L) {
     if (GetTouchPointCount() == 2) {
         Vector2 a = GetTouchPosition(0), b = GetTouchPosition(1);
         float d = std::hypot(a.x - b.x, a.y - b.y);
-        if (distanciaAntes > 0) delta = (d - distanciaAntes) * 0.02f;
+        // medido na tela virtual: o gesto vale o mesmo em qualquer resolução
+        if (distanciaAntes > 0) delta = (d - distanciaAntes) / std::max(M.camera.zoom, 0.01f) * 0.05f;
         distanciaAntes = d;
     } else {
         distanciaAntes = -1;
@@ -397,6 +403,7 @@ static int l_roda(lua_State* L) {
     return 1;
 }
 #else
+static int l_mouse_baixo(lua_State* L) { lua_pushboolean(L, IsMouseButtonDown(MOUSE_BUTTON_LEFT)); return 1; }
 static int l_roda(lua_State* L) { lua_pushnumber(L, GetMouseWheelMove()); return 1; }
 #endif
 // motor.recorte(x, y, w, h): só desenha dentro desta área; sem argumentos, volta à tela toda
@@ -720,8 +727,13 @@ static Font carregarFonte(const fs::path& arquivo) {
     std::vector<int> letras;
     for (int c = 32; c <= 255; c++) letras.push_back(c);  // inclui acentos: á, ç, õ...
     for (int c : {0x2022, 0x2026, 0x2013, 0x2014, 0x2191, 0x2192}) letras.push_back(c);
-    Font f = LoadFontEx(arquivo.string().c_str(), 64, letras.data(), (int)letras.size());
-    if (f.texture.id != 0) {
+    // pela memória: no Android, a raylib procura caminho absoluto dentro da pasta de dados e não acha
+    std::string dados;
+    if (!lerArquivo(arquivo, dados) || dados.empty()) return GetFontDefault();
+    Font f = LoadFontFromMemory(".ttf", (const unsigned char*)dados.data(), (int)dados.size(), 64, letras.data(),
+                                (int)letras.size());
+    if (f.texture.id == 0) return GetFontDefault();
+    if (f.texture.id != GetFontDefault().texture.id) {
         GenTextureMipmaps(&f.texture);
         SetTextureFilter(f.texture, TEXTURE_FILTER_TRILINEAR);
     }
@@ -787,19 +799,29 @@ static bool lerPacote(const std::string& b, Pacote& p) {
 static bool extrairPacote(const Pacote& p, const fs::path& pasta) {
     std::string atual;
     if (lerArquivo(pasta / "versao.txt", atual) && atual == p.versao) return true;
+    // Extrai ao lado e só troca no fim: com o disco cheio, a versão que já funcionava continua inteira.
     std::error_code ec;
-    fs::remove_all(pasta, ec);
+    fs::path temp = pasta;
+    temp += ".novo";
+    fs::remove_all(temp, ec);
     for (const auto& [nome, dados] : p.arquivos) {
         if (nome.find("..") != std::string::npos) continue;
-        fs::path destino = pasta / fs::u8path(nome);
+        fs::path destino = temp / fs::u8path(nome);
         fs::create_directories(destino.parent_path(), ec);
         std::ofstream f(destino, std::ios::binary | std::ios::trunc);
-        if (!f) return false;
         f.write(dados.data(), (std::streamsize)dados.size());
+        f.flush();
+        if (!f) return false;
     }
-    std::ofstream v(pasta / "versao.txt", std::ios::binary | std::ios::trunc);
-    v << p.versao;
-    return (bool)v;
+    {
+        std::ofstream v(temp / "versao.txt", std::ios::binary | std::ios::trunc);
+        v << p.versao;
+        v.flush();
+        if (!v) return false;
+    }
+    fs::remove_all(pasta, ec);
+    fs::rename(temp, pasta, ec);
+    return !ec;
 }
 
 static void atualizarCamera();
@@ -863,31 +885,125 @@ static bool verificarAtualizacao(const std::string& versaoLocal, const fs::path&
 // Muda quando o motor mudar: um APK antigo não pode rodar scripts que pedem funções novas.
 static const char* MOTOR_ANDROID = "1";
 
+// Baixa em outra linha de execução. Se o jogo ficasse parado esperando a internet, o sistema
+// mostraria "o app não responde" ao receber um toque ou ao ir para o segundo plano.
+static bool baixarSemTravar(const std::string& url, std::string& saida, int limiteMs, int& codigo, const char* titulo,
+                            const char* detalhe) {
+    struct Pedido {
+        std::atomic<bool> pronto{false};
+        bool ok = false;
+        int codigo = 0;
+        std::string dados;
+    };
+    auto p = std::make_shared<Pedido>();
+    std::thread([p, url, limiteMs] {
+        p->ok = android_sistema::baixar(url, p->dados, limiteMs, &p->codigo);
+        p->pronto = true;
+    }).detach();
+    double inicio = GetTime();
+    while (!p->pronto) {
+        if (WindowShouldClose() || GetTime() - inicio > limiteMs * 3 / 1000.0) return false;  // desiste; o jogo segue
+        mostrarMensagem(titulo, detalhe);
+    }
+    codigo = p->codigo;
+    saida = std::move(p->dados);
+    return p->ok;
+}
+
+static std::string g_versaoApk;
+
+// O pacote baixado vale só para o APK que o baixou: instalar um APK novo por cima não pode
+// fazer os scripts antigos voltarem no lugar dos que vieram nele.
+static bool lerPacoteBaixado(Pacote& p) {
+    fs::path bin = pastaDeDados() / "pacote_baixado.bin", origem = pastaDeDados() / "pacote_baixado.apk";
+    std::string bytes, apk;
+    if (!lerArquivo(bin, bytes)) return false;
+    if (lerArquivo(origem, apk) && apk == g_versaoApk && lerPacote(bytes, p)) return true;
+    std::error_code ec;
+    fs::remove(bin, ec);
+    fs::remove(origem, ec);
+    return false;
+}
+
+#if defined(TAVERNA_PUBLICADO)
 // Baixa só os scripts novos, sem reinstalar. Sem internet, segue com os que já tem.
 static void atualizarScriptsAndroid(Pacote& pacote) {
-    mostrarMensagem("Taverna de Aventureiros", "Procurando atualizações...");
+    const char* procurando = "Procurando atualizações...";
     std::string remota;
-    if (!atualizador::baixar(std::string(URL_ATUALIZACAO) + "versao.txt", remota, 4000)) return;
+    int codigo = 0;
+    if (!baixarSemTravar(std::string(URL_ATUALIZACAO) + "versao.txt", remota, 4000, codigo, "Taverna de Aventureiros", procurando)) return;
     while (!remota.empty() && isspace((unsigned char)remota.back())) remota.pop_back();
     if (remota.empty() || remota.size() > 64 || remota == pacote.versao) return;
-    mostrarMensagem("Atualizando...", "Baixando a versão nova do jogo.");
     std::string bytes;
     Pacote novo;
-    if (!atualizador::baixar(std::string(URL_ATUALIZACAO) + "pacote-m" + MOTOR_ANDROID + ".bin", bytes, 20000) ||
-        !lerPacote(bytes, novo) || novo.versao != remota) {
-        // o arquivo deste motor não existe mais: só um APK novo resolve
-        M.apkVelho = bytes.empty();
+    bool baixou = baixarSemTravar(std::string(URL_ATUALIZACAO) + "pacote-m" + MOTOR_ANDROID + ".bin", bytes, 20000, codigo,
+                                  "Atualizando...", "Baixando a versão nova do jogo.");
+    if (!baixou) {
+        // 404: o arquivo deste motor não existe mais e só um APK novo resolve. Internet ruim não conta.
+        M.apkVelho = codigo == 404;
         return;
     }
-    {
-        std::ofstream f(pastaDeDados() / "pacote_baixado.bin", std::ios::binary | std::ios::trunc);
-        f.write(bytes.data(), (std::streamsize)bytes.size());
-    }
+    if (!lerPacote(bytes, novo) || novo.versao != remota) return;
     fs::path pasta = pastaDeDados() / "jogo";
-    if (extrairPacote(novo, pasta)) {
-        pacote = novo;
-        M.versao = novo.versao;
+    if (!extrairPacote(novo, pasta)) return;
+    pacote = novo;
+    M.versao = novo.versao;
+    std::error_code ec;
+    fs::path bin = pastaDeDados() / "pacote_baixado.bin", temp = bin;
+    temp += ".tmp";
+    std::ofstream f(temp, std::ios::binary | std::ios::trunc);
+    f.write(bytes.data(), (std::streamsize)bytes.size());
+    f.close();
+    if (f) {
+        fs::rename(temp, bin, ec);
+        std::ofstream o(pastaDeDados() / "pacote_baixado.apk", std::ios::binary | std::ios::trunc);
+        o << g_versaoApk;
+    } else {
+        fs::remove(temp, ec);
     }
+}
+#endif
+
+// O sistema avisa pela mesma fila de eventos que a raylib lê dentro de EndDrawing, ou seja, entre
+// dois quadros: é seguro chamar o Lua daqui. Em segundo plano o laço do jogo fica parado e a
+// Android pode matar o processo sem aviso, então este é o último momento certo para salvar.
+static void (*g_comandoRaylib)(android_app*, int32_t) = nullptr;
+static int32_t (*g_entradaRaylib)(android_app*, AInputEvent*) = nullptr;
+static bool g_pausou = false, g_voltou = false, g_botaoVoltar = false;
+
+static void comandoAndroid(android_app* app, int32_t cmd) {
+    g_comandoRaylib(app, cmd);
+    if (cmd == APP_CMD_PAUSE) {
+        g_toques.cancelar();
+        sons::pausar();
+        chamar("ao_sair", {}, true);
+        g_pausou = true;
+    } else if (cmd == APP_CMD_RESUME) {
+        sons::retomar();
+        if (g_pausou) g_voltou = true;
+    } else if (cmd == APP_CMD_LOST_FOCUS) {
+        g_toques.cancelar();
+    }
+}
+
+static int32_t entradaAndroid(android_app* app, AInputEvent* ev) {
+    int32_t r = g_entradaRaylib(app, ev);
+    // Aqui, e não com IsKeyPressed: o gesto de voltar aperta e solta no mesmo quadro. Segurar não repete.
+    if (AInputEvent_getType(ev) == AINPUT_EVENT_TYPE_KEY && AKeyEvent_getKeyCode(ev) == AKEYCODE_BACK &&
+        AKeyEvent_getAction(ev) == AKEY_EVENT_ACTION_DOWN && AKeyEvent_getRepeatCount(ev) == 0) {
+        g_botaoVoltar = true;
+    }
+    if (AInputEvent_getType(ev) == AINPUT_EVENT_TYPE_MOTION && (AInputEvent_getSource(ev) & AINPUT_SOURCE_CLASS_POINTER)) {
+        Vector2 p = GetMousePosition();
+        switch (AMotionEvent_getAction(ev) & AMOTION_EVENT_ACTION_MASK) {
+            case AMOTION_EVENT_ACTION_DOWN: g_toques.descer(p.x, p.y, GetTime()); break;
+            case AMOTION_EVENT_ACTION_POINTER_DOWN: g_toques.outroDedo(); break;
+            case AMOTION_EVENT_ACTION_UP: g_toques.subir(p.x, p.y); break;
+            case AMOTION_EVENT_ACTION_CANCEL: g_toques.cancelar(); break;
+            default: break;
+        }
+    }
+    return r;
 }
 #endif
 
@@ -901,11 +1017,23 @@ static void atualizarCamera() {
 }
 
 int main() {
+#if defined(__ANDROID__)
+    // O sistema pode abrir o jogo de novo no mesmo processo: nada da sessão anterior pode sobrar.
+    M = Motor{};
+    cena3d::E = cena3d::Estado{};
+    g_sair = false;
+    g_toques = toques::Rastreador{};
+    g_pausou = g_voltou = g_botaoVoltar = false;
+#endif
     unsigned int flags = FLAG_WINDOW_RESIZABLE | FLAG_VSYNC_HINT;
     if (!getenv("TAVERNA_TESTE")) flags |= FLAG_MSAA_4X_HINT;  // bordas mais suaves
     SetConfigFlags(flags);
 #if defined(__ANDROID__)
     InitWindow(0, 0, "Taverna de Aventureiros");  // a tela toda do celular
+    g_comandoRaylib = GetAndroidApp()->onAppCmd;
+    g_entradaRaylib = GetAndroidApp()->onInputEvent;
+    GetAndroidApp()->onAppCmd = comandoAndroid;
+    GetAndroidApp()->onInputEvent = entradaAndroid;
 #else
     InitWindow(1280, 720, "Taverna de Aventureiros");
     SetWindowMinSize(480, 270);
@@ -940,8 +1068,9 @@ int main() {
     {
         std::string bytes;
         temPacote = android_sistema::lerAsset("pacote.bin", bytes) && lerPacote(bytes, pacote);
+        g_versaoApk = pacote.versao;
         Pacote baixado;
-        if (lerArquivo(pastaDeDados() / "pacote_baixado.bin", bytes) && lerPacote(bytes, baixado)) {
+        if (lerPacoteBaixado(baixado)) {
             pacote = baixado;
             temPacote = true;
         }
@@ -982,7 +1111,9 @@ int main() {
     }
 
 #if defined(__ANDROID__)
+#if defined(TAVERNA_PUBLICADO)
     if (temPacote) atualizarScriptsAndroid(pacote);
+#endif
 #else
     if (temPacote && !getenv("TAVERNA_SEM_ATUALIZAR") && verificarAtualizacao(M.versao, exe)) {
         if (M.fontesProprias) {
@@ -1006,12 +1137,14 @@ int main() {
         sons::atualizar();
         float dt = std::min(GetFrameTime(), 0.1f);
 
+#if !defined(__ANDROID__)  // no celular os scripts só mudam ao atualizar
         // recarrega sozinho quando algum .lua muda
         M.relogioVigia += dt;
         if (!M.pastaScripts.empty() && M.relogioVigia > 0.5f) {
             M.relogioVigia = 0;
             if (lerDatasScripts() != M.datasScripts) carregarScripts();
         }
+#endif
         if (IsKeyPressed(KEY_F5) && !M.pastaScripts.empty()) carregarScripts();
 
         // F11 ou Alt+Enter: alterna entre tela cheia e janela
@@ -1024,19 +1157,36 @@ int main() {
 
         atualizarCamera();
 
-        if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
-            Vector2 p = GetScreenToWorld2D(GetMousePosition(), M.camera);
+        auto tocou = [](Vector2 p) {
             if (p.x >= 0 && p.y >= 0 && p.x <= LARGURA && p.y <= ALTURA) {
                 if (M.erro.empty()) chamar("tocar", {p.x, p.y});
                 else if (!M.pastaScripts.empty()) carregarScripts();
             }
+        };
+#if defined(__ANDROID__)
+        if (g_voltou) {
+            g_voltou = false;
+            chamar("ao_voltar");
         }
+        for (const toques::Evento& ev : g_toques.quadro(GetTime())) {
+            Vector2 p = GetScreenToWorld2D(Vector2{ev.x, ev.y}, M.camera);
+            if (ev.tipo == toques::TOCAR) tocou(p);
+            else if (ev.tipo == toques::SOLTAR) { if (M.erro.empty()) chamar("soltar", {p.x, p.y}); }
+            else chamar("cancelar_toque");
+        }
+        if (g_botaoVoltar) {
+            g_botaoVoltar = false;
+            chamar("tecla_esc");
+        }
+#else
+        if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) tocou(GetScreenToWorld2D(GetMousePosition(), M.camera));
 
         if (IsMouseButtonReleased(MOUSE_BUTTON_LEFT) && M.erro.empty()) {
             Vector2 p = GetScreenToWorld2D(GetMousePosition(), M.camera);
             chamar("soltar", {p.x, p.y});
         }
-        if (IsKeyPressed(KEY_ESCAPE) || IsKeyPressed(KEY_BACK)) chamar("tecla_esc");
+        if (IsKeyPressed(KEY_ESCAPE)) chamar("tecla_esc");
+#endif
         if (IsKeyPressed(KEY_F2)) chamar("tecla_f2");
 
         chamar("atualizar", {dt});
@@ -1056,7 +1206,12 @@ int main() {
 
     chamar("ao_sair", {}, true);
     if (M.L) lua_close(M.L);
+    M.L = nullptr;
     sons::encerrar();
+#if defined(__ANDROID__)
+    // só depois disto a raylib zera o próprio estado, o que permite abrir de novo no mesmo processo
+    android_sistema::fecharAtividade();
+#endif
     if (M.fontesProprias) {
         UnloadFont(M.fonteNormal);
         UnloadFont(M.fonteNegrito);

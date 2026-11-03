@@ -1532,6 +1532,12 @@ function J.calcular_offline()
   if ganho >= 1 then J.offline = { ganho = ganho, segundos = fora } end
 end
 
+-- O celular congela o jogo em segundo plano: ao voltar, o tempo parado conta como tempo fora.
+function J.ao_voltar()
+  if J.em_menu or J.editando or J.offline or not J.pronto then return end
+  J.calcular_offline()
+end
+
 function J.coletar_offline()
   if not J.offline then return end
   -- entra de uma vez, mas não conta como renda por segundo: senão o próximo tempo fora rende muito mais

@@ -4,6 +4,8 @@
 #if defined(__ANDROID__)
 
 #include <android/asset_manager.h>
+#include <android/input.h>
+#include <android/looper.h>
 #include <android/native_activity.h>
 #include <android_native_app_glue.h>
 #include <jni.h>
@@ -21,6 +23,8 @@ struct Jni {
         vm = GetAndroidApp()->activity->vm;
         vm->AttachCurrentThread(&env, nullptr);
     }
+    // Soltar é obrigatório: linha que termina presa à Java derruba o app ao fechar. Também libera as referências locais.
+    ~Jni() { vm->DetachCurrentThread(); }
     bool erro() {
         if (env->ExceptionCheck()) {
             env->ExceptionClear();
@@ -45,10 +49,12 @@ inline bool lerAsset(const char* nome, std::string& saida) {
     return lidos == n;
 }
 
-inline bool baixar(const std::string& url, std::string& saida, int limiteMs) {
+// codigoHttp, se pedido, recebe a resposta do servidor (0 quando nem houve resposta).
+inline bool baixar(const std::string& url, std::string& saida, int limiteMs, int* codigoHttp = nullptr) {
     Jni j;
     JNIEnv* e = j.env;
     saida.clear();
+    if (codigoHttp) *codigoHttp = 0;
     jclass cUrl = e->FindClass("java/net/URL");
     if (j.erro() || !cUrl) return false;
     jstring s = e->NewStringUTF(url.c_str());
@@ -57,11 +63,14 @@ inline bool baixar(const std::string& url, std::string& saida, int limiteMs) {
     jobject con = e->CallObjectMethod(oUrl, e->GetMethodID(cUrl, "openConnection", "()Ljava/net/URLConnection;"));
     if (j.erro() || !con) return false;
     jclass cCon = e->FindClass("java/net/HttpURLConnection");
+    if (j.erro() || !cCon) return false;
     e->CallVoidMethod(con, e->GetMethodID(cCon, "setConnectTimeout", "(I)V"), limiteMs);
     e->CallVoidMethod(con, e->GetMethodID(cCon, "setReadTimeout", "(I)V"), limiteMs);
     if (j.erro()) return false;
     jint codigo = e->CallIntMethod(con, e->GetMethodID(cCon, "getResponseCode", "()I"));
-    if (j.erro() || codigo != 200) return false;
+    if (j.erro()) return false;
+    if (codigoHttp) *codigoHttp = codigo;
+    if (codigo != 200) return false;
     jobject in = e->CallObjectMethod(con, e->GetMethodID(cCon, "getInputStream", "()Ljava/io/InputStream;"));
     if (j.erro() || !in) return false;
     jclass cIn = e->FindClass("java/io/InputStream");
@@ -75,7 +84,8 @@ inline bool baixar(const std::string& url, std::string& saida, int limiteMs) {
         saida.resize(antes + (size_t)n);
         e->GetByteArrayRegion(buf, 0, n, (jbyte*)saida.data() + antes);
     }
-    e->DeleteLocalRef(buf);
+    e->CallVoidMethod(in, e->GetMethodID(cIn, "close", "()V"));
+    j.erro();
     return true;
 }
 
@@ -107,6 +117,18 @@ inline void minimizar() {
     jclass c = j.env->GetObjectClass(atividade);
     j.env->CallBooleanMethod(atividade, j.env->GetMethodID(c, "moveTaskToBack", "(Z)Z"), JNI_TRUE);
     j.erro();
+}
+
+// Fecha a atividade e espera o sistema confirmar.
+inline void fecharAtividade() {
+    android_app* app = GetAndroidApp();
+    if (!app || app->destroyRequested) return;
+    ANativeActivity_finish(app->activity);
+    while (!app->destroyRequested) {
+        int eventos = 0;
+        android_poll_source* fonte = nullptr;
+        if (ALooper_pollOnce(100, nullptr, &eventos, (void**)&fonte) >= 0 && fonte) fonte->process(app, fonte);
+    }
 }
 
 }  // namespace android_sistema

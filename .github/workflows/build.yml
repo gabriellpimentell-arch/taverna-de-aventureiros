@@ -64,15 +64,19 @@ jobs:
           cmake -S . -B build-android -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK_LATEST_HOME/build/cmake/android.toolchain.cmake" \
             -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-26 -DANDROID_STL=c++_static \
-            -DPLATFORM=Android -DOPENGL_VERSION="ES 3.0"
+            -DPLATFORM=Android -DOPENGL_VERSION="ES 3.0" \
+            -DTAVERNA_PUBLICADO=${{ github.ref == 'refs/heads/main' && 'ON' || 'OFF' }}
 
-      - name: Pedir OpenGL ES 3 ao celular
-        run: |
-          sed -i 's/EGL_CONTEXT_CLIENT_VERSION, 2/EGL_CONTEXT_CLIENT_VERSION, 3/' build-android/_deps/raylib-src/src/platforms/rcore_android.c
-          sed -i 's/glDrawBuffersEXT/glDrawBuffers/g' build-android/_deps/raylib-src/src/rlgl.h
+      - name: Ajustar a raylib para OpenGL ES 3
+        run: android/ajustar_raylib.sh build-android/_deps/raylib-src
 
       - name: Compilar
         run: cmake --build build-android --parallel
+
+      - name: Conferir a porta de entrada do APK
+        run: |
+          SO="$(find build-android -name libtaverna.so | head -1)"
+          "$ANDROID_NDK_LATEST_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-nm" -D --defined-only "$SO" | grep -q ANativeActivity_onCreate
 
       - name: Montar o APK
         run: |

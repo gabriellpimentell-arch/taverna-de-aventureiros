@@ -40,6 +40,13 @@ if(ANDROID)
   set_target_properties(TavernaDeAventureiros PROPERTIES OUTPUT_NAME taverna)
   target_include_directories(TavernaDeAventureiros PRIVATE ${ANDROID_NDK}/sources/android/native_app_glue)
   target_link_libraries(TavernaDeAventureiros PRIVATE raylib lua_estatica android log GLESv3 EGL)
+  # O sistema abre o jogo por este símbolo, que nada no código referencia: sem isto o linker o descarta.
+  # A raylib liga esta opção, mas só para os alvos da pasta dela. O outro é para celulares com páginas de 16 KB.
+  target_link_options(TavernaDeAventureiros PRIVATE -u ANativeActivity_onCreate -Wl,-z,max-page-size=16384)
+  # Só a versão publicada se atualiza sozinha: um APK de teste não pode trocar os próprios scripts pelos do main.
+  if(TAVERNA_PUBLICADO)
+    target_compile_definitions(TavernaDeAventureiros PRIVATE TAVERNA_PUBLICADO)
+  endif()
 else()
   add_executable(TavernaDeAventureiros src/main.cpp src/atualizador.cpp)
   target_link_libraries(TavernaDeAventureiros PRIVATE raylib lua_estatica)

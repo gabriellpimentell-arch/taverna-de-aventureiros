@@ -2,7 +2,8 @@
 --  TAVERNA DE AVENTUREIROS
 --
 --  O motor (C++) chama: iniciar(), atualizar(dt), desenhar(), tocar(x, y),
---  soltar(x, y), tecla_esc(), tecla_f2() e ao_sair().
+--  soltar(x, y), tecla_esc(), tecla_f2() e ao_sair(); no celular, também
+--  cancelar_toque() e ao_voltar().
 --
 --    config.lua   números do balanceamento
 --    arvore.lua   árvore de habilidades
@@ -40,3 +41,6 @@ function soltar(x, y) telas.soltar(x, y) end
 function tecla_esc() telas.esc() end
 function tecla_f2() telas.f2() end
 function ao_sair() jogo.salvar() end
+-- só no celular: um segundo dedo virou pinça, e o jogo voltou do segundo plano
+function cancelar_toque() telas.cancelar_toque() end
+function ao_voltar() jogo.ao_voltar() end

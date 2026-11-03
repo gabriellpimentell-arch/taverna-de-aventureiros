@@ -16,6 +16,7 @@ namespace sons {
 
 static const int TAXA = 22050;
 static bool g_pronto = false;
+static bool g_pausado = false;  // celular em segundo plano
 static float g_vEfeitos = 0.7f, g_vMusica = 0.4f;
 static std::map<std::string, Sound> g_efeitos;
 static Sound g_musica{};
@@ -105,14 +106,26 @@ static void volumes(float efeitos, float musica) {
 }
 
 static void tocar(const std::string& nome) {
-    if (!g_pronto) return;
+    if (!g_pronto || g_pausado) return;
     auto it = g_efeitos.find(nome);
     if (it == g_efeitos.end()) return;
     SetSoundVolume(it->second, g_vEfeitos);
     PlaySound(it->second);
 }
 
+// A saída de áudio tem linha própria: sem isto, a música segue tocando com o jogo minimizado.
+static void pausar() {
+    g_pausado = true;
+    if (g_pronto) PauseSound(g_musica);
+}
+
+static void retomar() {
+    g_pausado = false;
+    if (g_pronto) ResumeSound(g_musica);
+}
+
 static void atualizar() {
+    if (g_pausado) return;  // tocar agora religaria a música pausada
     if (g_pronto && g_vMusica > 0.001f && !IsSoundPlaying(g_musica)) {
         SetSoundVolume(g_musica, g_vMusica);
         PlaySound(g_musica);
@@ -124,7 +137,10 @@ static void encerrar() {
     if (!g_pronto) return;
     for (auto& e : g_efeitos) UnloadSound(e.second);
     UnloadSound(g_musica);
+    g_efeitos.clear();
     CloseAudioDevice();
+    g_pronto = false;
+    g_pausado = false;
 }
 
 }  // namespace sons
