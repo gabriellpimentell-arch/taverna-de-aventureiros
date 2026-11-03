@@ -187,4 +187,5 @@ O jogo usa um motor em C++ com raylib e toda a lógica em scripts Lua, compilado
 - [x] Implementar as mecânicas deste documento (branch `jogo-3d`, para avaliação).
 - [ ] Testar no Windows e ajustar o balanceamento (o robô de teste é a primeira referência de ritmo).
 - [ ] Trocar a árvore pelas imagens de referência, quando chegarem.
-- [ ] Versão Android (APK) na horizontal.
+- [x] Versão Android (APK) na horizontal, igual à do PC, com o Modo Layout sem NPCs.
+- [ ] Testar o APK no aparelho (S24 FE).
