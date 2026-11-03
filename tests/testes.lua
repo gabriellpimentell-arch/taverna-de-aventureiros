@@ -2352,6 +2352,35 @@ do
   J.sem_noticias = true
 end
 
+-- Começo endividado ------------------------------------------------------------------------------
+novo()
+do
+  J.comecar_endividado()
+  J.noticia = nil
+  local e = J.estado
+  ok("começa devendo e sem ouro", e.divida == C.divida_inicial and e.ouro == 0)
+  ok("primeiro empréstimo disponível", J.pode_emprestimo())
+  ok("empréstimo dá ouro e aumenta a dívida", J.pegar_emprestimo() and e.ouro == C.emprestimo and e.divida > C.divida_inicial)
+  ok("não dá para pegar outro à toa", not J.pode_emprestimo())
+  ok("compra mantimentos pagando", J.comprar_mantimentos("comida") and e.mantimentos.comida == C.lote_mantimentos and e.ouro < C.emprestimo)
+  local q = J.novo_cliente()
+  q.estado, q.pedido = "esperando", "bebida"
+  e.mantimentos.bebida = 0
+  ok("sem bebida não serve", not J.servir(q))
+  q.pedido = "comida"
+  local d0, o0 = e.divida, e.ouro
+  ok("com comida serve e gasta 1", J.servir(q) and e.mantimentos.comida == C.lote_mantimentos - 1)
+  ok("parte do ganho paga a dívida", e.divida < d0 and e.ouro > o0)
+  e.ouro = 0; e.mantimentos.comida = 0
+  ok("sem nada, o agiota socorre", J.pode_emprestimo())
+  local f = J.fracao_custo("comida")
+  e.nos.cozinha = 1
+  J.ajustar_equipe()
+end
+novo()
+ok("save antigo não tem mantimentos: serve como antes", J.estado.mantimentos == nil)
+ok("gerente existe", J.gerente ~= nil)
+
 -- Jogo completo: robô chega ao final ---------------------------------------------------------------
 if arg[3] ~= "rapido" then
   novo()

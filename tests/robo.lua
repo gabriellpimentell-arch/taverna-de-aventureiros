@@ -5,7 +5,7 @@ local C = require("config")
 local R = {}
 
 -- desbloqueios importantes: como uma pessoa, junta ouro para eles se não demorar demais
-local CHAVE = { "prateleira", "mercadinho", "jardim", "rank_e", "merc_e", "rank_d", "cozinha", "cozinheiro", "cervejaria", "merc_d", "rank_c", "recrutador", "merc_c", "venda", "rank_b", "party", "merc_b", "rank_a", "heroi", "propaganda", "merc_a", "rank_s", "invocacao", "merc_s", "rank_ss", "merc_ss" }
+local CHAVE = { "fornecedor", "cozinha", "cervejaria", "prateleira", "mercadinho", "jardim", "rank_e", "merc_e", "rank_d", "cozinha", "cozinheiro", "cervejaria", "merc_d", "rank_c", "recrutador", "merc_c", "venda", "rank_b", "party", "merc_b", "rank_a", "heroi", "propaganda", "merc_a", "rank_s", "invocacao", "merc_s", "rank_ss", "merc_ss" }
 
 local function comprar_melhor()
   local rps = math.max(J.estado.rps, 1)
@@ -74,6 +74,16 @@ function R.jogar(limite_horas, passo, marcos, cada)
     if J.noticia then J.noticia = nil end
     J.atualizar(passo)
     t = t + passo
+    -- começo endividado: pega o empréstimo, repõe a despensa e paga o agiota quando sobra
+    local ee = J.estado
+    if ee.mantimentos then
+      if J.pode_emprestimo() then J.pegar_emprestimo() end
+      if J.ef("fornecedor") < 1 then
+        for _, tipo in ipairs({ "comida", "bebida" }) do
+          if ee.mantimentos[tipo] < 3 then J.comprar_mantimentos(tipo) end
+        end
+      end
+    end
     -- serve um cliente de vez em quando, como uma pessoa faria
     if not J.estado.nos.garcom or (t % 3) < passo then
       for _, p in ipairs(J.pessoas) do

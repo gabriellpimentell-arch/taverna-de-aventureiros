@@ -251,8 +251,102 @@ function J.ganhar(v, x, y, z)
   e.ouro = e.ouro + v
   e.total = e.total + v
   J.ganho_segundo = J.ganho_segundo + v
+  -- uma parte de tudo que entra vai direto para o agiota
+  if (e.divida or 0) > 0 then
+    J.pagar_divida(math.min(e.divida, v * C.parcela_divida))
+  end
   if x then J.flutuar(x, y, z, "+" .. util.formatar(v)) end
 end
+
+-- Começo endividado ---------------------------------------------------------------
+-- Só vale em jogo novo: e.mantimentos nil (saves antigos) mantém as regras de antes.
+
+function J.comecar_endividado()
+  local e = J.estado
+  e.mantimentos = { comida = 0, bebida = 0 }
+  e.divida, e.emprestimos = C.divida_inicial, 0
+  J.noticia = { id = "historia", titulo = "A taverna do seu tio",
+    texto = "Você herdou esta taverna, e com ela " .. C.divida_inicial .. " de ouro em dívidas e uma despensa vazia. Bartolo, o agiota da vila, empresta um pouco para recomeçar. Pegue o empréstimo, compre comida e bebida e revenda por um preço maior." }
+end
+
+function J.fracao_custo(tipo)
+  local f = tipo == "comida" and C.fracao_comida or C.fracao_bebida
+  if J.ef("a_jardim") > 0 then return f.jardim end
+  if tipo == "comida" and L.aberta("cozinha") then return f.cozinha end
+  if tipo == "bebida" and J.ef("a_cerveja") > 0 then return f.cervejaria end
+  return f.comprada
+end
+
+function J.preco_mantimento(tipo) return J.valor_pedido() * J.fracao_custo(tipo) end
+
+function J.comprar_mantimentos(tipo, qtd)
+  local e = J.estado
+  if not e.mantimentos then return false end
+  qtd = qtd or C.lote_mantimentos
+  local custo = J.preco_mantimento(tipo) * qtd
+  if e.ouro < custo then J.avisar("Falta ouro para comprar."); return false end
+  e.ouro = e.ouro - custo
+  e.mantimentos[tipo] = (e.mantimentos[tipo] or 0) + qtd
+  J.som("moeda")
+  return true
+end
+
+function J.pode_emprestimo()
+  local e = J.estado
+  if not e.mantimentos then return false end
+  if (e.emprestimos or 0) == 0 then return true end
+  -- socorro: sem ouro para comprar nem comida para vender, o jogo não pode travar
+  local m = e.mantimentos
+  return m.comida < 1 and m.bebida < 1 and e.ouro < J.preco_mantimento("bebida") * C.lote_mantimentos
+end
+
+function J.pegar_emprestimo()
+  if not J.pode_emprestimo() then return false end
+  local e = J.estado
+  e.ouro = e.ouro + C.emprestimo
+  e.divida = (e.divida or 0) + C.emprestimo * C.juros_emprestimo
+  e.emprestimos = (e.emprestimos or 0) + 1
+  J.som("moeda")
+  return true
+end
+
+function J.pagar_divida(v)
+  local e = J.estado
+  v = math.min(v, e.divida or 0, e.ouro)
+  if v <= 0 then return end
+  e.ouro, e.divida = e.ouro - v, e.divida - v
+  if e.divida < 0.01 then
+    e.divida = 0
+    J.avisar("Dívida paga! Bartolo não vai mais bater à sua porta.", 5)
+  end
+end
+
+local function caseiro(p)
+  local e = J.estado
+  if e.estoque < 1 then return false end
+  return (p.pedido == "comida" and J.ef("cozinheiro") > 0) or (p.pedido == "bebida" and J.ef("bebida_casa") > 0)
+end
+
+-- tem como atender este pedido agora?
+function J.tem_mantimento(p)
+  local e = J.estado
+  if not e.mantimentos or caseiro(p) then return true end
+  if (e.mantimentos[p.pedido] or 0) >= 1 then return true end
+  return J.ef("fornecedor") > 0 and e.ouro >= J.preco_mantimento(p.pedido)
+end
+
+local function gastar_mantimento(p)
+  local e = J.estado
+  if not e.mantimentos or caseiro(p) then return end
+  if (e.mantimentos[p.pedido] or 0) >= 1 then
+    e.mantimentos[p.pedido] = e.mantimentos[p.pedido] - 1
+  else
+    e.ouro = e.ouro - J.preco_mantimento(p.pedido)
+  end
+end
+
+-- O gerente: serve sozinho no começo; com garçom fica atrás do balcão; com a sala da guilda, sobe
+function J.gerente_na_guilda() return J.ef("prateleira") > 0 and J.ef("a_segundo_andar") > 0 end
 
 -- Lugares ---------------------------------------------------------------------------
 
@@ -560,6 +654,12 @@ end
 function J.servir(p, por_garcom)
   if p.estado ~= "esperando" then return false end
   local e = J.estado
+  if not J.tem_mantimento(p) then
+    J.flutuar(p.x, 2.7, p.z, p.pedido == "comida" and "Sem comida!" or "Sem bebida!", "#ff9a8a", 18)
+    return false
+  end
+  gastar_mantimento(p)
+  if not por_garcom then J.chamar_gerente(p) end
   local v = J.valor_pedido()
   if p.tipo.nome ~= "comum" then v = v * C.bonus_aventureiro end
   if not por_garcom and p.t <= C.tempo_rapido then
@@ -778,17 +878,31 @@ local function atualizar_garcom(g, dt)
     if g.recarga <= 0 then
       local melhor
       for _, p in ipairs(J.pessoas) do
-        if p.estado == "esperando" and not p.reservado and (not melhor or p.t > melhor.t) then melhor = p end
+        if p.estado == "esperando" and not p.reservado and J.tem_mantimento(p) and (not melhor or p.t > melhor.t) then melhor = p end
       end
       if melhor then
         melhor.reservado = true
-        g.alvo, g.estado, g.levando = melhor, "indo", true
-        J.caminho(g, ponto_de_servir(g, melhor))
+        -- primeiro pega o prato que o gerente deixou na ponta do balcão
+        g.alvo, g.estado, g.levando, g.pega = melhor, "buscando", false, 0.5
       end
     end
   else
     g.andando = true
-    if seguir_rota(g, dt, C.garcom_velocidade) then
+    if g.estado == "buscando" then
+      -- a casa do garçom é ao lado do balcão: pega o prato ali mesmo
+      g.andando = false
+      g.pega = g.pega - dt
+      if g.pega <= 0 then
+        local p = g.alvo
+        if p and p.estado == "esperando" then
+          g.estado, g.levando = "indo", true
+          J.caminho(g, ponto_de_servir(g, p))
+        else
+          if p then p.reservado = false end
+          g.alvo, g.estado = nil, "parada"
+        end
+      end
+    elseif seguir_rota(g, dt, C.garcom_velocidade) then
       if g.estado == "indo" then
         local p = g.alvo
         if p and p.estado == "esperando" then J.servir(p, true) end
@@ -800,6 +914,62 @@ local function atualizar_garcom(g, dt)
         g.estado = "parada"
         g.fantasma = nil
       end
+    end
+  end
+end
+
+local function casa_gerente() return L.t("balcao", 2.5, -3.25) end
+
+function J.chamar_gerente(p)
+  local g = J.gerente
+  if not g or J.ef("garcons") > 0 or J.gerente_na_guilda() or g.estado == "servindo" then return end
+  g.estado = "servindo"
+  J.caminho(g, ponto_de_servir(g, p))
+end
+
+local function atualizar_gerente(g, dt)
+  if J.gerente_na_guilda() then g.andando = false; return end
+  if g.estado == "servindo" or g.estado == "voltando" or g.estado == "ajeitando" then
+    g.andando = true
+    if seguir_rota(g, dt, 3.8) then
+      if g.estado == "servindo" then
+        g.estado = "voltando"
+        J.caminho(g, casa_gerente())
+      else
+        g.estado, g.t, g.andando = "balcao", 2 + math.random() * 4, false
+      end
+    end
+  else
+    g.andando = false
+    g.t = (g.t or 0) - dt
+    -- com garçom ele só anda de um lado para o outro atrás do balcão, preparando os pratos
+    if g.t <= 0 then
+      g.t = 3
+      if J.ef("garcons") > 0 then
+        local x, z = L.t("balcao", 2.5 + (math.random() * 3 - 1.5), -3.25)
+        g.estado = "ajeitando"
+        J.caminho(g, x, z)
+      end
+    end
+  end
+end
+
+-- o moço vai e volta entre a cozinha e o balcão com os pratos
+local function atualizar_moco(m, dt)
+  if J.ef("moco") < 1 or not L.aberta("cozinha") then m.visivel = false; return end
+  m.visivel, m.andando = true, true
+  if seguir_rota(m, dt, 3) then
+    m.andando = false
+    m.t = (m.t or 0) - dt
+    if m.t <= 0 then
+      m.t = 1.5
+      m.na_cozinha = not m.na_cozinha
+      m.leva = m.na_cozinha == false
+      local x, z
+      if m.na_cozinha then x, z = L.t("mesa_preparo", 15, -0.1)
+      else x, z = L.t("balcao", 6.2, -3.25) end
+      -- sem porta até lá (a cozinha pode estar em outro andar), ele espera no lugar
+      if Cam.rota(m.x, m.z, x, z) then J.caminho(m, x, z) else m.na_cozinha = not m.na_cozinha end
     end
   end
 end
@@ -1266,6 +1436,10 @@ function J.objetivo()
   local e = J.estado
   if e.fim then return "O mundo está em paz!" end
   if e.final_resta then return "A party enfrenta o Lorde Demônio..." end
+  if e.mantimentos then
+    if (e.emprestimos or 0) == 0 then return "Pegue o empréstimo com Bartolo" end
+    if e.mantimentos.comida < 1 and e.mantimentos.bebida < 1 and J.ef("fornecedor") < 1 then return "Compre comida e bebida para vender" end
+  end
   for _, o in ipairs(OBJETIVOS) do
     if o[1] == "servidos" then
       if e.servidos < 5 then return o[2] end
@@ -1286,6 +1460,9 @@ function J.iniciar()
   J.estado = estado_inicial()
   J.pessoas = {}
   J.garcons = {}
+  local gx, gz = L.t("balcao", 2.5, -3.25)
+  J.gerente = { x = gx, z = gz, giro = 0, fase = 0, estado = "balcao", t = 2, rota = {} }
+  J.moco = { x = gx + 3, z = gz, giro = 0, fase = 0, rota = {}, t = 0, na_cozinha = false }
   J.lugares = {}
   J.efeitos = {}
   J.aviso = nil
@@ -1375,6 +1552,8 @@ function J.atualizar(dt)
     if J.pessoas[i].removido then table.remove(J.pessoas, i) end
   end
   for _, g in ipairs(J.garcons) do atualizar_garcom(g, dt) end
+  if J.gerente then atualizar_gerente(J.gerente, dt) end
+  if J.moco then atualizar_moco(J.moco, dt) end
   atualizar_colisoes(dt)
   J.relogio_noticia = (J.relogio_noticia or 0) + dt
   if J.relogio_noticia >= 0.5 then
@@ -1503,6 +1682,14 @@ function J.carregar()
   e.rps = math.max(0, saneado(e.rps, 0))
   e.fama = math.max(0, saneado(e.fama, 0))
   e.estoque = math.max(0, saneado(e.estoque, 0))
+  if type(e.mantimentos) == "table" then
+    e.mantimentos.comida = math.max(0, saneado(e.mantimentos.comida, 0))
+    e.mantimentos.bebida = math.max(0, saneado(e.mantimentos.bebida, 0))
+    e.divida = math.max(0, saneado(e.divida, 0))
+    e.emprestimos = math.max(0, saneado(e.emprestimos, 0))
+  else
+    e.mantimentos, e.divida, e.emprestimos = nil, nil, nil
+  end
   for k, v in pairs(estado_inicial()) do
     if type(v) == "number" then e[k] = saneado(e[k], v) end
   end

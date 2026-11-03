@@ -95,8 +95,38 @@ local function pilula(txt, y, fundo, frente, raio)
   end
 end
 
+-- despensa e dívida do começo do jogo, logo abaixo do ouro
+local function painel_divida()
+  local e = J.estado
+  if not e.mantimentos then return end
+  local fornecedor = J.ef("fornecedor") > 0
+  local divida = (e.divida or 0) > 0
+  if fornecedor and not divida and not J.pode_emprestimo() then return end
+  local y = 58
+  if J.pode_emprestimo() then
+    U.botao("emprestimo", 12, y, 236, 40, "Empréstimo: +" .. C.emprestimo .. " de ouro", { cor = cor.ouro, cor_texto = "#2a1608" }, J.pegar_emprestimo)
+    y = y + 44
+  end
+  if not fornecedor then
+    for _, m in ipairs({ { "comida", "Comida" }, { "bebida", "Bebida" } }) do
+      motor.retangulo(12, y, 236, 40, "#21150ee8", 10)
+      local q = e.mantimentos[m[1]] or 0
+      motor.texto(m[2] .. ": " .. fmt(q), 22, y + 11, 14, q < 1 and "#ff9a8a" or cor.texto, "esquerda", true)
+      local preco = J.preco_mantimento(m[1]) * C.lote_mantimentos
+      U.botao("comprar_" .. m[1], 118, y + 4, 124, 32, "+" .. C.lote_mantimentos .. " por " .. fmt(preco), { ativo = e.ouro >= preco, tam = 13 }, function() J.comprar_mantimentos(m[1]) end)
+      y = y + 44
+    end
+  end
+  if divida then
+    motor.retangulo(12, y, 236, 40, "#3a1610e8", 10)
+    motor.texto("Dívida: " .. fmt(e.divida), 22, y + 11, 14, "#ff9a8a", "esquerda", true)
+    U.botao("pagar_divida", 158, y + 4, 84, 32, "Pagar", { ativo = e.ouro >= 1, tam = 13 }, function() J.pagar_divida(e.ouro) end)
+  end
+end
+
 local function hud()
   local e = J.estado
+  painel_divida()
   motor.retangulo(12, 10, 236, 44, "#21150ee8", 12)
   local p = T.pulso
   U.moeda(34, 32, 14 + p * 2)

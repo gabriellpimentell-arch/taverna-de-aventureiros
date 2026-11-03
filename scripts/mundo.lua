@@ -1231,6 +1231,8 @@ end
 
 local T_GARCOM = { nome = "comum", corpo = "#2f7a8a", perna = "#23303a", braco = "#2a6d7c" }
 local T_COZINHEIRO = { nome = "comum", corpo = "#eeeae2", perna = "#3a3a40", braco = "#e2ddd2" }
+local T_GERENTE = { nome = "comum", corpo = "#6b3f2a", perna = "#2c2a30", braco = "#5f3826" }
+local T_MOCO = { nome = "comum", corpo = "#c9b48a", perna = "#4a3a2a", braco = "#b9a47a" }
 local T_BARDO = { nome = "comum", corpo = "#a13b6c", perna = "#3f2a3a", braco = "#8f3360" }
 
 local function garcom(g)
@@ -1305,6 +1307,23 @@ function M.mover_cozinheiro(dt)
 end
 
 local function equipe_fixa()
+  local g = J.gerente
+  if g and not J.gerente_na_guilda() then
+    M.boneco({ x = g.x, z = g.z, giro = g.giro, fase = g.fase, andando = g.andando, pele = "#d8a06e", tipo = T_GERENTE, chapeu = "#3a2a20" })
+  end
+  local m = J.moco
+  if m and m.visivel then
+    M.boneco({ x = m.x, z = m.z, giro = m.giro, fase = m.fase, andando = m.andando, pele = "#e0ac7e", tipo = T_MOCO, levando = m.leva })
+  end
+  -- prato pronto na ponta do balcão esperando o garçom
+  for _, w in ipairs(J.garcons or {}) do
+    if w.estado == "buscando" then
+      grupo("balcao")
+      cilindro(0.45, 1.13, -2.2, 0.34, 0.04, "#efe6d2")
+      esfera(0.45, 1.2, -2.2, 0.2, "#c98a4e", 0.12)
+      break
+    end
+  end
   grupo("cozinheiro")
   if J.ef("cozinheiro") > 0 then
     local c = M.cozinheiro

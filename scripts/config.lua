@@ -16,6 +16,15 @@ C.tempo_comendo = 4
 C.intervalo_chegada = 3.5
 C.velocidade_pessoa = 2.6
 
+-- Começo endividado: comprar de fora custa uma parte do valor do pedido; produzir em casa custa menos
+C.divida_inicial = 200
+C.emprestimo = 40
+C.juros_emprestimo = 1.25      -- quanto se deve por ouro emprestado
+C.parcela_divida = 0.2         -- parte de cada ganho que vai direto para o agiota
+C.lote_mantimentos = 10
+C.fracao_comida = { comprada = 0.5, cozinha = 0.35, jardim = 0.2 }
+C.fracao_bebida = { comprada = 0.4, cervejaria = 0.25, jardim = 0.1 }
+
 -- Equipe -------------------------------------------------------------------------
 C.garcom_intervalo = 4.0
 C.garcom_velocidade = 3.4

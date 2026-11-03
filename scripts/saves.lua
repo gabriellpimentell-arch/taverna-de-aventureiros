@@ -50,6 +50,7 @@ end
 function S.novo(arquivo)
   motor.apagar_save(arquivo)
   S.abrir(arquivo)
+  J.comecar_endividado()
   J.salvar()
 end
 
