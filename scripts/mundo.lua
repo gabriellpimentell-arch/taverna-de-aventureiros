@@ -63,6 +63,8 @@ function M.iniciar()
   M.pan_x, M.pan_z = 0, 0
   M.dt_cena = 0
   M.fazendeiro = { x = -5.7, z = 6.35, giro = 0, fase = 0, t = 0, i = 1 }
+  M.cozinheiro = nil
+  M.vacas = {}
   M.anim = { leste = 0, jardim = 0, cerveja = 0, circulo = 0, cozinha = 0, pomar = 0, fazenda = 0 }
   local a = M.alvos()
   for k, v in pairs(a) do M.anim[k] = v end
@@ -120,6 +122,8 @@ function M.atualizar(dt)
   M.quadro.largura, M.quadro.fundo = q.largura, q.fundo
   M.zoom = util.lerp(M.zoom, M.zoom_alvo, math.min(1, dt * 8))
   M.aplicar_camera()
+  M.mover_cozinheiro(dt)
+  M.mover_vacas(dt)
 end
 
 function M.aplicar_camera()
@@ -329,12 +333,6 @@ local function salao()
     local y = i % 2 == 0 and 2.2 or 1.35
     cilindro(gx, y, -4.3, 0.24, 0.42, c)
     cilindro(gx, y + 0.42, -4.3, 0.1, 0.2, c)
-  end
-  grupo("fogao")
-  if J.ef("cozinheiro") > 0 then
-    caixa(0.95, 0, -3.55, 1.1, 0.95, 0.9, "#55504c")
-    brilho("caixa", 0.95, 0.96, -3.55, 0.8, 0.03, 0.6, "#ff7a24", 1.0)
-    cilindro(0.95, 0.98, -3.55, 0.52, 0.36, "#3a3a40")
   end
 
   for i, b in ipairs({ { 5.6, -3.7, 1 }, { 4.75, -3.8, 1 }, { 5.75, -2.9, 0.9 }, { -5.6, 3.9, 0.9 }, { -4.8, 4.1, 0.8 } }) do
@@ -648,8 +646,9 @@ local function jardim(e)
 end
 
 -- Vaca low poly (olha para +x). `passo` afasta as patas alternadamente: 0 = parada.
-local function vaca(x, z, giro, passo)
-  giro, passo = giro or 0, passo or 0
+-- `pasta` (0 a 1) abaixa a cabeça até o chão.
+local function vaca(x, z, giro, passo, pasta)
+  giro, passo, pasta = giro or 0, passo or 0, pasta or 0
   local co, si = math.cos(giro), math.sin(giro)
   local function p(f, lx, y, lz, ex, ey, ez, c)
     peca(f, x + lx * co + lz * si, y, z - lx * si + lz * co, ex, ey, ez, giro, c)
@@ -662,13 +661,230 @@ local function vaca(x, z, giro, passo)
   end
   cx(-0.2, 0.9, 0, 0.5, 0.27, 0.62, "#3a302b")
   cx(0.3, 0.7, 0, 0.3, 0.47, 0.62, "#3a302b")
-  cx(0.75, 0.8, 0, 0.4, 0.4, 0.4, "#ece4d4")
-  cx(0.97, 0.8, 0, 0.12, 0.2, 0.34, "#e8a6a0")
-  p("cone", 0.75, 1.2, -0.14, 0.08, 0.14, 0.08, "#e8dcc0")
-  p("cone", 0.75, 1.2, 0.14, 0.08, 0.14, 0.08, "#e8dcc0")
+  local cab = 0.8 - 0.66 * pasta
+  local fr = 0.75 + 0.08 * pasta
+  -- pescoço: só aparece quando a cabeça desce e deixaria um vão
+  if pasta > 0.05 then cx(0.64, cab + 0.2, 0, 0.3, 0.8 - cab, 0.32, "#ece4d4") end
+  cx(fr, cab, 0, 0.4, 0.4, 0.4, "#ece4d4")
+  cx(fr + 0.22, cab, 0, 0.12, 0.2, 0.34, "#e8a6a0")
+  p("cone", fr, cab + 0.4, -0.14, 0.08, 0.14, 0.08, "#e8dcc0")
+  p("cone", fr, cab + 0.4, 0.14, 0.08, 0.14, 0.08, "#e8dcc0")
   cx(-0.63, 0.55, 0, 0.08, 0.55, 0.08, "#3a302b")
 end
 M.vaca = vaca
+
+-- Só aparência: nada aqui toca em regras, ouro ou tempo de jogo. Sorteio próprio, para
+-- não gastar o math.random que o jogo usa.
+local function sorte(v)
+  v.s = (v.s * 16807) % 2147483647
+  return v.s / 2147483647
+end
+
+local function editando()
+  local E = package.loaded["editor"]
+  return E and E.ativo
+end
+
+-- gira `a` em direção a `alvo` pelo caminho mais curto, no máximo `passo` radianos
+local function virar(a, alvo, passo)
+  local d = (alvo - a + math.pi) % (2 * math.pi) - math.pi
+  if math.abs(d) <= passo then return alvo, true end
+  return a + (d > 0 and passo or -passo), false
+end
+
+-- As vacas vivem nas coordenadas de origem da fazenda: assim a cerca, que é um retângulo
+-- ali, continua valendo com a fazenda movida ou girada no editor.
+local RAIO_VACA = 0.33
+local VACA_PONTOS = { 0.72, 0.3, -0.1, -0.42 } -- centros dos círculos do focinho ao rabo
+local OBSTACULOS_FAZENDA = { { "celeiro", 2.05, 1.6 }, { "cocho", 0.8, 0.33 }, { "feno", 1.08, 0.33 } }
+
+local function vaca_circulos(x, z, g)
+  local co, si = math.cos(g), math.sin(g)
+  local r = {}
+  for k, d in ipairs(VACA_PONTOS) do r[k] = { x + d * co, z - d * si } end
+  return r
+end
+
+-- folga da vaca nessa pose até a cerca, os obstáculos e as outras; negativo = encostou
+local function vaca_folga(v, x, z, g, limites)
+  local cs = vaca_circulos(x, z, g)
+  local folga = math.huge
+  for _, q in ipairs(cs) do
+    folga = math.min(folga, q[1] - limites[1], limites[2] - q[1], q[2] - limites[3], limites[4] - q[2])
+  end
+  folga = folga - 0.2 - RAIO_VACA
+  for _, ob in ipairs(OBSTACULOS_FAZENDA) do
+    if not L.oculto(ob[1]) then
+      local c = L.POR_ID[ob[1]]
+      for _, q in ipairs(cs) do
+        local ox, oz = L.base(ob[1], L.t("fazenda", q[1], q[2]))
+        local dx = math.max(math.abs(ox - c.x) - ob[2], 0)
+        local dz = math.max(math.abs(oz - c.z) - ob[3], 0)
+        folga = math.min(folga, math.sqrt(dx * dx + dz * dz) - RAIO_VACA)
+      end
+    end
+  end
+  for _, u in pairs(M.vacas) do
+    if u ~= v then
+      for _, q in ipairs(cs) do
+        for _, e in ipairs(vaca_circulos(u.x, u.z, u.g)) do
+          local dx, dz = q[1] - e[1], q[2] - e[2]
+          folga = math.min(folga, math.sqrt(dx * dx + dz * dz) - 2 * RAIO_VACA - 0.06)
+        end
+      end
+    end
+  end
+  return folga
+end
+
+-- aceita a pose se ela não encosta em nada; quem já começou encostado pode ir se soltando
+local function vaca_pode(v, x, z, g, limites)
+  local f = vaca_folga(v, x, z, g, limites)
+  return f >= 0 or f > vaca_folga(v, v.x, v.z, v.g, limites)
+end
+
+local function vaca_casa(i)
+  local id = "vaca" .. i
+  local o = L.POR_ID[id]
+  local wx, wz = L.t(id, o.x, o.z)
+  local x, z = L.base("fazenda", wx, wz)
+  return x, z, L.VACAS[i][3] + L.giro(id) - L.giro("fazenda")
+end
+
+local function vaca_descansa(v, pastando)
+  v.est = pastando and "pasta" or "para"
+  v.t = pastando and 4 + sorte(v) * 6 or 1 + sorte(v) * 2.5
+end
+
+-- só escolhe um passeio que ela consiga fazer inteiro: primeiro a virada, depois o trajeto
+local function vaca_trajeto_livre(v, x, z, ag, limites)
+  local atual = vaca_folga(v, v.x, v.z, v.g, limites)
+  local function livre(px, pz, pg)
+    local f = vaca_folga(v, px, pz, pg, limites)
+    return f >= 0 or f > atual
+  end
+  local d = (ag - v.g + math.pi) % (2 * math.pi) - math.pi
+  for k = 1, 6 do
+    if not livre(v.x, v.z, v.g + d * k / 6) then return false end
+  end
+  for k = 1, 6 do
+    if not livre(v.x + (x - v.x) * k / 6, v.z + (z - v.z) * k / 6, ag) then return false end
+  end
+  -- termina com alguma sobra: quem para colada na outra não consegue mais virar
+  return vaca_folga(v, x, z, ag, limites) >= 0.1
+end
+
+-- a casa guardada no layout pode ficar colada na cerca ou em outra vaca: sai para um lugar livre
+local function vaca_acha_lugar(v, limites)
+  local melhor = vaca_folga(v, v.x, v.z, v.g, limites)
+  if melhor >= 0 then return end
+  local mx, mz, mg = v.x, v.z, v.g
+  for _ = 1, 300 do
+    local x = limites[1] + sorte(v) * (limites[2] - limites[1])
+    local z = limites[3] + sorte(v) * (limites[4] - limites[3])
+    local g = sorte(v) * 2 * math.pi
+    local f = vaca_folga(v, x, z, g, limites)
+    if f > melhor then melhor, mx, mz, mg = f, x, z, g end
+    if f >= 0.15 then break end
+  end
+  v.x, v.z, v.g = mx, mz, mg
+end
+
+local function vaca_escolhe_destino(v, limites)
+  -- com a fazenda cheia virar é difícil: tenta seguir quase reto, dar uns passos de ré,
+  -- virar só um pouco no lugar e, por último, ir para qualquer lado
+  for tentativa = 1, 20 do
+    local g, x, z = v.g, v.x, v.z
+    if tentativa <= 6 then
+      g = v.g + (sorte(v) - 0.5) * 1.2
+      local d = 0.6 + sorte(v) * 1.8
+      x, z = v.x + math.cos(g) * d, v.z - math.sin(g) * d
+    elseif tentativa <= 10 then
+      local d = 0.4 + sorte(v) * 0.7
+      x, z = v.x - math.cos(g) * d, v.z + math.sin(g) * d
+    elseif tentativa <= 15 then
+      g = v.g + (sorte(v) - 0.5) * 1.8
+    else
+      g = v.g + (sorte(v) - 0.5) * 2 * math.pi
+      local d = 0.6 + sorte(v) * 1.8
+      x, z = v.x + math.cos(g) * d, v.z - math.sin(g) * d
+    end
+    if vaca_trajeto_livre(v, x, z, g, limites) then
+      v.est, v.ax, v.az, v.ag = "anda", x, z, g
+      return
+    end
+  end
+  vaca_descansa(v, true)
+end
+
+function M.mover_vacas(dt)
+  if not M.vacas or (M.anim.fazenda or 0) <= 0 then return end
+  local x0, x1, z0, z1 = L.sala("fazenda")
+  local limites = { x0, x1, z0, z1 }
+  local fixas = editando()
+  for i = 1, #L.VACAS do
+    if i > math.min(J.ef("vacas"), #L.VACAS) or L.oculto("vaca" .. i) then
+      M.vacas[i] = nil
+    else
+      local v = M.vacas[i]
+      local cx, cz, cg = vaca_casa(i)
+      -- nasce em casa; volta para casa se ela ou a cerca mudarem, e fica lá durante a edição
+      if not v or fixas or v.cx ~= cx or v.cz ~= cz or v.x0 ~= x0 or v.x1 ~= x1 or v.z0 ~= z0 or v.z1 ~= z1 then
+        local nova = not v
+        v = v or { s = 7919 * i + 13, velo = 0, pasta = 0, fase = 0 }
+        M.vacas[i] = v
+        v.x, v.z, v.g, v.cx, v.cz, v.x0, v.x1, v.z0, v.z1 = cx, cz, cg, cx, cz, x0, x1, z0, z1
+        v.velo = 0.35 + sorte(v) * 0.3
+        v.pasta, v.passo, v.acomodar = 0, 0, true
+        vaca_descansa(v, i % 2 == 0)
+        if nova then v.t = v.t * 0.4 + i * 0.5 end
+      end
+      if not fixas then
+        if v.acomodar then
+          v.acomodar = false
+          vaca_acha_lugar(v, limites)
+        end
+        v.pasta = util.limitar(v.pasta + (v.est == "pasta" and dt or -dt) / 0.8, 0, 1)
+        v.passo = 0
+        if v.est == "anda" then
+          if v.pasta <= 0 then
+            local ng, pronto = virar(v.g, v.ag, dt * 1.1)
+            if not vaca_pode(v, v.x, v.z, ng, limites) then
+              vaca_descansa(v, false)
+            elseif not pronto then
+              v.g = ng
+              v.fase = v.fase + dt
+              v.passo = math.sin(v.fase * 5) * 0.5
+            else
+              v.g = ng
+              local dx, dz = v.ax - v.x, v.az - v.z
+              local d = math.sqrt(dx * dx + dz * dz)
+              local p = math.min(d, v.velo * dt)
+              if d < 0.05 then
+                vaca_descansa(v, sorte(v) < 0.65)
+              else
+                local nx, nz = v.x + dx / d * p, v.z + dz / d * p
+                if vaca_pode(v, nx, nz, v.g, limites) then
+                  v.x, v.z = nx, nz
+                  v.fase = v.fase + dt
+                  v.passo = math.sin(v.fase * (5 + v.velo * 6))
+                else
+                  vaca_descansa(v, false)
+                end
+              end
+            end
+          end
+        else
+          v.t = v.t - dt
+          if v.t <= 0 then
+            if v.est == "pasta" or sorte(v) < 0.6 then vaca_escolhe_destino(v, limites)
+            else vaca_descansa(v, true) end
+          end
+        end
+      end
+    end
+  end
+end
 
 local function pomar(e)
   if e <= 0 then return end
@@ -751,8 +967,19 @@ local function fazenda(e)
   end
   for i = 1, math.min(J.ef("vacas"), #L.VACAS) do
     local v = L.VACAS[i]
-    grupo("vaca" .. i)
-    vaca(v[1], v[2], v[3], 0)
+    local id = "vaca" .. i
+    grupo(id)
+    local a = M.vacas and M.vacas[i]
+    if a then
+      -- de fazenda para o grupo da própria vaca, que o editor pode ter movido ou girado
+      local wx, wz = L.t("fazenda", a.x, a.z)
+      local px, pz = L.base(id, wx, wz)
+      -- mastigando: a cabeça sobe e desce um pouco, cada vaca em seu tempo
+      local masca = a.pasta * (0.94 + 0.06 * math.sin(M.tempo * 3 + i * 1.7))
+      vaca(px, pz, a.g + L.giro("fazenda") - L.giro(id), a.passo, masca)
+    else
+      vaca(v[1], v[2], v[3], 0)
+    end
   end
 end
 
@@ -772,7 +999,10 @@ local function cozinha(e)
   caixa(x - 0.3, 0.15, z + 0.39, 0.5, 0.4, 0.06, "#201a18")
   brilho("caixa", x - 0.3, 0.28, z + 0.41, 0.36, 0.2, 0.06, FOGO, 1.3)
   cilindro(x - 0.3, 0.93 * o, z, 0.5, 0.3, COBRE)
-  cilindro(x - 0.3, 1.23 * o, z, 0.54, 0.05, FERRO)
+  -- mexendo: a tampa fica de lado no fogão
+  local mexendo = M.cozinheiro and M.cozinheiro.fazendo == "fogao"
+  if mexendo then cilindro(x + 0.25, 0.93 * o, z + 0.17, 0.54, 0.05, FERRO)
+  else cilindro(x - 0.3, 1.23 * o, z, 0.54, 0.05, FERRO) end
   cilindro(x + 0.45, 0.93 * o, z - 0.2, 0.26, 3.27 * o, FERRO)
   -- panelas penduradas na parede
   grupo("panelas")
@@ -959,6 +1189,9 @@ function M.boneco(b)
     -- volta com um saco de espólios nas costas
     p("caixa", 0.36, y0 + by - 0.2, bs * 0.28, 0.14, 0.44, 0.15, t.braco, -bs)
     p("esfera", 0, y0 + pernas + 0.42, -0.34, 0.5, 0.56, 0.42, "#b59463")
+  elseif b.mao then
+    -- braço esticado à frente, trabalhando
+    p("caixa", 0.3, y0 + by + b.mao, 0.2, 0.14, 0.15, 0.44, t.braco)
   elseif b.bebendo then
     p("caixa", 0.3, y0 + by + 0.02, 0.2, 0.14, 0.15, 0.44, t.braco)
     p("cilindro", 0.3, y0 + by, 0.48, 0.22, 0.26, 0.22, "#e8a33d")
@@ -991,6 +1224,8 @@ function M.boneco(b)
     p("cilindro", 0, y0 + cy + 0.38, 0, 0.42, 0.04, 0.42, "#f2c14e")
   elseif b.chapeu then
     p("cilindro", 0, y0 + cy + 0.16, 0, 0.56, 0.16, 0.56, b.chapeu)
+    -- touca de cozinheiro: sobe junto com a cabeça, mesmo se ele andar ou mudar de tipo
+    if b.chapeu_alto then p("cilindro", 0, y0 + cy + 0.3, 0, 0.42, 0.24, 0.42, b.chapeu) end
   end
 end
 
@@ -1010,12 +1245,83 @@ local function garcom(g)
   end
 end
 
+-- Ponto do cozinheiro (nas coordenadas de origem dele) e para onde olha, em cada posto.
+-- Vêm do próprio móvel, para acompanhar o que for movido no editor.
+local function posto_cozinheiro(qual)
+  -- no fogão fica de lado, à esquerda da panela: de frente ele a esconderia da câmera
+  local id, px, pz, ox, oz = "fogao", 13.0, -3.25, 13.7, -3.95
+  if qual == "mesa" then id, px, pz, ox, oz = "mesa_preparo", 14.3, -1.64, 14.3, -0.9 end
+  local x, z = L.base("cozinheiro", L.t(id, px, pz))
+  local ax, az = L.base("cozinheiro", L.t(id, ox, oz))
+  return x, z, math.atan(ax - x, az - z)
+end
+
+function M.mover_cozinheiro(dt)
+  if J.ef("cozinheiro") <= 0 then M.cozinheiro = nil return end
+  local c = M.cozinheiro
+  if not c then
+    c = { posto = "fogao", t = 5, fase = 0, giro = math.pi }
+    c.x, c.z = posto_cozinheiro("fogao")
+    M.cozinheiro = c
+  end
+  c.andando, c.fazendo = false, nil
+  if editando() then
+    -- na edição ele fica no lugar que o editor mostra e deixa selecionar
+    c.parado = true
+    return
+  end
+  if c.parado then
+    c.parado = false
+    c.x, c.z = posto_cozinheiro(c.posto)
+  end
+  if c.posto == "mesa" and L.oculto("mesa_preparo") then c.posto, c.t = "fogao", 5 end
+  local ax, az, ag = posto_cozinheiro(c.posto)
+  local dx, dz = ax - c.x, az - c.z
+  local d = math.sqrt(dx * dx + dz * dz)
+  if d > 0.05 then
+    c.andando = true
+    c.fase = c.fase + dt
+    c.giro = virar(c.giro, math.atan(dx, dz), dt * 8)
+    local p = math.min(d, dt * 1.4)
+    c.x, c.z = c.x + dx / d * p, c.z + dz / d * p
+  else
+    local pronto
+    c.giro, pronto = virar(c.giro, ag, dt * 8)
+    if pronto then
+      c.fazendo = c.posto
+      c.t = c.t - dt
+      if c.t <= 0 then
+        c.posto = c.posto == "fogao" and "mesa" or "fogao"
+        c.t = c.posto == "fogao" and 5 or 3.5
+        if c.posto == "mesa" and L.oculto("mesa_preparo") then c.posto, c.t = "fogao", 5 end
+      end
+    end
+  end
+end
+
 local function equipe_fixa()
   grupo("cozinheiro")
   if J.ef("cozinheiro") > 0 then
-    -- parado por enquanto, de frente para o fogão
-    M.boneco({ x = 14, z = -2.5, giro = math.pi, fase = 0, pele = "#e0ac7e", tipo = T_COZINHEIRO, chapeu = "#f4f4f0" })
-    cilindro(14, 2.08, -2.5, 0.42, 0.24, "#f4f4f0")
+    local c = M.cozinheiro
+    local x, z, giro = 14, -2.5, math.pi
+    if c and not c.parado then x, z, giro = c.x, c.z, c.giro end
+    local fazendo = c and c.fazendo
+    local mao
+    if fazendo == "fogao" then mao = 0.26 + math.sin(M.tempo * 4) * 0.02
+    elseif fazendo == "mesa" then mao = 0.14 + math.abs(math.sin(M.tempo * 7)) * 0.08 end
+    M.boneco({ x = x, z = z, giro = giro, fase = c and c.fase or 0, andando = c and c.andando, mao = mao,
+      pele = "#e0ac7e", tipo = T_COZINHEIRO, chapeu = "#f4f4f0", chapeu_alto = true })
+    if fazendo == "fogao" then
+      -- colher dando voltas dentro da panela
+      grupo("fogao")
+      local a = M.tempo * 4
+      peca("caixa", 13.56 + math.cos(a) * 0.08, 1.3, -3.9 + math.sin(a) * 0.08, 0.07, 0.8, 0.07, 0, TAMPO, 0, 0.7)
+    elseif fazendo == "mesa" then
+      -- faca subindo e descendo na tábua
+      grupo("mesa_preparo")
+      local y = 0.95 + math.abs(math.sin(M.tempo * 7)) * 0.1
+      caixa(14.6, y, -1.0, 0.05, 0.04, 0.42, "#c0c4c8")
+    end
   end
   grupo("bardo")
   if J.ef("bardo") > 0 then
