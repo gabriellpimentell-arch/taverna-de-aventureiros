@@ -114,6 +114,7 @@ function J.chamar_menestrel()
     pele = "#e0ac7e", chapeu = "#3a7a55", menestrel = true, estado = "menestrel_indo", historia = historia, pedido = "bebida",
   }
   local x, z = L.t("palco", -1.65, 0.2)
+  J.vir_de_fora(p, 0)
   J.pessoas[#J.pessoas + 1] = p
   J.caminho(p, x, z)
   -- num salão enorme a caminhada é longa; o limite só existe para ele não ficar preso
@@ -357,8 +358,42 @@ function J.lugares_sem_rota()
   return n
 end
 
+-- A porta em coordenadas de origem (a parede fica entre x = -6.9 e -6.5): L.t acompanha o editor.
+-- soleira é o primeiro ponto livre dentro do salão; fora é atrás da parede, longe do mapa de colisões.
+local function soleira_da_porta(dz)
+  local x, z = L.t("porta", -5.9, 1.6 + dz)
+  -- móvel na frente da porta: a rota começa na própria porta, como sempre foi
+  if Cam.bloqueado(x, z) then return J.PORTA.x, J.PORTA.z end
+  return x, z
+end
+
+-- Coloca a pessoa atrás da parede: ela atravessa o vão em linha reta e só então segue a rota
+function J.vir_de_fora(p, dz)
+  local sx, sz = soleira_da_porta(dz)
+  p.x, p.z = L.t("porta", -7.7, 1.6 + dz)
+  p.giro = math.pi / 2 + L.giro("porta")
+  p.vao = { { x = sx, z = sz } }
+end
+
+-- Quem está andando perto da porta (ou no vão) a mantém aberta; sentados e garçons não contam
+function J.alguem_na_porta()
+  for _, p in ipairs(J.pessoas or {}) do
+    if p.vao or (p.andando and not p.sentado and util.distancia(p.x, p.z, J.PORTA.x, J.PORTA.z) < 1.5) then return true end
+  end
+  return false
+end
+
+-- Está atrás da parede? (o boneco tem 0,3 de raio: aqui ele ainda fica todo dentro dela)
+function J.fora_da_porta(p)
+  if not p.vao then return false end
+  return (L.base("porta", p.x, p.z)) < -6.85
+end
+
 -- Monta os caminhos desviando dos objetos; se não houver saída, a pessoa atravessa
 function J.caminho(p, x, z)
+  -- quem ainda vem pelo vão está fora do mapa: a rota começa no fim do vão
+  local vao, fx, fz = p.vao, p.x, p.z
+  if vao then p.x, p.z = vao[#vao].x, vao[#vao].z end
   local r = Cam.rota(p.x, p.z, x, z)
   if not r then
     -- empurrado para dentro de um móvel: sai pelo ponto livre mais próximo e segue a rota dali
@@ -385,6 +420,7 @@ function J.caminho(p, x, z)
   end
   p.rota, p.andando, p.preso, p.destino_x, p.destino_z = r, true, 0, x, z
   p.origem_x, p.origem_z = p.x, p.z
+  if vao then p.x, p.z, p.fantasma = fx, fz, true end
 end
 
 -- Só atualiza onde as coisas estão, para o editor mostrar o resultado na hora
@@ -431,19 +467,21 @@ function J.intervalo_garcom() return C.garcom_intervalo * J.ef("x_garcom") end
 -- Pessoas ---------------------------------------------------------------------------
 
 local function nova_pessoa(tipo)
-  return {
-    x = J.PORTA.x, y = 0, z = J.PORTA.z + (math.random() - 0.5) * 0.9, giro = math.pi / 2, fase = math.random() * 6, t = 0,
+  local p = {
+    x = J.PORTA.x, y = 0, z = J.PORTA.z, giro = math.pi / 2, fase = math.random() * 6, t = 0,
     tipo = tipo, pele = util.escolher(PELES),
     chapeu = tipo.nome == "comum" and util.escolher(CHAPEUS) or nil,
     pedido = math.random() < 0.5 and "bebida" or "comida",
     rota = {}, andando = true, estado = "entrando",
   }
+  J.vir_de_fora(p, (math.random() - 0.5) * 0.6)
+  return p
 end
 
 local function rota_ate(p, x, z) J.caminho(p, x, z) end
 
 local function rota_saida(p)
-  J.caminho(p, J.PORTA.x, J.PORTA.z)
+  J.caminho(p, soleira_da_porta(0))
   p.estado = "saindo"
 end
 
@@ -458,7 +496,7 @@ function J.porta_lotada()
   local n = 0
   for _, p in ipairs(J.pessoas) do
     -- quem está sentado perto da porta não atrapalha a entrada
-    if p.andando and not p.sentado and util.distancia(p.x, p.z, J.PORTA.x, J.PORTA.z) < 2.2 then n = n + 1 end
+    if p.andando and not p.sentado and not p.vao and util.distancia(p.x, p.z, J.PORTA.x, J.PORTA.z) < 2.2 then n = n + 1 end
   end
   return n >= 3
 end
@@ -606,8 +644,19 @@ local function iniciar_missao_visual(p, dados)
   rota_ate(p, x, z)
 end
 
+-- Reta pelo vão, sem colisões: as paredes do mapa bloqueiam tudo o que fica fora do salão
+local function atravessar_vao(p, dt)
+  local a = p.vao[1]
+  if andar(p, a.x, a.z, C.velocidade_pessoa, dt) then table.remove(p.vao, 1) end
+  if #p.vao > 0 then return end
+  p.vao, p.fantasma = nil, p.sem_rota or nil
+  -- só some depois de passar pela porta
+  if p.estado == "saindo" then p.removido = true end
+end
+
 local function atualizar_pessoa(p, dt)
   p.t = p.t + dt
+  if p.vao then return atravessar_vao(p, dt) end
   if p.estado == "entrando" then
     if seguir_rota(p, dt, C.velocidade_pessoa) then
       p.estado, p.t, p.andando, p.sentado = "esperando", 0, false, true
@@ -682,7 +731,12 @@ local function atualizar_pessoa(p, dt)
       if lugar and p.festa then sentar_cliente(p, lugar) else rota_saida(p) end
     end
   elseif p.estado == "saindo" then
-    if seguir_rota(p, dt, C.velocidade_pessoa) then p.removido = true end
+    if seguir_rota(p, dt, C.velocidade_pessoa) then
+      -- volta ao centro da soleira e cruza a porta em linha reta
+      local sx, sz = soleira_da_porta(0)
+      local fx, fz = L.t("porta", -7.7, 1.6)
+      p.vao, p.fantasma = { { x = sx, z = sz }, { x = fx, z = fz } }, true
+    end
   end
 end
 
@@ -1261,7 +1315,7 @@ local function atualizar_colisoes(dt)
       else
         p.preso = 0
         p.ult_x, p.ult_z = p.x, p.z
-        if not p.sem_rota then p.fantasma = nil end
+        if not p.sem_rota and not p.vao then p.fantasma = nil end
       end
     end
   end

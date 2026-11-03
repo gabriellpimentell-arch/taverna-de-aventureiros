@@ -892,6 +892,7 @@ end
 
 local function tela_titulo()
   cabecalho_menu()
+  motor.texto("Do balcão de um vilarejo à guilda que salva o mundo", 481, 105, 17, "#000000a0", "centro")
   motor.texto("Do balcão de um vilarejo à guilda que salva o mundo", 480, 104, 17, cor.texto, "centro")
   local x, w, y = 340, 280, 160
   local ultimo = S.ultimo()

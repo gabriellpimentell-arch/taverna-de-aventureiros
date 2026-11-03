@@ -1460,6 +1460,99 @@ do
   novo()
 end
 
+-- Porta principal: as folhas abrem para quem passa e ninguém atravessa a porta fechada
+do
+  local M = require("mundo")
+  local L = require("layout")
+  local Cam = require("caminhos")
+  local function so_o_cliente()
+    J.relogio_chegada = -1e9
+  end
+  -- anda quadro a quadro e devolve a abertura da porta quando a pessoa cruza a parede
+  local function acompanhar(p, ate)
+    local ao_cruzar, antes = nil, L.base("porta", p.x, p.z)
+    for _ = 1, 400 do
+      atualizar(1 / 30)
+      if ate() then break end
+      local bx = L.base("porta", p.x, p.z)
+      if (antes < -6.5) ~= (bx < -6.5) then ao_cruzar = M.porta_aberta end
+      antes = bx
+    end
+    return ao_cruzar
+  end
+  for _, giro in ipairs({ 0, -math.pi / 2 }) do
+    motor._layout = false
+    novo()
+    libera("mesa", "mesa")
+    if giro ~= 0 then
+      -- porta girada e levada para a parede do fundo
+      L.colocar("porta", -1, -4.4)
+      L.de("porta").g = giro
+      J.aplicar_layout()
+    end
+    J.sem_caminho = 0
+    so_o_cliente()
+    atualizar(0.5)
+    ok("porta começa fechada", M.porta_aberta == 0, M.porta_aberta)
+    local p = J.novo_cliente()
+    local bx = L.base("porta", p.x, p.z)
+    ok("cliente nasce atrás da parede", bx < -6.9, bx)
+    ok("atrás da parede não é desenhado", J.fora_da_porta(p))
+    atualizar(0.1)
+    ok("porta abre aos poucos", M.porta_aberta > 0.2 and M.porta_aberta < 0.6, M.porta_aberta)
+    atualizar(0.2)
+    ok("porta abre em 0,25 s", M.porta_aberta == 1, M.porta_aberta)
+    local cruzou = acompanhar(p, function() return not p.vao end)
+    ok("cruzou a porta já aberta", cruzou == 1, cruzou)
+    ok("a rota continua depois do vão", #p.rota > 0 and not p.sem_rota and not p.fantasma)
+    for _ = 1, 150 do
+      atualizar(1 / 30)
+      if p.sentado then break end
+    end
+    ok("porta aberta chegou ao banco", p.sentado)
+    for _ = 1, 15 do atualizar(1 / 30) end
+    ok("porta fecha depois que passou", M.porta_aberta == 0, M.porta_aberta)
+    -- saída: atravessa e só some depois de passar
+    p.estado, p.t = "comendo", 1e9
+    atualizar(1 / 30)
+    ok("cliente foi embora", p.estado == "saindo", p.estado)
+    local viu_vao
+    cruzou = acompanhar(p, function()
+      if p.vao then viu_vao = true end
+      return p.removido
+    end)
+    ok("saída cruza a porta aberta", cruzou and cruzou > 0.99, cruzou)
+    ok("saída passa pelo vão", viu_vao)
+    ok("só some do lado de fora", L.base("porta", p.x, p.z) < -6.9, p.x)
+    for _ = 1, 15 do atualizar(1 / 30) end
+    ok("porta fecha depois da saída", M.porta_aberta == 0, M.porta_aberta)
+    ok("porta não atrapalha as rotas", J.sem_caminho == 0, J.sem_caminho)
+    L.restaurar()
+  end
+  -- animação não mexe no ouro nem no relógio do jogo
+  motor._layout = false
+  novo()
+  libera("mesa")
+  J.estado.ouro = 0
+  so_o_cliente()
+  local tempo = J.estado.tempo
+  local p = J.novo_cliente()
+  for _ = 1, 20 do M.atualizar(0.1) end
+  ok("porta não mexe em ouro nem tempo", J.estado.ouro == 0 and J.estado.tempo == tempo)
+  ok("sem J.atualizar a pessoa fica parada", p.vao ~= nil)
+  -- menestrel também vem de fora
+  novo()
+  J.chamar_menestrel("uma história")
+  local m = J.pessoas[#J.pessoas]
+  ok("menestrel vem de fora", m.menestrel and m.vao ~= nil)
+  for _ = 1, 400 do
+    atualizar(0.05)
+    if m.estado ~= "menestrel_indo" then break end
+  end
+  ok("menestrel chega ao palco", m.estado == "menestrel_canta" and not m.fantasma, m.estado)
+  novo()
+end
+
 -- Tela inicial e saves ------------------------------------------------------------------------------
 do
   local S = require("saves")
