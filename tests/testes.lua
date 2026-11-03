@@ -889,7 +889,7 @@ do
     for _, g in ipairs(J.garcons) do
       local k = parado[g] or { x = g.x, z = g.z, t = 0 }
       parado[g] = k
-      if g.estado ~= "parada" and util.distancia(g.x, g.z, k.x, k.z) < 0.5 then
+      if g.estado ~= "parada" and g.estado ~= "buscando" and util.distancia(g.x, g.z, k.x, k.z) < 0.5 then
         k.t = k.t + 0.1
         pior = math.max(pior, k.t)
       else
