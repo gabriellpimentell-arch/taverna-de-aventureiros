@@ -16,8 +16,17 @@ local E = { ativo = false }
 local LISTA = { x = 8, y = 56, w = 158, h = 448 }
 local ACOES = { x = 810, y = 56, w = 142, h = 440 }
 local ITEM = 40       -- altura da linha (alvo de toque)
-local VISIVEIS = 9    -- linhas inteiras visíveis na lista
-local LISTA_TOPO = 32 -- título acima das linhas
+local VISIVEIS = 8    -- linhas inteiras visíveis na lista
+local LISTA_TOPO = 74 -- categoria e título acima das linhas
+
+-- objetos da categoria escolhida
+local function itens()
+  local l = {}
+  for _, o in ipairs(L.OBJETOS) do
+    if o.cat == E.cat then l[#l + 1] = o end
+  end
+  return l
+end
 
 local function msg(t) E.mensagem, E.tempo_msg = t, 3 end
 
@@ -26,6 +35,7 @@ function E.abrir()
   E.sel, E.arrasto, E.confirmar = nil, nil, false
   E.rolagem, E.desfazer, E.grade, E.painel = 0, {}, true, true
   E.mudou = false
+  E.cat = "Móveis"
   J.editando, J.previa = true, true
 end
 
@@ -43,6 +53,7 @@ end
 local function guardar()
   local copia = {}
   for id, d in pairs(L.dados) do copia[id] = { x = d.x, z = d.z, y = d.y, g = d.g } end
+  copia._tamanho = { dir = L.tamanho.dir, frente = L.tamanho.frente, fundo = L.tamanho.fundo, oeste = L.tamanho.oeste }
   E.desfazer[#E.desfazer + 1] = copia
   if #E.desfazer > 30 then table.remove(E.desfazer, 1) end
 end
@@ -66,16 +77,17 @@ function E.mover_para(id, x, z)
     x = math.floor(x * 4 + 0.5) / 4
     z = math.floor(z * 4 + 0.5) / 4
   end
-  d.x, d.z = x - o.x, z - o.z
+  local ax, az = L.desloc(id)
+  d.x, d.z = x - o.x - (ax - d.x), z - o.z - (az - d.z)
   L.limitar(id)
   J.aplicar_visual()
 end
 
 function E.pegar(x, y)
   local melhor, md = nil, 34
-  for _, o in ipairs(L.OBJETOS) do
-    local d = L.dados[o.id]
-    local sx, sy = motor.projetar(o.x + (d and d.x or 0), 0.3, o.z + (d and d.z or 0))
+  for _, o in ipairs(itens()) do
+    local dx, dz = L.desloc(o.id)
+    local sx, sy = motor.projetar(o.x + dx, 0.3, o.z + dz)
     if sx then
       local dist = util.distancia(x, y, sx, sy)
       if dist < md then melhor, md = o.id, dist end
@@ -92,7 +104,8 @@ function E.tocar(x, y)
     local d = L.de(id)
     local o = L.POR_ID[id]
     local gx, gz = motor.chao(x, y)
-    E.arrasto = { id = id, ox = (gx or 0) - (o.x + d.x), oz = (gz or 0) - (o.z + d.z), moveu = false, sx = x, sy = y }
+    local ax, az = L.desloc(id)
+    E.arrasto = { id = id, ox = (gx or 0) - (o.x + ax), oz = (gz or 0) - (o.z + az), moveu = false, sx = x, sy = y }
   else
     E.sel = nil
     E.arrasto = nil
@@ -163,7 +176,7 @@ local function achar_sob_mouse()
     if util.dentro(mx, my, LISTA) then
       local topo = LISTA.y + LISTA_TOPO
       if my >= topo and my < topo + VISIVEIS * ITEM then
-        local o = L.OBJETOS[math.floor((my - topo + E.rolagem) / ITEM) + 1]
+        local o = itens()[math.floor((my - topo + E.rolagem) / ITEM) + 1]
         return o and o.id
       end
       return nil
@@ -176,10 +189,10 @@ end
 
 local function desenhar_marcadores(sob)
   local function posicao(o)
-    local d = L.dados[o.id]
-    return motor.projetar(o.x + (d and d.x or 0), 0.3, o.z + (d and d.z or 0))
+    local dx, dz = L.desloc(o.id)
+    return motor.projetar(o.x + dx, 0.3, o.z + dz)
   end
-  for _, o in ipairs(L.OBJETOS) do
+  for _, o in ipairs(itens()) do
     if o.id ~= E.sel and o.id ~= sob then
       local sx, sy = posicao(o)
       if sx then
@@ -213,28 +226,76 @@ local function ajustar_rolagem()
   local alt = VISIVEIS * ITEM
   if E.sel ~= E.sel_visto then
     E.sel_visto = E.sel
-    for i, o in ipairs(L.OBJETOS) do
+    for i, o in ipairs(itens()) do
       if o.id == E.sel then
         if (i - 1) * ITEM < E.rolagem then E.rolagem = (i - 1) * ITEM
         elseif i * ITEM > E.rolagem + alt then E.rolagem = i * ITEM - alt end
       end
     end
   end
-  local maximo = math.max(0, #L.OBJETOS * ITEM - alt)
+  local maximo = math.max(0, #itens() * ITEM - alt)
   E.rolagem = util.limitar(math.floor(E.rolagem / ITEM + 0.5) * ITEM, 0, maximo)
   return maximo
+end
+
+-- escolha do que editar: uma categoria de objetos ou o tamanho da taverna
+local function seletor_categoria()
+  local w = (LISTA.w - 18) / 2
+  local function trocar(delta)
+    local n = #L.CATEGORIAS
+    for i, c in ipairs(L.CATEGORIAS) do
+      if c == E.cat then
+        E.cat = L.CATEGORIAS[(i - 1 + delta) % n + 1]
+        E.rolagem, E.sel, E.sel_visto = 0, nil, nil
+        break
+      end
+    end
+  end
+  U.botao("editor_cat_ant", LISTA.x + 6, LISTA.y + 6, 36, 34, "<", { cor = "#4a3627", cor_texto = cor.texto, tam = 15 }, function() trocar(-1) end)
+  U.botao("editor_cat_prox", LISTA.x + LISTA.w - 42, LISTA.y + 6, 36, 34, ">", { cor = "#4a3627", cor_texto = cor.texto, tam = 15 }, function() trocar(1) end)
+  motor.texto(E.cat, LISTA.x + LISTA.w / 2, LISTA.y + 15, 13, cor.ouro, "centro", true)
+  return w
+end
+
+local LADOS = { { "dir", "Direita" }, { "frente", "Frente" }, { "fundo", "Fundo" }, { "oeste", "Esquerda" } }
+
+local function desenhar_tamanho()
+  local y = LISTA.y + 48
+  motor.texto("Tamanho do salão", LISTA.x + 10, y, 13, cor.texto, "esquerda", true)
+  y = y + 20
+  for _, l in ipairs(LADOS) do
+    local lado = l[1]
+    motor.texto(l[2] .. ": +" .. L.tamanho[lado] .. " m", LISTA.x + 10, y, 13, cor.texto)
+    local bw = (LISTA.w - 18) / 2
+    local function muda(delta)
+      guardar()
+      L.mudar_tamanho(lado, delta)
+      mudou()
+      J.aplicar_visual()
+    end
+    U.botao("editor_tam_menos_" .. lado, LISTA.x + 6, y + 18, bw, 40, "-1", { ativo = L.tamanho[lado] > 0, cor = "#4a3627", cor_texto = cor.texto, tam = 15 }, function() muda(-1) end)
+    U.botao("editor_tam_mais_" .. lado, LISTA.x + 12 + bw, y + 18, bw, 40, "+1", { ativo = L.tamanho[lado] < L.TAMANHO_MAX, cor = "#4a3627", cor_texto = cor.texto, tam = 15 }, function() muda(1) end)
+    y = y + 66
+  end
+  U.paragrafo("As paredes acompanham. Depois, ligue \"FPS e fluxo\" nas Configurações para medir.", LISTA.x + 10, y + 2, LISTA.w - 20, 13, cor.texto_fraco)
 end
 
 local function desenhar_lista(sob, maximo)
   U.painel(LISTA.x, LISTA.y, LISTA.w, LISTA.h, "#21150ef0")
   U.zona("editor_fundo_lista", LISTA)
+  seletor_categoria()
+  if E.cat == "Tamanho" then
+    desenhar_tamanho()
+    return
+  end
+  local objetos = itens()
   local primeiro = E.rolagem / ITEM + 1
-  local ultimo = math.min(#L.OBJETOS, primeiro + VISIVEIS - 1)
-  motor.texto(string.format("Objetos %d-%d de %d", primeiro, ultimo, #L.OBJETOS), LISTA.x + 10, LISTA.y + 9, 13, cor.texto)
+  local ultimo = math.min(#objetos, primeiro + VISIVEIS - 1)
+  motor.texto(string.format("Itens %d-%d de %d", primeiro, ultimo, #objetos), LISTA.x + 10, LISTA.y + 50, 13, cor.texto)
   local topo = LISTA.y + LISTA_TOPO
   local largura = LISTA.w - 20
   for i = primeiro, ultimo do
-    local o = L.OBJETOS[i]
+    local o = objetos[i]
     local y = topo + (i - primeiro) * ITEM
     local sel = o.id == E.sel
     motor.retangulo(LISTA.x + 6, y + 1, largura, ITEM - 3, sel and cor.ouro or (o.id == sob and "#5e4330" or "#3d291b"), 7)
@@ -245,7 +306,7 @@ local function desenhar_lista(sob, maximo)
   local alt = VISIVEIS * ITEM
   local bx = LISTA.x + LISTA.w - 11
   motor.retangulo(bx, topo, 5, alt - 3, "#00000060", 2)
-  local h = math.max(24, alt * VISIVEIS / #L.OBJETOS)
+  local h = math.min(alt - 3, math.max(24, alt * VISIVEIS / math.max(1, #objetos)))
   local p = maximo > 0 and E.rolagem / maximo or 0
   motor.retangulo(bx, topo + p * (alt - 3 - h), 5, h, cor.ouro, 2)
   -- botões de página, para quem não usa a roda
@@ -278,7 +339,13 @@ local function desenhar_acoes()
   end, od)
   botao("editor_desfazer", ACOES.y + 190, "Desfazer (" .. #E.desfazer .. ")", function()
     local ultimo = table.remove(E.desfazer)
-    if ultimo then L.dados = ultimo; mudou(); J.aplicar_visual() end
+    if ultimo then
+      L.tamanho = ultimo._tamanho
+      ultimo._tamanho = nil
+      L.dados = ultimo
+      mudou()
+      J.aplicar_visual()
+    end
   end)
   botao("editor_grade", ACOES.y + 236, E.grade and "Encaixe: ligado" or "Encaixe: desligado", function() E.grade = not E.grade end)
   botao("editor_copiar", ACOES.y + 282, "Copiar posições", function()
@@ -313,9 +380,9 @@ function E.desenhar()
   if E.mensagem then
     txt, fundo, frente = E.mensagem, cor.ouro, cor.texto_ouro
   elseif E.sel then
-    local d = L.de(E.sel)
     local o = L.POR_ID[E.sel]
-    txt = o.nome .. string.format("  x %.2f  z %.2f", o.x + d.x, o.z + d.z):gsub("%.", ",")
+    local dx, dz = L.desloc(E.sel)
+    txt = o.nome .. string.format("  x %.2f  z %.2f", o.x + dx, o.z + dz):gsub("%.", ",")
   else
     txt = "Arraste um ponto dourado para mover o objeto"
   end

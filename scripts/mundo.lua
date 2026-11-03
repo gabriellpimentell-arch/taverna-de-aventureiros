@@ -18,9 +18,11 @@ local G = nil
 local function grupo(id)
   if not id then G = nil return end
   local d = L.dados[id]
-  if not d then G = nil return end
   local o = L.POR_ID[id]
-  G = { px = o.x, pz = o.z, x = d.x, z = d.z, y = d.y, g = d.g, co = math.cos(d.g), si = math.sin(d.g) }
+  local x, z = L.desloc(id)
+  local y, g = d and d.y or 0, d and d.g or 0
+  if x == 0 and z == 0 and y == 0 and g == 0 then G = nil return end
+  G = { px = o.x, pz = o.z, x = x, z = z, y = y, g = g, co = math.cos(g), si = math.sin(g) }
 end
 M.grupo = grupo
 
@@ -57,6 +59,8 @@ function M.iniciar()
   M.tempo = 0
   M.zoom, M.zoom_alvo = 1, 1
   M.pan_x, M.pan_z = 0, 0
+  M.dt_cena = 0
+  M.fazendeiro = { x = -5.7, z = 6.35, giro = 0, fase = 0, t = 0, i = 1 }
   M.anim = { leste = 0, jardim = 0, cerveja = 0, circulo = 0 }
   local a = M.alvos()
   for k, v in pairs(a) do M.anim[k] = v end
@@ -74,15 +78,18 @@ end
 
 -- a câmera recua conforme as áreas abrem, para sempre caber tudo
 function M.calcular_enquadramento(a)
-  local xmax = util.lerp(6.7, 12.2, math.max(a.leste, a.circulo))
-  local zmax = util.lerp(4.9, 8.8, math.max(a.jardim, a.cerveja, a.circulo))
-  local cx, cz = (-6.9 + xmax) / 2, (-4.9 + zmax) / 2
-  local escala = math.max((xmax + 6.9) / 13.6, (zmax + 4.9) / 9.8)
-  return { x = cx, z = cz, escala = escala }
+  local xa, xb, za, zb = L.salao()
+  local xmin, zmin = xa - 0.4, za - 0.4
+  local xmax = xb + util.lerp(0.2, 5.7, math.max(a.leste, a.circulo))
+  local zmax = zb + util.lerp(0.2, 4.1, math.max(a.jardim, a.cerveja, a.circulo))
+  local cx, cz = (xmin + xmax) / 2, (zmin + zmax) / 2
+  local escala = math.max((xmax - xmin) / 13.6, (zmax - zmin) / 9.8)
+  return { x = cx, z = cz, escala = escala, largura = xmax - xmin, fundo = zmax - zmin }
 end
 
 function M.atualizar(dt)
   M.tempo = M.tempo + dt
+  M.dt_cena = dt
   local a = M.alvos()
   for k, v in pairs(a) do
     if M.anim[k] < v then M.anim[k] = math.min(v, M.anim[k] + dt / 1.6)
@@ -93,6 +100,7 @@ function M.atualizar(dt)
   M.quadro.x = util.lerp(M.quadro.x, q.x, k)
   M.quadro.z = util.lerp(M.quadro.z, q.z, k)
   M.quadro.escala = util.lerp(M.quadro.escala, q.escala, k)
+  M.quadro.largura, M.quadro.fundo = q.largura, q.fundo
   M.zoom = util.lerp(M.zoom, M.zoom_alvo, math.min(1, dt * 8))
   M.aplicar_camera()
 end
@@ -102,13 +110,15 @@ function M.aplicar_camera()
   local d = q.escala / M.zoom
   local ax, az = q.x + M.pan_x, q.z + M.pan_z
   motor.cena_camera(ax + 6.5 * d, 15 * d, az + 18 * d, ax, 0.3, az - 0.3, 28)
+  motor.cena_sombra(q.x, q.z, math.max(24, math.max(q.largura or 14, q.fundo or 10) * 1.1))
 end
 
 function M.arrastar(dx, dy)
   if M.zoom_alvo <= 1.02 then return end
   local f = 0.022 * M.quadro.escala / M.zoom
-  M.pan_x = util.limitar(M.pan_x - dx * f, -9, 9)
-  M.pan_z = util.limitar(M.pan_z - dy * f * 1.2, -7, 7)
+  local lx, lz = (M.quadro.largura or 14) * 0.65, (M.quadro.fundo or 10) * 0.65
+  M.pan_x = util.limitar(M.pan_x - dx * f, -lx, lx)
+  M.pan_z = util.limitar(M.pan_z - dy * f * 1.2, -lz, lz)
 end
 
 function M.rolar(v)
@@ -125,7 +135,7 @@ local function piso(x0, x1, z0, z1, a, b, e, gasto)
     local l = math.min(0.8, z1 - z)
     local c = i % 2 == 0 and a or b
     -- as tábuas por onde todos andam ficam mais gastas
-    if gasto and z + l / 2 > 0.8 and z + l / 2 < 2.4 then c = gasto end
+    if gasto and math.abs(z + l / 2 - J.PORTA.z) < 0.8 then c = gasto end
     caixa((x0 + x1) / 2, -0.3, z + l / 2, x1 - x0, 0.3 * e, l - 0.03, c)
     z = z + 0.8
     i = i + 1
@@ -142,7 +152,6 @@ local function mesa(x, z)
   cilindro(x, 0, z, 0.26, 0.72, MAD_ESC)
   cilindro(x, 0, z, 0.8, 0.07, VIGA)
   peca("cilindro", x, 0.70, z, 1.75, 0.12, 1.75, 0, TAMPO)
-  vela(x, 0.82, z)
 end
 
 local function banquinho(x, z)
@@ -164,7 +173,8 @@ local function tapete(x, z, ex, ez)
 end
 
 -- janela acesa na parede esquerda
-local function janela(z)
+local function janela(id, z)
+  grupo(id)
   local x = -6.46
   caixa(x, 1.5, z, 0.08, 1.5, 1.2, VIGA)
   brilho("caixa", x + 0.05, 2.25, z, 0.04, 1.26, 0.96, "#ffc96b", 1.3)
@@ -183,19 +193,21 @@ end
 
 local function salao()
   local tempo = M.tempo
-  piso(-6.5, 6.5, -4.5, 4.7, PISO_A, PISO_B, 1, CORREDOR)
-  caixa(0, -0.95, 0.1, 13.6, 0.65, 9.9, "#2a1b12")
-  caixa(0, 0, -4.7, 13.4, 4.2, 0.4, PAREDE)
-  caixa(-6.7, 0, 0.05, 0.4, 4.2, 9.9, "#47301f")
+  local xa, xb, za, zb = L.salao()
+  local cx, cz, lx, lz = (xa + xb) / 2, (za + zb) / 2, xb - xa, zb - za
+  piso(xa, xb, za, zb, PISO_A, PISO_B, 1, CORREDOR)
+  caixa(cx, -0.95, cz, lx + 0.6, 0.65, lz + 0.7, "#2a1b12")
+  caixa(cx, 0, za - 0.2, lx + 0.4, 4.2, 0.4, PAREDE)
+  caixa(xa - 0.2, 0, cz, 0.4, 4.2, lz + 0.7, "#47301f")
   -- o rodapé vira pedra clara quando a taverna chega à fase de guilda
   local guilda = M.anim.circulo > 0
   local rodape = guilda and PEDRA_CLARA or "#2f1e13"
-  caixa(0, 0, -4.48, 13, 0.75, 0.08, rodape)
-  caixa(-6.48, 0, 0.05, 0.08, 0.75, 9.7, rodape)
+  caixa(cx, 0, za + 0.02, lx, 0.75, 0.08, rodape)
+  caixa(xa + 0.02, 0, cz, 0.08, 0.75, lz + 0.5, rodape)
 
-  for x = -6, 6, 3 do caixa(x, 0, -4.45, 0.26, 4.2, 0.2, VIGA) end
-  for z = -3, 4.5, 2.5 do caixa(-6.45, 0, z, 0.2, 4.2, 0.26, VIGA) end
-  caixa(0, 3.75, -4.42, 13, 0.26, 0.2, VIGA)
+  for x = xa + 0.5, xb, 3 do caixa(x, 0, za + 0.05, 0.26, 4.2, 0.2, VIGA) end
+  for z = za + 1.5, zb, 2.5 do caixa(xa + 0.05, 0, z, 0.2, 4.2, 0.26, VIGA) end
+  caixa(cx, 3.75, za + 0.08, lx, 0.26, 0.2, VIGA)
 
   grupo("porta")
   -- porta (o corredor termina nela) com lampião, porque a parede esquerda fica na sombra
@@ -205,11 +217,12 @@ local function salao()
   caixa(-6.4, 0, pz - 0.37, 0.06, 2.42, 0.66, MAD_ESC)
   caixa(-6.4, 0, pz + 0.37, 0.06, 2.42, 0.66, MAD_MED)
   caixa(-6.35, 1.0, pz + 0.55, 0.06, 0.14, 0.14, OURO)
+  grupo("lampiao_porta")
   caixa(-6.34, 2.6, 2.6, 0.3, 0.08, 0.08, FERRO)
   brilho("esfera", -6.18, 2.48, 2.6, 0.24, 0.32, 0.24, VELA, 1.6)
-  grupo(nil)
-  janela(-1.27)
-  janela(3.7)
+  janela("janela1", -1.27)
+  janela("janela2", 3.7)
+  grupo("vassoura")
   -- vassoura encostada ao lado da porta
   peca("cilindro", -6.25, 0.1, 2.75, 0.07, 1.5, 0.07, 0, MAD_MED, -0.12)
   cone(-6.25, 0, 2.72, 0.3, 0.42, "#c9a24a")
@@ -274,17 +287,20 @@ local function salao()
   for k = -2, 2 do caixa(bx + k, 0.24, bz + 0.37, 0.72, 0.62, 0.04, MAD_ESC) end
   caixa(bx, 1.05, bz + 0.05, 5.5, 0.12, 0.95, TAMPO)
   -- barrilete com torneira e canecas: a cor do balcão é o âmbar
+  grupo("barrilete")
   cilindro(bx + 1.9, 1.17, bz - 0.1, 0.5, 0.6, MAD_MED)
   caixa(bx + 1.9, 1.4, bz + 0.17, 0.08, 0.08, 0.16, FERRO)
-  for _, x in ipairs({ bx - 2.0, bx + 1.1 }) do
+  for i, x in ipairs({ bx - 2.0, bx + 1.1 }) do
+    grupo("caneca" .. i)
     cilindro(x, 1.17, bz + 0.22, 0.16, 0.2, AMBAR)
     cilindro(x, 1.37, bz + 0.22, 0.18, 0.05, ESPUMA)
   end
-  grupo("garrafas")
+  grupo("prateleira")
   caixa(bx, 2.1, -4.32, 5.4, 0.1, 0.5, MAD_ESC)
   caixa(bx, 1.25, -4.32, 5.4, 0.1, 0.5, MAD_ESC)
   local garrafas = { "#3f8d4f", "#a13b3b", "#3c68a8", "#d0a23e", "#7a4a9c", "#3f8d4f", "#a13b3b", "#d0a23e" }
   for i, c in ipairs(garrafas) do
+    grupo("garrafa" .. i)
     local gx = bx - 2.4 + (i - 1) * 0.68
     local y = i % 2 == 0 and 2.2 or 1.35
     cilindro(gx, y, -4.3, 0.24, 0.42, c)
@@ -297,10 +313,10 @@ local function salao()
     cilindro(0.95, 0.98, -3.55, 0.52, 0.36, "#3a3a40")
   end
 
-  grupo("barris_fundo")
-  barril(5.6, -3.7); barril(4.75, -3.8); barril(5.75, -2.9, 0.9)
-  grupo("barris_frente")
-  barril(-5.6, 3.9, 0.9); barril(-4.8, 4.1, 0.8)
+  for i, b in ipairs({ { 5.6, -3.7, 1 }, { 4.75, -3.8, 1 }, { 5.75, -2.9, 0.9 }, { -5.6, 3.9, 0.9 }, { -4.8, 4.1, 0.8 } }) do
+    grupo("barril" .. i)
+    barril(b[1], b[2], b[3])
+  end
   grupo("carga")
   carga(5.85, 4.1)
 
@@ -317,8 +333,10 @@ local function salao()
   for i = 1, d do
     local x = -5.5 + (i - 1) * 3 + 1.5
     -- a última flâmula fica na ala leste: só aparece quando a parede dela existe
-    if x < 6.5 or M.anim.leste > 0.9 then
+    if x < 6.5 or M.anim.leste > 0.9 or L.tamanho.dir >= 3 then
+      grupo("flamula" .. i)
       local pano = guilda and AZUL_GUILDA or (i % 2 == 0 and "#3d5a8a" or TAPETE)
+      x = -4 + (i - 1) * 3
       caixa(x, 2.4, -4.4, 0.7, 1.1, 0.04, pano)
       caixa(x, 3.4, -4.37, 0.7, 0.08, 0.04, OURO)
       peca("caixa", x, 2.4, -4.4, 0.5, 0.5, 0.04, 0, pano, 0, math.pi / 4)
@@ -326,7 +344,8 @@ local function salao()
   end
 
   -- lampiões
-  for _, x in ipairs({ -4.5, -0.6 }) do
+  for i, x in ipairs({ -4.5, -0.6 }) do
+    grupo("lampiao" .. i)
     caixa(x, 2.6, -4.4, 0.08, 0.08, 0.3, FERRO)
     brilho("esfera", x, 2.48, -4.2, 0.24, 0.32, 0.24, VELA, 1.6)
   end
@@ -337,6 +356,8 @@ local function salao()
     mesa(m.bx, m.bz)
     banquinho(m.bx - 1.25, m.bz)
     banquinho(m.bx + 1.25, m.bz)
+    grupo("vela" .. i)
+    vela(m.bx, 0.82, m.bz + 0.001)
   end
   grupo("balcao")
   if J.ef("balcao") > 0 then
@@ -349,10 +370,11 @@ local function ala_leste(e)
   if e <= 0 then return end
   local o = e + math.sin(e * math.pi) * 0.12
   local function c2(x, y, z, ex, ey, ez, c) caixa(x, y * o, z, ex, ey * o, ez, c) end
-  piso(6.5, 12, -4.5, 4.7, "#7a5a3a", "#715335", o, "#8c6a46")
-  caixa(9.25, -0.95, 0.1, 5.7, 0.65, 9.9, "#2a1b12")
-  c2(9.25, 0, -4.7, 5.5, 4.2, 0.4, PAREDE)
-  for x = 7.5, 12, 3 do c2(x, 0, -4.45, 0.26, 4.2, 0.2, VIGA) end
+  local _, xb, za, zb = L.salao()
+  piso(xb, xb + 5.5, za, zb, "#7a5a3a", "#715335", o, "#8c6a46")
+  caixa(xb + 2.75, -0.95, (za + zb) / 2, 5.7, 0.65, zb - za + 0.7, "#2a1b12")
+  c2(xb + 2.75, 0, za - 0.2, 5.5, 4.2, 0.4, PAREDE)
+  for x = xb + 1, xb + 5.5, 3 do c2(x, 0, za + 0.05, 0.26, 4.2, 0.2, VIGA) end
 
   if J.mercadinho_aberto() then
     grupo("barraca")
@@ -378,6 +400,7 @@ local function ala_leste(e)
     if r >= 7 then brilho("esfera", mx + 0.1, 1.2, mz + 0.35, 0.3, 0.3, 0.3, "#c9a7ff", 0.7) end
     if r >= 8 then caixa(mx - 0.9, 1.05, mz + 0.35, 0.5, 0.5, 0.4, "#f2c14e") end
     -- estantes da aba de venda
+    grupo("estantes")
     if J.venda_aberta() then
       c2(mx, 0, -4.3, 4.6, 2.2, 0.5, "#5b3a22")
       local lista = { J.ef("pocoes") > 0 and "#5abf7c", J.ef("armaduras") > 0 and "#a8b4bf", J.ef("armas") > 0 and "#c7d0d8" }
@@ -398,6 +421,8 @@ local function ala_leste(e)
     mesa(m.bx, m.bz)
     banquinho(m.bx - 1.25, m.bz)
     banquinho(m.bx + 1.25, m.bz)
+    grupo("vela" .. i)
+    vela(m.bx, 0.82, m.bz + 0.001)
   end
   grupo(nil)
 end
@@ -408,18 +433,25 @@ local function jardim(e)
   caixa(-3, -0.95, 6.75, 7.2, 0.65, 4.1, "#2a1b12")
   caixa(-3, -0.3, 6.75, 7, 0.3 * o, 3.9, "#4f7a3a")
   -- cerca
+  grupo("cerca")
   for x = -6.3, 0.5, 1.1 do caixa(x, 0, 8.55, 0.12, 0.7 * o, 0.12, MAD_MED) end
   caixa(-3, 0.5 * o, 8.55, 7, 0.08, 0.05, TAMPO)
   caixa(-3, 0.2 * o, 8.55, 7, 0.08, 0.05, TAMPO)
   -- moitas e abóboras na faixa livre diante da cerca
   if e > 0.9 then
+    grupo("moita1")
     peca("esfera", -5.9, 0.22, 8.05, 0.62, 0.48, 0.62, 0, "#3f6b34")
+    grupo("moita2")
     peca("esfera", -5.3, 0.18, 8.1, 0.46, 0.36, 0.46, 0, "#86b552")
+    grupo("moita3")
     peca("esfera", -0.3, 0.22, 8.05, 0.62, 0.48, 0.62, 0, "#3f6b34")
+    grupo("abobora1")
     peca("esfera", -3.6, 0.15, 8.1, 0.36, 0.3, 0.36, 0, "#e08a3c")
+    grupo("abobora2")
     peca("esfera", -3.1, 0.15, 8.0, 0.42, 0.32, 0.42, 0, "#e08a3c")
   end
   -- canteiros
+  grupo("canteiros")
   local n = J.ef("canteiros")
   local cresce = J.estado.ciclo / J.ciclo_jardim()
   for i = 1, n do
@@ -432,6 +464,31 @@ local function jardim(e)
       if cresce > 0.7 then peca("esfera", x + k * 0.3, 0.12 + a * 0.6, z + 0.1, 0.12, 0.12, 0.12, 0, i % 3 == 0 and "#e8c04a" or "#d9534a") end
     end
   end
+  -- fazendeiro: anda entre os canteiros e cuida de um de cada vez
+  if J.ef("fazendeiro") > 0 and n > 0 then
+    local f = M.fazendeiro
+    local col, lin = (f.i - 1) % 5, math.floor((f.i - 1) / 5)
+    local ax, az = -5.7 + col * 1.25, 5.6 + lin * 1.45 + 0.75
+    local dx, dz = ax - f.x, az - f.z
+    local d = math.sqrt(dx * dx + dz * dz)
+    local andando = d > 0.1
+    if andando then
+      f.x, f.z = f.x + dx / d * M.dt_cena * 1.6, f.z + dz / d * M.dt_cena * 1.6
+      f.giro, f.fase = math.atan(dx, dz), f.fase + M.dt_cena
+    else
+      f.giro = math.pi
+      f.t = f.t + M.dt_cena
+      if f.t > 2.5 then
+        f.t = 0
+        f.i = f.i % n + 1
+      end
+    end
+    M.boneco({ x = f.x, z = f.z, giro = f.giro, fase = f.fase, andando = andando, pele = "#c68a5a", chapeu = "#c9a24a",
+      tipo = { nome = "comum", corpo = "#5f7a3a", perna = "#4b3b2c", braco = "#54702f" } })
+    -- enxada
+    local mexe = andando and 0 or math.sin(M.tempo * 6) * 0.25
+    peca("caixa", f.x + 0.42 * math.cos(f.giro), 0.75, f.z - 0.42 * math.sin(f.giro), 0.06, 1.3, 0.06, f.giro, "#7b4a26", mexe)
+  end
 end
 
 local function cervejaria(e)
@@ -441,6 +498,7 @@ local function cervejaria(e)
   caixa(3.5, -0.3, 6.75, 6, 0.3 * o, 3.9, PEDRA)
   -- tina de cobre com domo, cano e fogo embaixo
   local tx, tz = 1.9, 6.2
+  grupo("tina")
   cilindro(tx, 0, tz, 1.5, 0.16 * o, FERRO)
   cilindro(tx, 0.16 * o, tz, 1.3, 1.1 * o, COBRE)
   cilindro(tx, 0.35 * o, tz, 1.34, 0.07, FERRO)
@@ -451,15 +509,31 @@ local function cervejaria(e)
   cilindro(tx + 1.25, 0.9 * o, tz, 0.14, 1.25 * o, COBRE)
   brilho("caixa", tx, 0.12, tz + 0.72, 0.5, 0.2, 0.12, "#ffb347", 1.3)
   -- barril que recebe o cano
+  grupo("barril_grande")
   cilindro(3.5, 0, tz, 1.1 * o, 1.2 * o, MAD_MED)
   cilindro(3.5, 0.2, tz, 1.14, 0.08, FERRO)
   cilindro(3.5, 0.9, tz, 1.14, 0.08, FERRO)
-  for i = 0, 2 do barril(4.8 + i * 0.75, 7.6, 0.9 * o) end
+  for i = 0, 2 do
+    grupo("barril_c" .. (i + 1))
+    barril(4.8 + i * 0.75, 7.6, 0.9 * o)
+  end
+  grupo("bancada")
   caixa(2.7, 0, 7.8, 2.0, 0.85 * o, 0.7, MAD_MED)
   caixa(2.7, 0.85 * o, 7.8, 2.1, 0.08, 0.78, TAMPO)
   -- sacos de malte
+  grupo("malte1")
   peca("esfera", 5.5, 0.26, 5.6, 0.6, 0.52, 0.6, 0, "#c9b58b")
+  grupo("malte2")
   peca("esfera", 6.05, 0.22, 5.75, 0.5, 0.44, 0.5, 0, "#a8946c")
+  -- cervejeiro: aparece junto com a cervejaria e vai da tina à bancada
+  grupo("cervejaria")
+  local c = (math.sin(M.tempo * 0.5) + 1) / 2
+  local bx, bz = 2.7 + c * 1.6, 7.05
+  local d = math.cos(M.tempo * 0.5)
+  M.boneco({ x = bx, z = bz, giro = math.abs(d) > 0.2 and (d > 0 and math.pi / 2 or -math.pi / 2) or math.pi, fase = M.tempo,
+    andando = math.abs(d) > 0.2, pele = "#e0ac7e", chapeu = "#7a3a3a",
+    tipo = { nome = "comum", corpo = "#8a5a33", perna = "#3f2f22", braco = "#7b4f2c" } })
+  caixa(bx, 0.45, bz + 0.26, 0.42, 0.5, 0.03, "#efe2c4")
 end
 
 local function circulo(e)
@@ -483,6 +557,7 @@ local function circulo(e)
   for i = 0, 3 do
     local a = i * math.pi / 2 + math.pi / 4
     -- pilares de pedra com cristal aceso
+    grupo("pilar" .. (i + 1))
     local px, pz = cx + math.cos(a) * 2.35, cz + math.sin(a) * 1.75
     caixa(px, 0, pz, 0.36, 0.3 * e, 0.36, PEDRA)
     peca("cone", px, 0.3 * e, pz, 0.3, 0.5 * e, 0.3, 0, CIANO, 0, 0, 1.3)
@@ -514,6 +589,7 @@ function M.boneco(b)
   end
 
   local inc = b.bebendo and -0.12 or 0
+  if b.estado == "menestrel_canta" then y0 = y0 + math.abs(math.sin(M.tempo * 5)) * 0.1 end
   local topo = pernas + 0.62
   if t.nome == "mago" then
     p("cone", 0, y0 + pernas - 0.26, 0, 0.74, 1.1, 0.74, t.corpo)
@@ -537,7 +613,13 @@ function M.boneco(b)
   local by = topo - 0.06
   if t.nome == "mago" then by = pernas + 0.45 end
   p("caixa", -0.36, y0 + by - 0.2, -bs * 0.28, 0.14, 0.44, 0.15, t.braco, bs)
-  if b.estado == "pegando" then
+  if b.menestrel then
+    -- alaúde nas mãos; quando canta, balança o corpo
+    p("caixa", 0.3, y0 + by + 0.02, 0.2, 0.14, 0.15, 0.44, t.braco)
+    p("esfera", 0.12, y0 + by - 0.1, 0.36, 0.38, 0.5, 0.14, "#b5763a")
+    p("caixa", 0.42, y0 + by + 0.16, 0.36, 0.5, 0.06, 0.06, "#6f4326", 0, 0.5)
+    p("cilindro", 0, y0 + topo + 0.5, 0, 0.1, 0.5, 0.1, "#c9413a", 0, -0.7)
+  elseif b.estado == "pegando" then
     -- estica o braço até o quadro e puxa o papel
     local alto = util.limitar(b.t / 0.5, 0, 1) * (1 - util.limitar((b.t - 0.75) / 0.4, 0, 0.6))
     local ay = y0 + by + 0.06 + alto * 0.62
@@ -641,15 +723,19 @@ function M.desenhar_cena()
   M.aplicar_camera()
   local t = M.tempo
   local f = 1 + math.sin(t * 9) * 0.1 + math.sin(t * 23) * 0.07
-  motor.cena_luz(1, -5.3, 1.1, -3.2, 2.1 * f, 1.0 * f, 0.36 * f, 7.5)
-  motor.cena_luz(2, -0.6, 2.6, -3.0, 1.15, 0.8, 0.42, 8)
+  local fx, fz = L.t("lareira", -5.3, -3.2)
+  motor.cena_luz(1, fx, 1.1, fz, 2.1 * f, 1.0 * f, 0.36 * f, 7.5)
+  local lmx, lmz = L.t("lampiao2", -0.6, -3.0)
+  motor.cena_luz(2, lmx, 2.6, lmz, 1.15, 0.8, 0.42, 8)
   motor.cena_luz(3, 3.0, 2.4, -3.0, 0.75, 0.5, 0.26, 5.5)
   local c = a.circulo
   if c > 0 then
-    motor.cena_luz(4, 9.25, 1.2, 6.75, 0.9 * c, 0.6 * c, 1.5 * c, 6)
+    local cirx, cirz = L.t("circulo", 9.25, 6.75)
+    motor.cena_luz(4, cirx, 1.2, cirz, 0.9 * c, 0.6 * c, 1.5 * c, 6)
   else
     local l = a.leste
-    motor.cena_luz(4, 9.3, 2.2, -1.4, 0.95 * l, 0.66 * l, 0.36 * l, 6.5)
+    local brx, brz = L.t("barraca", 9.3, -1.4)
+    motor.cena_luz(4, brx, 2.2, brz, 0.95 * l, 0.66 * l, 0.36 * l, 6.5)
   end
 
   salao()
@@ -695,6 +781,15 @@ end
 function M.desenhar_baloes()
   local e = util.limitar(1 / M.quadro.escala * M.zoom, 0.72, 1.1)
   for _, p in ipairs(J.pessoas) do
+    if p.estado == "menestrel_canta" then
+      local x, y = M.posicao_balao(p)
+      if x then
+        y = y - math.abs(math.sin(M.tempo * 4)) * 5
+        motor.circulo(x - 5, y + 6, 4.5, "#fff6e6")
+        motor.linha(x - 1, y + 6, x - 1, y - 9, 2.5, "#fff6e6")
+        motor.linha(x - 1, y - 9, x + 7, y - 5, 2.5, "#fff6e6")
+      end
+    end
     if p.estado == "indo_quadro" then
       -- mostra que está indo atrás de uma missão
       local x, y = M.posicao_balao(p)

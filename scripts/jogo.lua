@@ -41,13 +41,94 @@ local CHAPEUS = { "#6b4a2f", "#3e5a4b", false, "#7a3a3a" }
 local NOMES = { "Bruno", "Lia", "Tomás", "Iara", "Caio", "Nina", "Davi", "Rosa", "Otávio", "Maia",
   "Heitor", "Clara", "Igor", "Luna", "Rui", "Vera", "Joel", "Alma" }
 
+-- histórias do menestrel: incentivam os aventureiros a pegar missões
 local FOFOCAS = {
-  "Dizem que um dragão foi visto ao norte: as missões pagam mais!",
-  "Duas guildas rivais brigaram na estrada: as missões pagam mais!",
-  "Um nobre está contratando escoltas: as missões pagam mais!",
-  "Goblins saquearam uma caravana: as missões pagam mais!",
-  "O rei ofereceu recompensas pelos monstros: as missões pagam mais!",
+  "do dragão que dorme sobre uma montanha de ouro ao norte",
+  "da guilda que derrotou um exército de goblins com uma única emboscada",
+  "do nobre que paga em ouro a quem escoltar a sua caravana",
+  "da espada encantada escondida nas ruínas além da floresta",
+  "dos heróis antigos que começaram com uma simples missão de rank F",
+  "do rei que oferece recompensas por cada monstro derrotado",
 }
+
+-- O que merece parar o jogo: "agora você pode liberar isto"
+J.NOTICIAS = {
+  { id = "mesa", titulo = "Mais espaço na taverna!", texto = "Agora você pode comprar uma Nova mesa. Mais lugares significam mais clientes ao mesmo tempo e mais ouro." },
+  { id = "garcom", titulo = "Contrate um garçom!", texto = "Agora você pode contratar um Garçom. Ele serve os clientes sozinho e a taverna continua rendendo mesmo quando você não toca." },
+  { id = "prateleira", titulo = "A prateleira de missões!", texto = "Agora você pode construir a Prateleira de missões. Aventureiros vão pegar missões e pagar quando voltarem." },
+  { id = "bardo", titulo = "Um bardo na taverna!", texto = "Agora você pode chamar um Bardo. A música faz cada pedido render mais." },
+  { id = "mercadinho", titulo = "O mercadinho!", texto = "Agora você pode abrir o Mercadinho. Os aventureiros voltam com espólios, você compra e revende com lucro." },
+  { id = "jardim", titulo = "O jardim!", texto = "Agora você pode plantar o Jardim. Ele produz alimentos que abastecem a cozinha e a cervejaria." },
+  { id = "fazendeiro", titulo = "Um fazendeiro!", texto = "Agora você pode contratar um Fazendeiro. Ele só cuida do jardim e cada colheita rende mais." },
+  { id = "cozinheiro", titulo = "Um cozinheiro!", texto = "Agora você pode contratar um Cozinheiro. Ele usa o que você colhe e a comida passa a render bem mais." },
+  { id = "cervejaria", titulo = "A cervejaria!", texto = "Agora você pode abrir a Cervejaria, com um cervejeiro próprio. As bebidas da casa rendem bem mais." },
+  { id = "ala_leste", titulo = "Uma ala nova!", texto = "Agora você pode construir a Ala leste. A taverna cresce e ganha mais duas mesas." },
+  { id = "venda", titulo = "A aba de venda!", texto = "Agora você pode vender poções, armaduras e armas. O lucro do mercadinho também dobra." },
+  { id = "recrutador", titulo = "O recrutador chegou!", texto = "Agora você pode trazer o Recrutador e contratar aventureiros próprios, que evoluem e trazem mais ouro." },
+  { id = "party", titulo = "Parties!", texto = "Agora você pode juntar quatro aventureiros em uma party, um grupo mais forte que vai junto nas missões." },
+  { id = "heroi", titulo = "O caminho do herói!", texto = "Agora seus contratados de rank A podem virar heróis e ganhar muito mais." },
+  { id = "propaganda", titulo = "Propaganda!", texto = "Agora você pode divulgar seus heróis. A fama traz reputação, e a reputação atrai aventureiros de rank mais alto." },
+  { id = "invocacao", titulo = "O círculo de invocação!", texto = "Agora você pode construir o Círculo e invocar heróis de outro mundo, os únicos capazes de enfrentar o Lorde Demônio." },
+}
+for _, r in ipairs({ { "rank_e", "E" }, { "rank_d", "D" }, { "rank_c", "C" }, { "rank_b", "B" }, { "rank_a", "A" }, { "rank_s", "S" }, { "rank_ss", "SS" } }) do
+  J.NOTICIAS[#J.NOTICIAS + 1] = { id = r[1], titulo = "Missões rank " .. r[2] .. "!", texto = "Agora você pode abrir as missões rank " .. r[2] .. ". Elas pagam muito mais do que as anteriores." }
+end
+
+function J.procurar_noticia()
+  local e = J.estado
+  if J.noticia or J.sem_noticias or J.editando or J.offline or e.fim then return end
+  for _, n in ipairs(J.NOTICIAS) do
+    local no = A.POR_ID[n.id]
+    if not e.noticias[n.id] and J.nivel(n.id) == 0 and J.no_liberado(no) and e.ouro >= J.custo_no(no) then
+      e.noticias[n.id] = true
+      J.noticia = n
+      J.som("missao")
+      return
+    end
+  end
+  if J.pode_final() and not e.noticias._final then
+    e.noticias._final = true
+    J.noticia = { final = true, titulo = "Chegou a hora!", texto = "A party dos quatro heróis invocados está pronta para enfrentar o Lorde Demônio. Quando quiser, envie-os na aba Invocação." }
+    J.som("invocar")
+  end
+end
+
+-- O menestrel aparece, canta no meio da taverna e as missões passam a render mais
+function J.chamar_menestrel()
+  J.indice_fofoca = (J.indice_fofoca or 0) % #FOFOCAS + 1
+  local historia = FOFOCAS[J.indice_fofoca]
+  for _, p in ipairs(J.pessoas) do
+    if p.menestrel then
+      -- já tem um na taverna: emenda outra história
+      J.comecar_historia(historia)
+      return
+    end
+  end
+  if #J.pessoas >= J.MAX_PESSOAS then
+    J.comecar_historia(historia)
+    return
+  end
+  local p = {
+    x = J.PORTA.x, y = 0, z = J.PORTA.z, giro = math.pi / 2, fase = 0, t = 0, rota = {},
+    tipo = { nome = "comum", corpo = "#c0562f", perna = "#3b2a3a", braco = "#a94a29", temperamento = "calmo" },
+    pele = "#e0ac7e", chapeu = "#3a7a55", menestrel = true, estado = "menestrel_indo", historia = historia, pedido = "bebida",
+  }
+  local x, z = L.t("palco", -1.65, 0.2)
+  J.pessoas[#J.pessoas + 1] = p
+  J.caminho(p, x, z)
+  J.flutuar(J.PORTA.x + 0.8, 2.5, J.PORTA.z, "Um menestrel chegou!", util.cores.verde, 18)
+end
+
+function J.comecar_historia(historia)
+  J.buff = C.fofoca_duracao
+  J.banner = {
+    titulo = "O menestrel contou uma história",
+    texto = "Ele cantou " .. historia .. ". Animados, os aventureiros correm atrás de missões: elas ficam mais rentáveis por " .. C.fofoca_duracao .. " segundos!",
+    vida = 0, duracao = 8,
+  }
+  J.som("missao")
+end
+
 
 local function tipo_de(nome)
   local l = {}
@@ -71,7 +152,8 @@ local function estado_inicial()
     estoque = 0, ciclo = 0, colhido = 0,
     brigas = 0,
     final_resta = nil, fim = false,
-    opcoes = { musica = 0.4, efeitos = 0.7, sombras = true, fps = false },
+    opcoes = { musica = 0.4, efeitos = 0.7, sombras = true, fps = false, fluxo = false },
+    noticias = {},
   }
 end
 
@@ -198,11 +280,16 @@ function J.reconstruir_lugares()
   J.lugares = l
 end
 
+-- enche do fundo para a frente: quem chega não precisa passar pelo meio de quem já sentou
 local function lugar_livre()
-  local livres = {}
-  for _, l in ipairs(J.lugares) do if not l.dono then livres[#livres + 1] = l end end
-  if #livres == 0 then return nil end
-  return util.escolher(livres)
+  local melhor, md
+  for _, l in ipairs(J.lugares) do
+    if not l.dono then
+      local d = util.distancia(l.x, l.z, J.PORTA.x, J.PORTA.z) + math.random() * 3
+      if not md or d > md then melhor, md = l, d end
+    end
+  end
+  return melhor
 end
 
 local CASAS_GARCOM = { { -0.35, -1.6 }, { -0.35, -2.4 }, { -0.35, -3.2 }, { -1.1, -2.4 }, { -1.1, -3.2 }, { -1.1, -1.6 } }
@@ -240,20 +327,23 @@ function J.montar_mapa()
   end
   caixa("lareira", -5.9, -3.2, 1.3, 2.6)
   caixa("lenha", -6.05, -1.95, 0.7, 0.95)
-  caixa("garrafas", 3.05, -4.3, 5.4, 0.5)
-  for _, b in ipairs({ { 5.6, -3.7 }, { 4.75, -3.8 }, { 5.75, -2.9 } }) do circulo("barris_fundo", b[1], b[2], 0.43) end
-  for _, b in ipairs({ { -5.6, 3.9 }, { -4.8, 4.1 } }) do circulo("barris_frente", b[1], b[2], 0.43) end
+  caixa("prateleira", 3.05, -4.3, 5.4, 0.5)
+  for i = 1, 5 do
+    local o = L.POR_ID["barril" .. i]
+    circulo(o.id, o.x, o.z, 0.43)
+  end
   caixa("carga", 5.5, 4.1, 1.4, 0.8)
   if J.ef("cozinheiro") > 0 then caixa("fogao", 0.95, -3.55, 1.1, 0.9) end
   if J.ef("bardo") > 0 then circulo("bardo", -5.1, -1.25, 0.32) end
   if J.nivel("quartos") > 0 then caixa("quartos", -4.65, -3.9, 1.4, 0.8) end
-  local xmax = 6.3
+  local sa, sb, sc, sd = L.salao()
+  local xmax = sb - 0.2
   if J.ef("a_leste") > 0 then
-    xmax = 12.1   -- o banco direito da mesa 8 fica em x = 11,95: precisa dar para chegar nele
+    xmax = sb + 5.6   -- o banco direito da mesa 8 fica perto do fim da ala: precisa dar para chegar nele
     caixa("carga_leste", 11.2, -0.4, 1.4, 0.8)
     if J.mercadinho_aberto() then caixa("barraca", 9.3, -2.15, 4.5, 1.7) end
   end
-  Cam.montar({ -6.3, xmax, -4.25, 4.5 }, obs)
+  Cam.montar({ sa + 0.2, xmax, sc + 0.25, sd - 0.2 }, obs)
 end
 
 -- bancos que a pessoa só alcança atravessando móveis (usado para avisar no editor)
@@ -319,7 +409,7 @@ function J.intervalo_garcom() return C.garcom_intervalo * J.ef("x_garcom") end
 
 local function nova_pessoa(tipo)
   return {
-    x = J.PORTA.x, y = 0, z = J.PORTA.z, giro = math.pi / 2, fase = math.random() * 6, t = 0,
+    x = J.PORTA.x, y = 0, z = J.PORTA.z + (math.random() - 0.5) * 0.9, giro = math.pi / 2, fase = math.random() * 6, t = 0,
     tipo = tipo, pele = util.escolher(PELES),
     chapeu = tipo.nome == "comum" and util.escolher(CHAPEUS) or nil,
     pedido = math.random() < 0.5 and "bebida" or "comida",
@@ -341,7 +431,16 @@ local function sentar_cliente(p, lugar)
   p.estado = "entrando"
 end
 
+function J.porta_lotada()
+  local n = 0
+  for _, p in ipairs(J.pessoas) do
+    if util.distancia(p.x, p.z, J.PORTA.x, J.PORTA.z) < 2.2 then n = n + 1 end
+  end
+  return n >= 3
+end
+
 function J.novo_cliente()
+  if J.porta_lotada() then return nil end
   local lugar = lugar_livre()
   if not lugar then return nil end
   -- no começo só gente comum e alguns aventureiros; depois mais aventureiros
@@ -522,6 +621,16 @@ local function atualizar_pessoa(p, dt)
       liberar(p)
       rota_saida(p)
     end
+  elseif p.estado == "menestrel_indo" then
+    if seguir_rota(p, dt, C.velocidade_pessoa) or p.t > 15 then
+      p.estado, p.t, p.andando = "menestrel_canta", 0, false
+      p.fantasma = nil
+      p.giro = 0
+      J.comecar_historia(p.historia)
+    end
+  elseif p.estado == "menestrel_canta" then
+    p.fase = p.fase + dt
+    if p.t > C.menestrel_canta then rota_saida(p) end
   elseif p.estado == "indo_quadro" then
     if seguir_rota(p, dt, C.velocidade_pessoa) then
       p.estado, p.t, p.andando = "pegando", 0, false
@@ -656,9 +765,8 @@ local function concluir_missao(m)
   J.fofoca_conta = (J.fofoca_conta or 0) + 1
   if J.fofoca_conta >= C.fofoca_a_cada then
     J.fofoca_conta = 0
-    J.indice_fofoca = (J.indice_fofoca or 0) % #FOFOCAS + 1
-    J.avisar(FOFOCAS[J.indice_fofoca], 5)
-    J.buff = C.fofoca_duracao
+  J.noticia, J.banner, J.travados, J.media_travados = nil, nil, 0, 0
+    J.chamar_menestrel()
   end
 
   local c = m.contratado and J.contratado_por_id(m.contratado) or nil
@@ -1105,6 +1213,13 @@ local function atualizar_colisoes(dt)
   J.relogio_preso = (J.relogio_preso or 0) + dt
   if J.relogio_preso < 1 then return end
   J.relogio_preso = 0
+  -- medidor: gente que queria andar e não conseguiu no último segundo
+  local travados = 0
+  for _, p in ipairs(lista) do
+    if p.andando and p.rota and #p.rota > 0 and (p.preso or 0) >= 1 then travados = travados + 1 end
+  end
+  J.travados = travados
+  J.media_travados = (J.media_travados or 0) * 0.95 + travados * 0.05
   for _, p in ipairs(lista) do
     if p.andando and p.rota and #p.rota > 0 and not p.sentado then
       -- mede a partir de um ponto fixo: quem só treme no lugar, empurrado pelos outros, também está preso
@@ -1130,6 +1245,8 @@ end
 function J.atualizar(dt)
   local e = J.estado
   if J.offline or J.editando then return end
+  -- notícia na tela: tudo espera o jogador ler
+  if J.noticia then return end
   -- depois do final o mundo para: nada de ouro, sons ou tempo correndo atrás da tela final
   if e.fim then
     J.aviso, J.efeitos = nil, {}
@@ -1148,6 +1265,15 @@ function J.atualizar(dt)
   end
   for _, g in ipairs(J.garcons) do atualizar_garcom(g, dt) end
   atualizar_colisoes(dt)
+  J.relogio_noticia = (J.relogio_noticia or 0) + dt
+  if J.relogio_noticia >= 0.5 then
+    J.relogio_noticia = 0
+    J.procurar_noticia()
+  end
+  if J.banner then
+    J.banner.vida = J.banner.vida + dt
+    if J.banner.vida >= J.banner.duracao then J.banner = nil end
+  end
   atualizar_missoes(dt)
   atualizar_jardim(dt)
 

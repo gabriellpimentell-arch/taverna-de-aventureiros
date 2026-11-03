@@ -121,7 +121,10 @@ local function hud()
   end
 
   if e.opcoes.fps then
-    motor.texto(motor.fps() .. " FPS", 948, 60, 13, cor.texto, "direita", true)
+    motor.retangulo(712, 58, 240, 42, "#21150ee8", 8)
+    motor.texto(motor.fps() .. " FPS  •  " .. #J.pessoas .. " pessoas", 944, 60, 13, cor.texto, "direita", true)
+    local trav = J.travados or 0
+    motor.texto("Travados agora: " .. trav .. "  •  média " .. string.format("%.1f", J.media_travados or 0):gsub("%.", ","), 944, 78, 13, trav > 2 and "#ff9a8a" or cor.verde, "direita", true)
   end
 end
 
@@ -471,7 +474,7 @@ local function tela_missoes()
   motor.texto("Comissão", AREA.x + 270, y + 10, 14, cor.texto)
   atalho_no("comissao", AREA.x + 350, y, 130)
   if J.buff > 0 then
-    motor.texto("Fofoca: missões pagam +25% por " .. duracao_texto(J.buff), AREA.x + AREA.w - 8, y + 10, 14, cor.verde, "direita", true)
+    motor.texto("História do menestrel: missões pagam +25% por " .. duracao_texto(J.buff), AREA.x + AREA.w - 8, y + 10, 14, cor.verde, "direita", true)
   end
 end
 
@@ -752,7 +755,7 @@ local function janela_config()
   controle_volume("efeitos", "Efeitos", cx, y + 108, o.efeitos, function(v) o.efeitos = v; T.aplicar_opcoes() end)
   alternador("tela_cheia", "Tela cheia (F11)", cx, y + 156, motor.tela_cheia(), function() motor.alternar_tela_cheia() end)
   alternador("sombras", "Sombras (mais leve sem)", cx, y + 204, o.sombras, function() o.sombras = not o.sombras; T.aplicar_opcoes() end)
-  alternador("mostrar_fps", "Mostrar FPS", cx, y + 252, o.fps, function() o.fps = not o.fps end)
+  alternador("mostrar_fps", "FPS e fluxo de pessoas", cx, y + 252, o.fps, function() o.fps = not o.fps end)
 
   local bx = x + w - 230
   U.botao("minimizar2", bx, y + 60, 200, 44, "Minimizar", { cor = "#4a3627", cor_texto = cor.texto }, function() motor.minimizar() end)
@@ -822,6 +825,55 @@ local function janela_creditos()
   U.paragrafo("Motor: raylib. Linguagem de scripts: Lua. Fonte: Poppins (licença OFL).", x + 30, y + 120, w - 60, 15, cor.texto_fraco, false, "centro")
   U.paragrafo("Música e efeitos gerados por código.", x + 30, y + 176, w - 60, 15, cor.texto_fraco, false, "centro")
   U.botao("creditos_voltar", x + w / 2 - 80, y + h - 62, 160, 44, "Voltar", {}, function() T.modal = "config" end)
+end
+
+-- Notícia: o jogo para para contar que algo importante pode ser liberado
+local function janela_noticia()
+  local n = J.noticia
+  if not n then return end
+  bloquear()
+  local x, y, w, h = 210, 96, 540, 330
+  U.painel(x, y, w, h, cor.carta, cor.ouro)
+  U.zona("janela", { x = x, y = y, w = w, h = h })
+  motor.retangulo(x + 2, y + 2, w - 4, 34, cor.ouro, 10)
+  motor.texto("NOVIDADE NA TAVERNA", x + w / 2, y + 9, 15, cor.texto_ouro, "centro", true)
+  motor.texto(n.titulo, x + w / 2, y + 54, 28, cor.texto, "centro", true)
+  U.paragrafo(n.texto, x + 34, y + 104, w - 68, 17, cor.texto, false, "centro")
+  if n.final then
+    U.botao("noticia_ver", x + 60, y + h - 76, 240, 54, "Ver a missão", { tam = 16 }, function()
+      J.noticia = nil
+      T.aba = "invocacao"
+    end)
+    U.botao("noticia_depois", x + 312, y + h - 76, 168, 54, "Depois", { cor = "#4a3627", cor_texto = cor.texto }, function() J.noticia = nil end)
+    return
+  end
+  local no = A.POR_ID[n.id]
+  local custo = J.custo_no(no)
+  motor.texto("Custa " .. fmt(custo) .. " de ouro", x + w / 2, y + h - 108, 15, cor.ouro, "centro", true)
+  U.botao("noticia_abrir", x + 60, y + h - 76, 240, 54, "Liberar agora", { tam = 17, som = "compra" }, function()
+    J.comprar_no(n.id)
+    J.noticia = nil
+  end)
+  U.botao("noticia_depois", x + 312, y + h - 76, 168, 54, "Depois", { cor = "#4a3627", cor_texto = cor.texto }, function() J.noticia = nil end)
+end
+
+-- Faixa do menestrel: conta a história sem parar o jogo
+local function banner_menestrel()
+  local b = J.banner
+  if not b then return end
+  local entrada = util.limitar(b.vida / 0.4, 0, 1)
+  local saida = util.limitar((b.duracao - b.vida) / 0.5, 0, 1)
+  motor.opacidade(math.min(entrada, saida))
+  local x, y, w, h = 150, 58 - (1 - util.suave(entrada)) * 24, 660, 84
+  motor.retangulo(x, y + 3, w, h, cor.sombra, 14)
+  U.painel(x, y, w, h, "#3a2415f8", "#c0562f")
+  motor.circulo(x + 40, y + h / 2, 26, "#c0562f")
+  motor.circulo(x + 34, y + h / 2 + 8, 7, "#fff6e6")
+  motor.linha(x + 40, y + h / 2 + 8, x + 40, y + h / 2 - 14, 3, "#fff6e6")
+  motor.linha(x + 40, y + h / 2 - 14, x + 52, y + h / 2 - 8, 3, "#fff6e6")
+  motor.texto(b.titulo, x + 78, y + 8, 16, cor.ouro, "esquerda", true)
+  U.paragrafo(b.texto, x + 78, y + 30, w - 92, 14, cor.texto)
+  motor.opacidade(1)
 end
 
 local function janela_offline()
@@ -934,6 +986,8 @@ function T.desenhar()
   elseif T.modal == "stats" then janela_stats()
   elseif T.modal == "creditos" then janela_creditos()
   end
+  banner_menestrel()
+  if J.noticia and not T.modal and not J.offline then janela_noticia() end
   if J.offline then janela_offline() end
   if J.estado.fim and not T.modal then tela_final() end
 end
@@ -986,6 +1040,7 @@ end
 function T.esc()
   if Ed.ativo then Ed.fechar() return end
   if J.offline then return end
+  if J.noticia and not T.modal then J.noticia = nil return end
   if T.modal == "config" then T.modal = nil
   elseif T.modal then T.modal = "config"
   elseif T.aba ~= "taverna" then T.aba = "taverna"

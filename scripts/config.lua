@@ -94,8 +94,9 @@ C.briga_espera = 12            -- segundos até os brigões irem embora
 C.briga_inicio = 2.5           -- segundos à mesa até a briga começar
 C.briga_recompensa = 4         -- pedidos pagos por separar a briga
 C.combo_mesa = 1.5             -- mago + clérigo na mesma mesa
-C.fofoca_a_cada = 12           -- missões
-C.fofoca_duracao = 60
+C.fofoca_a_cada = 12           -- missões até o menestrel aparecer
+C.fofoca_duracao = 60          -- segundos em que as missões rendem mais
+C.menestrel_canta = 7         -- segundos contando a história
 C.fofoca_bonus = 1.25
 
 -- Fora do jogo -------------------------------------------------------------------------------------

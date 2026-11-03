@@ -43,6 +43,7 @@ local n = {
   -- BEBIDAS E COMIDA ---------------------------------------------------------------------
   { id = "cardapio", ramo = "bebidas", p = 1, l = 0, nome = "Cardápio", desc = "Pedidos rendem +30%", custo = 15, mult = 2.15, max = 20, ef = { x_pedido = 1.3 } },
   { id = "jardim", pai = "cardapio", ramo = "bebidas", p = 2, l = -1, nome = "Jardim", desc = "Abre a plantação da taverna", custo = 5000, mult = 1, max = 1, ef = { a_jardim = 1, canteiros = 2 } },
+  { id = "fazendeiro", pai = "jardim", ramo = "bebidas", p = 3, l = -3, nome = "Fazendeiro", desc = "Cuida do jardim: colheitas rendem +25%", custo = 4000, mult = 3.2, max = 6, ef = { fazendeiro = 1, x_colheita = 1.25 } },
   { id = "canteiro", pai = "jardim", ramo = "bebidas", p = 3, l = -2, nome = "Mais canteiros", desc = "+1 canteiro", custo = 2500, mult = 3, max = 8, ef = { canteiros = 1 } },
   { id = "adubo", pai = "jardim", ramo = "bebidas", p = 3, l = -1, nome = "Adubo", desc = "Colheitas rendem +30%", custo = 5000, mult = 3.2, max = 8, ef = { x_colheita = 1.3 } },
   { id = "irrigacao", pai = "canteiro", ramo = "bebidas", p = 4, l = -2, nome = "Irrigação", desc = "As plantas crescem 15% mais rápido", custo = 16000, mult = 3, max = 6, ef = { x_ciclo = 0.85 } },

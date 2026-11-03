@@ -20,6 +20,10 @@ local function centro(ix, iz) return X0 + (ix + 0.5) * S, Z0 + (iz + 0.5) * S en
 
 -- limites: { xmin, xmax, zmin, zmax }; obstaculos: círculos { x, z, r } ou caixas { id, x, z, ex, ez, base }
 function Cam.montar(limites, obstaculos)
+  X0, Z0 = math.floor(limites[1]) - 1, math.floor(limites[3]) - 1
+  NX = math.ceil((limites[2] + 1 - X0) / S) + 1
+  NZ = math.ceil((limites[4] + 1 - Z0) / S) + 1
+  bloq = {}
   for iz = 0, NZ - 1 do
     for ix = 0, NX - 1 do
       local x, z = centro(ix, iz)

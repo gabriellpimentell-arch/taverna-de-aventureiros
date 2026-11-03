@@ -16,6 +16,9 @@ local U = require("ui")
 local T = require("telas")
 local util = require("util")
 
+J_sem = require("jogo")
+J_sem.sem_noticias = true   -- as notícias pausam o jogo: têm teste próprio mais abaixo
+
 local falhas, total = 0, 0
 local function ok(nome, cond, extra)
   total = total + 1
@@ -1002,6 +1005,127 @@ do
     if viu and viu.com_papel then break end
   end
   ok("contratado pega o papel", viu and viu.com_papel)
+  motor._layout = false
+  novo()
+end
+
+-- Notícias, menestrel, personagens novos, tamanho -----------------------------------------------
+do
+  local L = require("layout")
+  local Ed = require("editor")
+  motor._layout = false
+  J.sem_noticias = false
+  novo()
+  J.estado.ouro = 25
+  local tempo0 = J.estado.tempo
+  J.atualizar(1)
+  ok("notícia aparece ao poder comprar", J.noticia ~= nil)
+  ok("notícia é a da mesa", J.noticia and J.noticia.id == "mesa", J.noticia and J.noticia.id)
+  local t1 = J.estado.tempo
+  J.atualizar(1)
+  ok("notícia pausa o jogo", J.estado.tempo == t1)
+  desenhar()
+  ok("liberar compra", U.apertar("noticia_abrir") and J.nivel("mesa") == 1 and J.noticia == nil)
+  J.estado.ouro = 25
+  J.atualizar(1)
+  ok("mesma notícia não repete", not (J.noticia and J.noticia.id == "mesa"))
+  J.noticia = nil
+  novo()
+  J.estado.ouro = 25
+  J.atualizar(1)
+  desenhar()
+  ok("depois fecha sem comprar", U.apertar("noticia_depois") and J.noticia == nil and J.nivel("mesa") == 0)
+  J.salvar()
+  iniciar()
+  J.estado.ouro = 25
+  J.atualizar(1)
+  ok("notícia vista fica salva", not (J.noticia and J.noticia.id == "mesa"))
+  for _, n in ipairs(J.NOTICIAS) do ok("notícia aponta para nó real: " .. n.id, A.POR_ID[n.id] ~= nil) end
+  J.sem_noticias = true
+
+  novo()
+  libera("prateleira")
+  J.fofoca_conta = C.fofoca_a_cada - 1
+  J.estado.missoes = { { rank = 1, resta = 0.01 } }
+  J.atualizar(0.1)
+  local men
+  for _, p in ipairs(J.pessoas) do if p.menestrel then men = p end end
+  ok("menestrel entra na taverna", men ~= nil)
+  ok("sem bônus antes de cantar", J.buff <= 0, J.buff)
+  local p0 = J.pagamento_rank(1)
+  local cantou, viu_banner = false, false
+  for _ = 1, 400 do
+    atualizar(0.1); desenhar()
+    if men.estado == "menestrel_canta" then cantou = true end
+    if J.banner then viu_banner = true end
+    if cantou and J.buff > 0 then
+      ok("bônus vale durante a história", J.pagamento_rank(1) > p0)
+      break
+    end
+  end
+  ok("menestrel canta", cantou)
+  ok("banner aparece", viu_banner)
+  for _ = 1, 400 do atualizar(0.1) end
+  local ainda = false
+  for _, p in ipairs(J.pessoas) do if p.menestrel then ainda = true end end
+  ok("menestrel vai embora", not ainda)
+
+  novo()
+  libera("fazendeiro")
+  ok("fazendeiro existe e rende mais", J.ef("fazendeiro") == 1 and J.por_colheita() > 2 * C.colheita)
+  libera("canteiro")
+  quadros(40)
+  libera("cervejaria"); quadros(5)
+
+  -- todo objeto do editor está na lista e os pais existem
+  for _, o in ipairs(L.OBJETOS) do
+    ok("categoria existe: " .. o.id, (function() for _, c in ipairs(L.CATEGORIAS) do if c == o.cat then return true end end end)())
+    if o.pai and o.pai:sub(1, 1) ~= "@" then ok("pai existe: " .. o.id, L.POR_ID[o.pai] ~= nil) end
+  end
+
+  -- tamanho
+  novo()
+  T.f2(); atualizar(0.1); desenhar()
+  for _ = 1, 45 do L.mudar_tamanho("dir", 1) end
+  ok("tamanho tem limite", L.tamanho.dir == L.TAMANHO_MAX)
+  L.mudar_tamanho("dir", -100)
+  ok("tamanho não fica negativo", L.tamanho.dir == 0)
+  L.mudar_tamanho("dir", 10); L.mudar_tamanho("frente", 6); L.mudar_tamanho("oeste", 4); L.mudar_tamanho("fundo", 3)
+  J.aplicar_visual(); desenhar()
+  -- a porta e o quadro acompanham as paredes; o jardim acompanha a frente
+  local dx = L.desloc("porta")
+  ok("porta acompanha a parede", dx == -4, dx)
+  local _, dz = L.desloc("jardim")
+  ok("jardim acompanha a frente", dz == 6, dz)
+  local _, gz = L.desloc("garrafa1")
+  ok("garrafa acompanha a prateleira", gz == -3, gz)
+  -- categorias e botões do editor
+  for _ = 1, #L.CATEGORIAS do
+    ok("trocar categoria", U.apertar("editor_cat_prox"))
+    atualizar(0.05); desenhar()
+    local zonas = {}
+    for _, z in ipairs(U.zonas) do zonas[#zonas + 1] = z.id end
+    ok("categoria desenha", #zonas > 2)
+  end
+  T.esc()
+  iniciar()
+  ok("tamanho sobrevive a reiniciar", L.tamanho.dir == 10 and L.tamanho.frente == 6, L.tamanho.dir)
+  ok("porta real acompanha", J.PORTA.x < -10, J.PORTA.x)
+  libera("prateleira", "garcom", "mesa", "mesa", "mesa")
+  for _ = 1, 1500 do J.atualizar(0.1) end
+  ok("funciona numa taverna grande", J.estado.servidos > 5 and (J.sem_caminho or 0) == 0, J.sem_caminho)
+  ok("mundo desenha grande", pcall(desenhar))
+  -- mover objeto preso a uma parede depois de crescer continua no lugar pedido
+  T.f2(); atualizar(0.1); desenhar()
+  Ed.grade = false
+  Ed.mover_para("lampiao1", 2, -6)
+  local ax, az = L.desloc("lampiao1")
+  ok("mover respeita a âncora", math.abs(L.POR_ID.lampiao1.x + ax - 2) < 0.01 and math.abs(L.POR_ID.lampiao1.z + az + 6) < 0.01, ax)
+  U.apertar("editor_desfazer"); desenhar()
+  L.restaurar()
+  ok("restaurar zera o tamanho", L.tamanho.dir == 0)
+  T.esc()
+  L.salvar()
   motor._layout = false
   novo()
 end

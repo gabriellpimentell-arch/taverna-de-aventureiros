@@ -293,6 +293,14 @@ static int l_cena_camera(lua_State* L) {
     return 0;
 }
 
+// motor.cena_sombra(x, z, raio): área coberta pelas sombras (acompanha o tamanho da taverna)
+static int l_cena_sombra(lua_State* L) {
+    cena3d::E.sombraX = num(L, 1);
+    cena3d::E.sombraZ = num(L, 2);
+    cena3d::E.sombraRaio = std::max(10.0f, num(L, 3));
+    return 0;
+}
+
 static int l_cena_luz(lua_State* L) {
     int i = (int)luaL_checkinteger(L, 1) - 1;
     if (i < 0 || i >= cena3d::MAX_LUZES) return 0;
@@ -436,7 +444,7 @@ static void registrarApi(lua_State* L) {
         {"tempo", l_tempo},         {"salvar", l_salvar},
         {"carregar", l_carregar},   {"log", l_log},
         {"captura", l_captura},
-        {"cena_camera", l_cena_camera}, {"cena_luz", l_cena_luz},
+        {"cena_sombra", l_cena_sombra}, {"cena_camera", l_cena_camera}, {"cena_luz", l_cena_luz},
         {"peca", l_peca},           {"cena_desenhar", l_cena_desenhar},
         {"projetar", l_projetar},   {"fps", l_fps},
         {"minimizar", l_minimizar}, {"sair", l_sair},

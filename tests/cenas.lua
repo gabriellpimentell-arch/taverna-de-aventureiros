@@ -16,6 +16,7 @@ local function tudo()
     for _, no in ipairs(A.NOS) do J.estado.ouro = 1e40; J.comprar_no(no.id) end
   end
 end
+J.sem_noticias = true
 local passos = {
   { 3, function() end, "01_inicio" },
   { 1, function() T.aba = "arvore" end, "02_arvore_inicio" },
@@ -41,7 +42,14 @@ local passos = {
   { 0.5, function() T.modal = "creditos" end, "18_creditos" },
   { 0.5, function() T.modal = nil; require("editor").abrir() end, "18b_editor" },
   { 0.5, function() local E = require("editor"); E.sel = "mesa2"; E.mover_para("mesa2", 1.5, -0.5) end, "18c_editor_movido" },
-  { 0.5, function() local E = require("editor"); require("layout").dados = {}; E.fechar() end, "18d_editor_fim" },
+  { 0.5, function() local E = require("editor"); E.cat = "Tamanho"; E.sel = nil end, "18d_editor_tamanho" },
+  { 1.5, function() local L = require("layout"); L.mudar_tamanho("dir", 6); L.mudar_tamanho("frente", 4); require("jogo").aplicar_visual() end, "18e_editor_maior" },
+  { 0.5, function() local E = require("editor"); E.cat = "Paredes" end, "18f_editor_paredes" },
+  { 0.5, function() local E = require("editor"); local L = require("layout"); L.restaurar(); E.fechar() end, "18g_editor_fim" },
+  { 0.4, function() J.fofoca_conta = 11; J.chamar_menestrel() end, "18h_menestrel_entra" },
+  { 7, function() end, "18i_menestrel_banner" },
+  { 0.4, function() J.noticia = J.NOTICIAS[6] end, "18j_noticia" },
+  { 0.3, function() J.noticia = nil end, "18k_fim" },
   { 0.5, function() T.modal = nil; J.offline = { ganho = 48250, segundos = 11520 } end, "19_offline" },
   { 0.5, function() J.offline = nil; J.estado.fim = true end, "20_final" },
 }

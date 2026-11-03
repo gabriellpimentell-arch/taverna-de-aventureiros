@@ -57,6 +57,7 @@ struct Estado {
     Vector3 camPos{9, 11, 15}, camAlvo{0, 0, 0};
     float fov = 28.0f;
     bool sombras = true;
+    float sombraX = 3.0f, sombraZ = 0.0f, sombraRaio = 24.0f;
 };
 
 static Estado E;
@@ -186,10 +187,11 @@ static void desenhar(int x, int y, int w, int h, int alturaTela) {
     rlDrawRenderBatchActive();
 
     Vector3 sol = solDirecao();
-    Vector3 centro{3.0f, 0.0f, 0.0f};
-    Vector3 posSol = Vector3Add(centro, Vector3Scale(sol, 30.0f));
+    Vector3 centro{E.sombraX, 0.0f, E.sombraZ};
+    float raioS = E.sombraRaio;
+    Vector3 posSol = Vector3Add(centro, Vector3Scale(sol, raioS * 1.25f));
     Matrix luzVista = MatrixLookAt(posSol, centro, Vector3{0, 1, 0});
-    Matrix luzProj = MatrixOrtho(-24, 24, -20, 20, 1, 80);
+    Matrix luzProj = MatrixOrtho(-raioS, raioS, -raioS * 0.84, raioS * 0.84, 1, raioS * 3.4);
     Matrix luzVP = MatrixMultiply(luzVista, luzProj);
 
     rlEnableDepthTest();
