@@ -1,0 +1,44 @@
+{
+["brigas"] = 0,
+["ciclo"] = 0,
+["colhido"] = 0,
+["contratados"] = {
+
+},
+["espolios"] = 0,
+["estoque"] = 0,
+["fama"] = 0,
+["feitas"] = 0,
+["feitas_rank"] = {
+
+},
+["fim"] = false,
+["invocados_feitos"] = 0,
+["lucro_espolios"] = 0,
+["missoes"] = {
+
+},
+["nos"] = {
+
+},
+["noticias"] = {
+
+},
+["opcoes"] = {
+["efeitos"] = 0.69999999999999996,
+["fluxo"] = false,
+["fps"] = false,
+["musica"] = 0.40000000000000002,
+["sombras"] = true
+},
+["ouro"] = 0,
+["parties"] = {
+
+},
+["prox_id"] = 1,
+["rps"] = 0,
+["servidos"] = 0,
+["tempo"] = 0,
+["total"] = 0,
+["versao"] = 2
+}
