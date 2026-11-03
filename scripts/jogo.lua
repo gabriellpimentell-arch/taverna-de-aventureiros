@@ -238,10 +238,14 @@ function J.flutuar(x, y, z, texto, cor, tam)
   J.efeitos[#J.efeitos + 1] = { x = x, y = y, z = z, texto = texto, cor = cor or util.cores.ouro, tam = tam or 22, vida = 0 }
 end
 
+local TETO_OURO = 1e300
+
 function J.ganhar(v, x, y, z)
   local e = J.estado
-  e.ouro = e.ouro + v
-  e.total = e.total + v
+  -- ouro infinito seria zerado ao carregar o save
+  v = math.min(v, TETO_OURO)
+  e.ouro = math.min(e.ouro + v, TETO_OURO)
+  e.total = math.min(e.total + v, TETO_OURO)
   J.ganho_segundo = J.ganho_segundo + v
   if x then J.flutuar(x, y, z, "+" .. util.formatar(v)) end
 end
@@ -362,7 +366,8 @@ function J.caminho(p, x, z)
   local r = Cam.rota(p.x, p.z, x, z)
   if not r then
     -- empurrado para dentro de um móvel: sai pelo ponto livre mais próximo e segue a rota dali
-    for raio = 0.3, 0.6, 0.3 do
+    -- quem já está dentro do móvel pode estar a mais de um metro da borda: uma mesa tem 2 m de largura
+    for raio = 0.3, Cam.bloqueado(p.x, p.z) and 1.5 or 0.6, 0.3 do
       for k = 0, 7 do
         local a = k * math.pi / 4
         local ax, az = p.x + math.cos(a) * raio, p.z + math.sin(a) * raio
@@ -1008,9 +1013,11 @@ function J.criar_party(ids)
   local e = J.estado
   local num = e.prox_id
   e.prox_id = num + 1
+  local vistos = {}
   for _, id in ipairs(ids) do
     local c = J.contratado_por_id(id)
-    if not c or c.party then return false end
+    if not c or c.party or vistos[id] then return false end
+    vistos[id] = true
   end
   for _, id in ipairs(ids) do J.contratado_por_id(id).party = num end
   e.parties[#e.parties + 1] = { id = num, membros = ids }
@@ -1101,6 +1108,17 @@ function J.invocacao_aberta() return J.ef("invocar") > 0 end
 
 function J.custo_invocar() return C.invocar_custo * C.invocar_mult ^ J.estado.invocados_feitos end
 
+local function novo_invocado(e, d)
+  local i = e.prox_id
+  e.prox_id = i + 1
+  local c = {
+    id = i, nome = d.nome, titulo = d.titulo, tipo = d.tipo, pele = "#f1c9a5", invocado = true,
+    armadura = 0, arma = 0, magia = 0, fama = 0, missoes = 0,
+  }
+  e.contratados[#e.contratados + 1] = c
+  return c
+end
+
 function J.invocar()
   local e = J.estado
   if not J.invocacao_aberta() or e.invocados_feitos >= #C.invocados then return nil end
@@ -1109,13 +1127,7 @@ function J.invocar()
   e.ouro = e.ouro - custo
   e.invocados_feitos = e.invocados_feitos + 1
   local d = C.invocados[e.invocados_feitos]
-  local i = e.prox_id
-  e.prox_id = i + 1
-  local c = {
-    id = i, nome = d.nome, titulo = d.titulo, tipo = d.tipo, pele = "#f1c9a5", invocado = true,
-    armadura = 0, arma = 0, magia = 0, fama = 0, missoes = 0,
-  }
-  e.contratados[#e.contratados + 1] = c
+  local c = novo_invocado(e, d)
   J.avisar(d.nome .. " atravessou o portal!", 4)
   J.som("invocar")
   return c
@@ -1390,14 +1402,28 @@ function limpar_contratados(e)
       for _, k in ipairs({ "armadura", "arma", "magia", "fama", "missoes" }) do c[k] = math.max(0, saneado(c[k], 0)) end
     end
   end
+  -- id repetido: só o primeiro é achado, e o outro ficaria em missão para sempre; invocado só existe um de cada
+  local nomes_invocados, vistos, unicos = {}, {}, {}
+  for _, d in ipairs(C.invocados) do nomes_invocados[d.nome] = true end
+  for _, c in ipairs(e.contratados) do
+    local nome = c.invocado and c.nome
+    if not vistos[c.id] and not (nome and (vistos[nome] or not nomes_invocados[nome])) then
+      vistos[c.id] = true
+      if nome then vistos[nome] = true end
+      unicos[#unicos + 1] = c
+    end
+  end
+  e.contratados = unicos
   local por_id, em_party = {}, {}
   for _, c in ipairs(e.contratados) do por_id[c.id] = c; c.party = nil end
   for i = #e.parties, 1, -1 do
     local p = e.parties[i]
     local boa = type(p) == "table" and saneado(p.id, nil) and type(p.membros) == "table" and #p.membros == 4
     if boa then
+      local aqui = {}
       for _, id in ipairs(p.membros) do
-        if not por_id[id] or em_party[id] then boa = false end
+        if not por_id[id] or em_party[id] or aqui[id] then boa = false
+        else aqui[id] = true end
       end
     end
     if boa then
@@ -1408,6 +1434,14 @@ function limpar_contratados(e)
     end
   end
   e.prox_id = math.max(math.floor(e.prox_id), maior + 1)
+  -- invocado perdido volta do zero: sem os 4, a missão final nunca libera
+  for i, d in ipairs(C.invocados) do
+    if vistos[d.nome] then e.invocados_feitos = math.max(e.invocados_feitos, i) end
+  end
+  for i = 1, e.invocados_feitos do
+    local d = C.invocados[i]
+    if not vistos[d.nome] then novo_invocado(e, d) end
+  end
 end
 
 function J.carregar()
@@ -1444,7 +1478,7 @@ function J.carregar()
   for _, c in ipairs(e.contratados) do ids[c.id] = true end
   for i = #e.missoes, 1, -1 do
     local m = e.missoes[i]
-    if type(m) ~= "table" or not (C.ranks[m.rank]) or (m.contratado and not ids[m.contratado]) then table.remove(e.missoes, i)
+    if type(m) ~= "table" or not (C.ranks[m.rank]) or (m.contratado and (not ids[m.contratado] or em[m.contratado])) then table.remove(e.missoes, i)
     else
       m.resta = util.limitar(saneado(m.resta, 1), 0, C.ranks[m.rank].duracao)
       if m.contratado then em[m.contratado] = true end

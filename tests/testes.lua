@@ -1470,5 +1470,82 @@ if arg[3] ~= "rapido" then
   ok("tela final tem botão", U.apertar("final_sair") ~= nil)
 end
 
+-- Segunda metade: saves com party, invocados e números que travavam o fim do jogo
+do
+  local function recarregar()
+    motor._save = util.serializar(J.estado)
+    iniciar()
+    J.offline = nil
+  end
+  local function preparar()
+    novo()
+    tudo_comprado()
+    for _ = 1, 4 do J.contratar(); J.estado.ouro = 1e60 end
+    for _ = 1, 4 do J.invocar(); J.estado.ouro = 1e60 end
+  end
+  local function invocados()
+    local n = 0
+    for _, c in ipairs(J.estado.contratados) do if c.invocado then n = n + 1 end end
+    return n
+  end
+
+  preparar()
+  local id = J.estado.contratados[1].id
+  ok("party com o mesmo membro 4 vezes é recusada", J.criar_party({ id, id, id, id }) == false)
+  J.estado.parties = { { id = 99999, membros = { id, id, id, id } } }
+  recarregar()
+  ok("party repetida sai do save", #J.estado.parties == 0 and not J.estado.contratados[1].party)
+
+  preparar()
+  J.estado.contratados[2].id = J.estado.contratados[1].id
+  recarregar()
+  local vistos, repetido = {}, false
+  for _, c in ipairs(J.estado.contratados) do
+    repetido = repetido or vistos[c.id]
+    vistos[c.id] = true
+  end
+  ok("id repetido no save não deixa ninguém preso em missão", not repetido)
+
+  preparar()
+  for _, c in ipairs(J.estado.contratados) do if c.invocado and c.nome == "Yuki" then c.tipo = "estragado" end end
+  recarregar()
+  ok("invocado estragado volta: a final segue possível", invocados() == 4 and J.formar_party_final(), invocados())
+
+  preparar()
+  J.estado.invocados_feitos = 0
+  J.estado.ouro = 1e60
+  recarregar()
+  J.estado.ouro = 1e60
+  ok("contagem zerada não duplica invocados", J.estado.invocados_feitos == 4 and J.invocar() == nil and invocados() == 4)
+
+  preparar()
+  local cinco = {}
+  for k, v in pairs(J.estado.contratados[#J.estado.contratados]) do cinco[k] = v end
+  cinco.id = 88888
+  J.estado.contratados[#J.estado.contratados + 1] = cinco
+  recarregar()
+  ok("invocado a mais sai do save", invocados() == 4 and J.formar_party_final())
+
+  preparar()
+  local c = J.estado.contratados[1]
+  J.estado.missoes = { { rank = 1, resta = 5, contratado = c.id }, { rank = 1, resta = 20, contratado = c.id } }
+  recarregar()
+  local n = 0
+  for _, m in ipairs(J.estado.missoes) do if m.contratado == c.id then n = n + 1 end end
+  ok("contratado não fica em duas missões", n == 1, n)
+
+  novo()
+  J.estado.ouro = 1e308
+  J.ganhar(1e308)
+  ok("ouro não vira infinito", J.estado.ouro < math.huge and J.estado.total < math.huge)
+  local antes = J.estado.ouro
+  recarregar()
+  ok("ouro enorme sobrevive ao save", J.estado.ouro == antes)
+
+  ok("número enorme é curto", #util.formatar(1e300) <= 10 and #util.formatar(1e36) <= 10, util.formatar(1e36))
+  ok("infinito é curto", #util.formatar(math.huge) <= 10)
+  ok("1 qui segue igual", util.formatar(1e18) == "1 qui", util.formatar(1e18))
+end
+
 print(string.format("semente %d: %d testes, %d falhas", semente, total, falhas))
 os.exit(falhas == 0 and 0 or 1)

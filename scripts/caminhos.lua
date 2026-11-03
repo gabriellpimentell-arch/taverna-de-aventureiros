@@ -190,6 +190,13 @@ function Cam.rota(sx, sz, gx, gz)
   return rota
 end
 
+-- nunca empurra para dentro de um móvel; encostado nele, escorrega ao longo dele
+local function empurrar(p, ax, az)
+  if not Cam.bloqueado(p.x + ax, p.z + az) then p.x, p.z = p.x + ax, p.z + az
+  elseif not Cam.bloqueado(p.x + ax, p.z) then p.x = p.x + ax
+  elseif not Cam.bloqueado(p.x, p.z + az) then p.z = p.z + az end
+end
+
 -- pessoas: lista de objetos com x, z; p.sentado fica parado; p.fantasma ignora colisão
 function Cam.separar(pessoas, dt)
   local n = #pessoas
@@ -231,12 +238,10 @@ function Cam.separar(pessoas, dt)
             if not (pf and qf) then
               local parte = (pf or qf) and falta or falta / 2
               if not pf then
-                local x, z = p.x - dx * parte, p.z - dz * parte
-                if not Cam.bloqueado(x, z) or Cam.bloqueado(p.x, p.z) then p.x, p.z = x, z end
+                empurrar(p, -dx * parte, -dz * parte)
               end
               if not qf then
-                local x, z = q.x + dx * parte, q.z + dz * parte
-                if not Cam.bloqueado(x, z) or Cam.bloqueado(q.x, q.z) then q.x, q.z = x, z end
+                empurrar(q, dx * parte, dz * parte)
               end
             end
           end

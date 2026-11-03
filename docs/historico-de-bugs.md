@@ -49,6 +49,16 @@ Só rode o que a mudança pode ter afetado. Os testes em `tests/testes.lua` já 
 - Se o início do jogo falhasse, fechar gravava um save vazio por cima do progresso.
 - Party incompleta ou com id inválido prendia os membros.
 
+### Segunda metade: saves e números enormes
+- Party com o mesmo membro repetido gerava 4 missões para uma pessoa; agora é recusada e sai do save.
+- Dois contratados com o mesmo id: o segundo ficava em missão para sempre.
+- Invocado estragado sumia do save e a missão SSS nunca mais liberava; agora ele volta do zero. Invocado repetido ou a mais sai do save, e a contagem acompanha quem existe.
+- Contratado com duas missões no save saía de novo antes da segunda terminar.
+- Ouro infinito virava zero ao carregar; agora tem teto de 1e300.
+- Preços acima de 1000 qui viravam textos de centenas de dígitos; agora aparecem como `1,00e36`, e infinito como "muito".
+
+Conferido sem bug: party com membro em missão, desfazer party (também durante a final), herói e invocado salvos e carregados, final com tempo fora, apagar o progresso depois do fim.
+
 ### Ganho offline
 - Coletar inflava o ouro por segundo e multiplicava o ganho seguinte.
 - Sair com a janela de ganho aberta perdia o ouro.
