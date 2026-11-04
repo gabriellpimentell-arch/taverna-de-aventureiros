@@ -227,9 +227,36 @@ Os números marcados como sugestão são pontos de partida, não pedidos.
 - Para não lotar a barra de baixo, há uma só aba Árvore, com ícones dos ambientes no topo.
 - Tocar na sala no mapa também abre a árvore dela.
 - Cada árvore tem de 5 a 8 nós no começo.
-- A invocação também tem árvore, salvo se ele disser outra coisa (ver "A decidir").
+- A invocação também tem árvore, com os sumos sacerdotes (seção 10.1).
 
 **Ponto a cuidar:** é preciso rebalancear a economia inteira. Rode o robô do início ao fim para confirmar que o jogo continua terminável.
+
+---
+
+## 10.1. Árvore da invocação e sumos sacerdotes
+
+**O dono pediu:**
+
+- Ao abrir a invocação, cria-se "uma nova árvore de habilidades", igual às dos outros ambientes (seção 10).
+- Dentro dela, há "a opção de desbloquear sumos sacerdotes".
+- São necessários **4 sacerdotes**, "porque como tem 4 pilares". Primeiro ele falou em 5 e se corrigiu.
+- Os 4 são "um pré-requisito para desbloquear a invocação de herói".
+- Ele deixou com o Claude a melhor forma de introduzir: contratar um mago e evoluí-lo até virar sacerdote, ou desbloquear direto na árvore.
+
+**Sugestão do Claude, ainda sem resposta do dono:** desbloquear na árvore, sem evoluir um mago.
+
+1. Um nó da árvore da invocação, por exemplo "Ordem dos Sumos Sacerdotes", libera os sacerdotes.
+2. O jogador contrata os 4 um a um, cada um mais caro que o anterior.
+3. Cada sacerdote vai para um pilar, e o pilar acende.
+4. Com os 4 pilares acesos, o círculo se ativa e a invocação de heróis é liberada.
+
+**Motivos:**
+
+- Evoluir um mago tiraria um contratado das missões e da party, e o jogador poderia ficar sem nenhum mago disponível.
+- Quatro pilares acendendo mostram o progresso na tela, sem precisar de outro sistema de evolução.
+- Assim, o escopo fica menor. A ideia de ordenar um contratado pode entrar depois, no refinamento.
+
+**Ponto a cuidar:** o robô de testes precisa contratar os 4 antes de invocar, para o jogo continuar terminável.
 
 ---
 
@@ -327,7 +354,7 @@ O dono disse "gostei das ideias" sobre esta divisão. Cada parte é publicada pa
 8. Três fazendas, porco, galinha e três fazendeiros (seção 9).
 
 **Parte 3: árvores e receitas**
-9. Árvore por ambiente (seção 10).
+9. Árvore por ambiente e sumos sacerdotes (seções 10 e 10.1).
 10. Receitas (seção 11).
 
 **Parte 4: vida na taverna**
@@ -343,7 +370,7 @@ O dono disse "gostei das ideias" sobre esta divisão. Cada parte é publicada pa
 
 ## 16. A decidir
 
-1. **Invocação:** o dono disse "na parte de invocação do herói, eu também queria uma opção que desse pra... como é, tipo, criar uma árvore de habilidades exclusiva também" e passou para outros ambientes. O Claude perguntou se havia outra ideia, e ele não respondeu. Padrão: é só a árvore exclusiva.
+1. **Sumos sacerdotes:** falta o dono confirmar a forma sugerida na seção 10.1.
 2. **Autorização:** o dono ainda não mandou começar. Na mensagem anterior a esta, ele pediu só este documento.
 3. **Preços:** metro de obra, decoração e tudo o que for vendido na Loja ou na carroça. Os atuais são chutes iniciais e devem ser ajustados depois de jogar.
 4. **Salas em cadeia e o herdar de saves:** ficaram como limitações da entrega anterior. Uma sala que dá acesso a outra só sai depois que a outra for movida. Tamanhos e decoração ficam salvos para todos os saves, então um jogo novo herda o que foi construído. O Claude disse que o herdar é a primeira coisa que corrigiria. Sem o editor, faz sentido resolver isso junto da Parte 1.
