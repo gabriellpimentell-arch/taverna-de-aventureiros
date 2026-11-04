@@ -171,14 +171,14 @@ O jogo passa a ter capítulos, cada um com seu objetivo e um momento de virada. 
 | Capítulo | Objetivo | O que abre no final |
 | --- | --- | --- |
 | 1. A taverna | Pagar a dívida e produzir a própria comida | Missões e o caminho de pedras |
-| 2. A guilda | Mural, mercadinho, quartos e contratados | Área de avaliação |
+| 2. A guilda | Mural, mercadinho, quartos, contratados, sala da guilda e área de avaliação | Heróis e invocação |
 | 3. Os heróis | Promoções, party e invocação | Lorde Demônio |
 
 Um quarto capítulo fica para o futuro.
 
 ### Área de avaliação
 
-Fora da taverna, há uma arena de treino onde os contratados tentam subir de rank enfrentando um examinador de rank maior.
+Fora da taverna, há uma arena de treino onde os contratados tentam subir de rank enfrentando um examinador de rank maior. Ela faz parte do capítulo da guilda: é liberada depois da sala da guilda, como um dos passos dessa fase.
 
 1. O jogador escolhe um contratado e paga uma taxa.
 2. O jogo mostra a chance de vitória, baseada no poder do contratado contra o do examinador.
