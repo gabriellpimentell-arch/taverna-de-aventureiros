@@ -71,7 +71,7 @@ ob("barraca", "Mercadinho", 73, -2, "Áreas", "caminho")
 ob("estantes", "Estantes de venda", 73, -4.1, "Áreas", "caminho")
 ob("quadro", "Mural de missões", 79, -1.6, "Áreas", "caminho")
 ob("jardim", "Fazenda de sementes", -3, 6.75, "Áreas", "@frente")
-ob("pomar", "Árvores frutíferas", 4.25, 7.8, "Áreas", "@pomar")
+ob("pomar", "Fazenda de árvores frutíferas", 4.25, 7.8, "Áreas", "@pomar")
 ob("fazenda", "Fazenda de animais", 13, 7.8, "Áreas", "@fazenda")
 -- salas internas: as paredes ficam na fileira; "mover a sala" leva o que está dentro dela
 ob("cozinha", "Cozinha", 14.75, 0.1, "Áreas", "@cozinha")
@@ -97,6 +97,13 @@ ob("feno", "Feno", 13.3, 10, "Fazenda", "fazenda")
 L.VACAS = { { 9.3, 7.2, 0.4 }, { 11.4, 7.5, 2.7 }, { 12.8, 6.6, -0.5 }, { 9.5, 8.8, -0.7 }, { 11.6, 9.1, 0.3 }, { 9.7, 10.1, 3.4 }, { 12.8, 8.4, 1.5 }, { 11.5, 10.2, 5.5 } }
 for i = #L.VACAS + 1, require("config").limite_vacas do L.VACAS[i] = { 9.5 + i % 4 * 1.1, 6.6 + i % 3 * 1.5, i * 0.7 } end
 for i, v in ipairs(L.VACAS) do ob("vaca" .. i, "Vaca " .. i, v[1], v[2], "Fazenda", "fazenda") end
+-- porcos do lado esquerdo do curral; galinhas soltas pela frente, perto do feno
+L.PORCOS = {}
+for i = 1, require("config").limite_porcos do L.PORCOS[i] = { 8.9 + (i - 1) % 4 * 1.05, 5.5 + math.floor((i - 1) / 4) * 1.5, i * 1.3 } end
+for i, v in ipairs(L.PORCOS) do ob("porco" .. i, "Porco " .. i, v[1], v[2], "Fazenda", "fazenda") end
+L.GALINHAS = {}
+for i = 1, require("config").limite_galinhas do L.GALINHAS[i] = { 9 + (i - 1) % 8 * 0.75, 10 - math.floor((i - 1) / 8) * 0.8, i * 0.9 } end
+for i, v in ipairs(L.GALINHAS) do ob("galinha" .. i, "Galinha " .. i, v[1], v[2], "Fazenda", "fazenda") end
 
 ob("fogao", "Fogão", 14, -3.95, "Cozinha", "cozinha")
 ob("cozinheiro", "Cozinheiro", 14, -2.5, "Cozinha", "cozinha")
@@ -160,7 +167,7 @@ local INTERNAS = {
 }
 local EXTERNAS = {
   { id = "jardim", ancora = "@frente", x0 = -6.5, l = 7, z0 = 4.8, p = 4, k = "jardim", nome = "Fazenda de sementes" },
-  { id = "pomar", ancora = "@pomar", x0 = 0.5, l = 7.5, z0 = 4.8, p = 6, k = "pomar", nome = "Árvores frutíferas" },
+  { id = "pomar", ancora = "@pomar", x0 = 0.5, l = 7.5, z0 = 4.8, p = 6, k = "pomar", nome = "Fazenda de árvores frutíferas" },
   { id = "fazenda", ancora = "@fazenda", x0 = 8, l = 10, z0 = 4.8, p = 6, k = "faz", nome = "Fazenda de animais" },
   -- sem k: o caminho tem tamanho fixo, não entra em L.tamanho nem tem alça
   { id = "caminho", ancora = "@caminho", x0 = 70, l = 12, z0 = -4.5, p = 6, nome = "Caminho de pedras" },
@@ -1364,7 +1371,7 @@ function L.removivel(id)
   if o.extra then return true end
   if CAT_FIXA[o.cat] then return false end
   -- mesas, árvores e vacas mostram quantas foram compradas
-  if id:match("^mesa%d") or id:match("^arvore%d") or id:match("^vaca%d") then return false end
+  if id:match("^mesa%d") or id:match("^arvore%d") or id:match("^vaca%d") or id:match("^porco%d") or id:match("^galinha%d") then return false end
   return not FIXOS[id]
 end
 

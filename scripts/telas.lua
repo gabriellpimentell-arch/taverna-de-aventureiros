@@ -145,7 +145,8 @@ end
 
 local function hud()
   local e = J.estado
-  painel_divida()
+  -- as outras abas ocupam a tela toda: o painel só fica onde não cobre o conteúdo
+  if T.aba == "taverna" or T.aba == "loja" or T.aba == "arvore" then painel_divida() end
   motor.retangulo(12, 10, 236, 44, "#21150ee8", 12)
   local p = T.pulso
   U.moeda(34, 32, 14 + p * 2)
@@ -773,48 +774,67 @@ local function tela_mercadinho()
   end
 end
 
-local function tela_producao()
+-- bloco de uma fazenda: nome, o que tem nela e o estoque de cada ingrediente, com imagem
+local function bloco_fazenda(sala, nome, info, x, y, w, aberta)
+  motor.retangulo(x, y, w, 104, "#3d291b", 8)
+  motor.texto(nome, x + 10, y + 6, 15, aberta and cor.texto or cor.texto_fraco, "esquerda", true)
+  motor.texto(info, x + 10, y + 27, 12, cor.texto_fraco)
   local e = J.estado
-  fundo_aba("Produção", "O jardim abastece a cozinha e a cervejaria: comida e bebida da casa rendem mais")
-
-  U.painel(AREA.x, AREA.y + 56, 448, 340)
-  local px = AREA.x + 16
-  motor.texto("Fazenda de sementes", px, AREA.y + 66, 16, cor.texto, "esquerda", true)
-  motor.texto(J.ef("canteiros") .. " canteiros  •  " .. util.formatar(J.por_colheita()) .. " por colheita", px, AREA.y + 92, 14, cor.texto)
-  motor.texto("Próxima colheita em " .. duracao_texto(J.ciclo_jardim() - e.ciclo), px, AREA.y + 114, 14, cor.texto_fraco)
-  U.barra(px, AREA.y + 136, 416, 10, e.ciclo / J.ciclo_jardim(), cor.verde)
-  motor.texto("Estoque de alimentos: " .. fmt(e.estoque), px, AREA.y + 158, 15, cor.ouro, "esquerda", true)
-  local linhas = { { "Mais canteiros", "canteiro" }, { "Adubo", "adubo" }, { "Irrigação", "irrigacao" } }
-  for i, l in ipairs(linhas) do
-    local y = AREA.y + 186 + (i - 1) * 50
-    if l[2] == "canteiro" and J.nivel("canteiro") > 0 then
-      -- canteiro novo agora se compra na Loja
-      motor.texto("Mais canteiros", px, y + 10, 14, cor.texto)
-      U.botao("ir_loja_canteiro", px + 280, y, 136, 40, "Ver na Loja", { tam = 13 }, function() T.aba = "loja" end)
-    else
-      motor.texto(l[1] .. " (nível " .. J.nivel(l[2]) .. ")", px, y + 10, 14, cor.texto)
-      atalho_no(l[2], px + 280, y, 136)
+  local cx = x + 10
+  local r = J.proxima_colheita()
+  for _, d in ipairs(C.estoques) do
+    if d.fazenda == sala then
+      motor.retangulo(cx, y + 48, 138, 48, "#21150e", 6)
+      M.miniatura(d.modelo, cx + 3, y + 51, 42, 42)
+      motor.texto(d.nome, cx + 48, y + 52, 12, cor.texto_fraco)
+      motor.texto(fmt(e.estoques[d.id]), cx + 48, y + 70, 15, cor.ouro, "esquerda", true)
+      local q = r[d.id]
+      if q and q > 0 then motor.texto("+" .. fmt(q), cx + 132, y + 72, 12, cor.verde, "direita") end
+      cx = cx + 144
     end
   end
+end
 
-  U.painel(AREA.x + 460, AREA.y + 56, 476, 340)
-  local qx = AREA.x + 476
-  motor.texto("Cozinha", qx, AREA.y + 66, 16, cor.texto, "esquerda", true)
+local function tela_producao()
+  local e = J.estado
+  fundo_aba("Produção", "As três fazendas enchem os estoques; a cozinha e a cervejaria servem o que há neles")
+  M.gravar_miniaturas()
+
+  U.painel(AREA.x, AREA.y + 56, 472, 340)
+  local px = AREA.x + 12
+  motor.texto("Próxima colheita em " .. duracao_texto(J.ciclo_jardim() - e.ciclo), px + 2, AREA.y + 62, 13, cor.texto_fraco)
+  U.barra(px + 230, AREA.y + 66, 218, 8, e.ciclo / J.ciclo_jardim(), cor.verde)
+  local yb, wb = AREA.y + 82, 448
+  bloco_fazenda("jardim", "Fazenda de sementes",
+    J.ef("canteiros") .. " canteiros  •  " .. fmt(e.sementes.lupulo) .. " sementes de lúpulo", px, yb, wb, true)
+  bloco_fazenda("pomar", "Fazenda de árvores frutíferas",
+    J.ef("a_pomar") > 0 and ((J.ef("frutas") + 2) .. " árvores  •  " .. fmt(e.sementes.fruta) .. " sementes de fruta") or "Libere na Árvore", px, yb + 104 + 3, wb, J.ef("a_pomar") > 0)
+  bloco_fazenda("fazenda", "Fazenda de animais",
+    J.ef("a_fazenda") > 0 and (J.ef("vacas") .. " vacas  •  " .. J.ef("porcos") .. " porcos  •  " .. J.ef("galinhas") .. " galinhas") or "Libere na Árvore", px, yb + 2 * 107, wb, J.ef("a_fazenda") > 0)
+
+  U.painel(AREA.x + 484, AREA.y + 56, 452, 340)
+  local qx = AREA.x + 498
+  motor.texto("Cozinha", qx, AREA.y + 62, 16, cor.texto, "esquerda", true)
   local nc = J.ef("cozinheiro")
-  local tc = nc > 0 and ("Comida rende x" .. string.format("%.2f", C.bonus_cozinheiro + C.bonus_cozinheiro_nivel * (nc - 1)):gsub("%.", ",") .. " usando o estoque") or "Contrate o cozinheiro para usar o que você colhe"
-  motor.texto(tc, qx, AREA.y + 92, 14, cor.texto_fraco)
-  motor.texto("Cozinheiro (nível " .. J.nivel("cozinheiro") .. ")", qx, AREA.y + 124, 14, cor.texto)
-  atalho_no("cozinheiro", qx + 308, AREA.y + 114, 136)
-
-  motor.texto("Cervejaria", qx, AREA.y + 176, 16, cor.texto, "esquerda", true)
+  local tc = nc > 0 and ("Comida da casa rende x" .. string.format("%.2f", C.bonus_cozinheiro + C.bonus_cozinheiro_nivel * (nc - 1)):gsub("%.", ",")) or "Serve o que há em estoque. Cozinheiro faz render mais"
+  motor.texto(tc, qx, AREA.y + 84, 13, cor.texto_fraco)
+  motor.texto("Cervejaria", qx, AREA.y + 110, 16, cor.texto, "esquerda", true)
   local nb = J.ef("bebida_casa")
-  local tb = nb > 0 and ("Bebida rende x" .. string.format("%.2f", C.bonus_bebida_casa + C.bonus_bebida_nivel * (nb - 1)):gsub("%.", ",") .. " usando o estoque") or "Faça as próprias bebidas com o que você colhe"
-  motor.texto(tb, qx, AREA.y + 202, 14, cor.texto_fraco)
-  motor.texto("Cervejaria (nível " .. J.nivel("cervejaria") .. ")", qx, AREA.y + 234, 14, cor.texto)
-  atalho_no(J.nivel("cervejaria") > 0 and "cerveja_melhor" or "cervejaria", qx + 308, AREA.y + 224, 136)
-
-  motor.texto("Cardápio (nível " .. J.nivel("cardapio") .. ")", qx, AREA.y + 296, 14, cor.texto)
-  atalho_no("cardapio", qx + 308, AREA.y + 286, 136)
+  local tb = nb > 0 and ("Bebida da casa rende x" .. string.format("%.2f", C.bonus_bebida_casa + C.bonus_bebida_nivel * (nb - 1)):gsub("%.", ",")) or "Abra a Cervejaria para servir o que você colhe"
+  motor.texto(tb, qx, AREA.y + 132, 13, cor.texto_fraco)
+  local linhas = {
+    { "Cozinheiro", "cozinheiro" },
+    { "Receita da casa", J.nivel("cervejaria") > 0 and "cerveja_melhor" or "cervejaria" },
+    { "Adubo", "adubo" },
+    { "Irrigação", "irrigacao" },
+    { "Cardápio", "cardapio" },
+  }
+  for i, l in ipairs(linhas) do
+    local y = AREA.y + 156 + (i - 1) * 40
+    motor.texto(l[1] .. " (nível " .. J.nivel(l[2]) .. ")", qx, y + 10, 14, cor.texto)
+    atalho_no(l[2], qx + 288, y, 136)
+  end
+  U.botao("ir_loja_canteiro", qx + 180, AREA.y + 56, 244, 40, "Canteiros, árvores e animais: Loja", { tam = 13 }, function() T.aba = "loja" end)
 end
 
 local function nome_contratado(c)
@@ -1012,7 +1032,7 @@ local function janela_carroca()
   U.moeda(x + w - 200, y + 30, 11)
   motor.texto(fmt(J.estado.ouro), x + w - 184, y + 20, 16, cor.ouro, "esquerda", true)
   U.botao("carroca_fechar", x + w - 52, y + 8, 44, 44, "x", { cor = "#4a3627", cor_texto = cor.texto }, function() T.modal = nil end)
-  local cw, ch, gx, gy = 404, 80, 16, 8
+  local cw, ch, gx, gy = 404, 78, 16, 6
   local n = 0
   for _, d in ipairs(C.carroca) do
     local est = J.estado_carroca(d.id)

@@ -67,7 +67,7 @@ function M.iniciar()
   M.painel, M.painel_alvo = 0, 0
   M.fazendeiro = { x = -5.7, z = 6.35, giro = 0, fase = 0, t = 0, i = 1 }
   M.cozinheiro = nil
-  M.vacas = {}
+  M.vacas, M.porcos, M.galinhas = {}, {}, {}
   M.estrada_z = nil
   M.anim = { leste = 0, jardim = 0, cerveja = 0, circulo = 0, cozinha = 0, pomar = 0, fazenda = 0, quartos = 0, guilda = 0, caminho = 0 }
   local a = M.alvos()
@@ -875,8 +875,10 @@ local function jardim(e)
     caixa(x, 0, z, 1.0, 0.14, 1.1, "#5a3d26")
     for k = -1, 1, 1 do
       local a = 0.2 + cresce * 0.6
-      peca("cone", x + k * 0.3, 0.12, z, 0.26, a, 0.26, 0, i % 3 == 0 and "#c9a24a" or "#5a8f42")
-      if cresce > 0.7 then peca("esfera", x + k * 0.3, 0.12 + a * 0.6, z + 0.1, 0.12, 0.12, 0.12, 0, i % 3 == 0 and "#e8c04a" or "#d9534a") end
+      -- metade trigo, dourado; metade lúpulo, verde com pinhas claras
+      local trigo = i % 2 == 1
+      peca("cone", x + k * 0.3, 0.12, z, 0.26, a, 0.26, 0, trigo and "#c9a24a" or "#4f8a3c")
+      if cresce > 0.7 then peca("esfera", x + k * 0.3, 0.12 + a * 0.6, z + 0.1, 0.12, 0.12, 0.12, 0, trigo and "#e8c04a" or "#b9d67a") end
     end
   end
   -- fazendeiro: anda entre os canteiros e cuida de um de cada vez
@@ -934,6 +936,54 @@ local function vaca(x, z, giro, passo, pasta)
 end
 M.vaca = vaca
 
+-- Porco low poly (olha para +x). `pasta` abaixa o focinho para fuçar o chão.
+local function porco(x, z, giro, passo, pasta)
+  giro, passo, pasta = giro or 0, passo or 0, pasta or 0
+  local co, si = math.cos(giro), math.sin(giro)
+  local rosa, rosa2 = "#e8a6a0", "#d68b86"
+  local function p(f, lx, y, lz, ex, ey, ez, c)
+    peca(f, x + lx * co + lz * si, y, z - lx * si + lz * co, ex, ey, ez, giro, c)
+  end
+  local function cx(lx, y, lz, ex, ey, ez, c) p("caixa", lx, y + ey / 2, lz, ex, ey, ez, c) end
+  cx(0, 0.22, 0, 0.84, 0.42, 0.5, rosa)
+  cx(-0.2, 0.62, 0, 0.3, 0.04, 0.3, rosa2)
+  for i, q in ipairs({ { -0.28, -0.16 }, { 0.28, -0.16 }, { -0.28, 0.16 }, { 0.28, 0.16 } }) do
+    local anda = (i == 1 or i == 4) and passo or -passo
+    cx(q[1] + anda * 0.06, 0, q[2], 0.13, 0.24, 0.13, rosa2)
+  end
+  local cab = 0.3 - 0.2 * pasta
+  cx(0.52, cab, 0, 0.34, 0.32, 0.36, rosa)
+  cx(0.72, cab + 0.04, 0, 0.1, 0.17, 0.22, rosa2)
+  p("cone", 0.48, cab + 0.3, -0.12, 0.1, 0.13, 0.1, rosa2)
+  p("cone", 0.48, cab + 0.3, 0.12, 0.1, 0.13, 0.1, rosa2)
+  -- rabinho enrolado
+  p("esfera", -0.46, 0.5, 0, 0.1, 0.1, 0.1, rosa2)
+  p("esfera", -0.5, 0.55, 0.04, 0.07, 0.07, 0.07, rosa2)
+end
+M.porco = porco
+
+-- Galinha low poly (olha para +x). `pasta` é a bicada no chão; `passo` faz o corpo saltitar.
+local function galinha(x, z, giro, passo, pasta)
+  giro, passo, pasta = giro or 0, passo or 0, pasta or 0
+  local co, si = math.cos(giro), math.sin(giro)
+  local function p(f, lx, y, lz, ex, ey, ez, c)
+    peca(f, x + lx * co + lz * si, y, z - lx * si + lz * co, ex, ey, ez, giro, c)
+  end
+  local pulo = math.abs(passo) * 0.05
+  p("caixa", 0, 0.08, -0.07, 0.04, 0.16, 0.04, "#e0a030")
+  p("caixa", 0, 0.08, 0.07, 0.04, 0.16, 0.04, "#e0a030")
+  p("esfera", 0, 0.3 + pulo, 0, 0.42, 0.3, 0.32, "#f4efe2")
+  p("esfera", -0.02, 0.3 + pulo, -0.16, 0.24, 0.17, 0.07, "#ddd5c2")
+  p("esfera", -0.02, 0.3 + pulo, 0.16, 0.24, 0.17, 0.07, "#ddd5c2")
+  p("cone", -0.2, 0.36 + pulo, 0, 0.18, 0.2, 0.14, "#ddd5c2")
+  local cab = 0.5 - 0.34 * pasta
+  local fr = 0.17 + 0.07 * pasta
+  p("esfera", fr, cab + pulo, 0, 0.17, 0.17, 0.16, "#f4efe2")
+  p("caixa", fr + 0.1, cab + pulo, 0, 0.08, 0.04, 0.05, "#e0a030")
+  p("caixa", fr, cab + 0.1 + pulo, 0, 0.08, 0.08, 0.04, "#d9342b")
+end
+M.galinha = galinha
+
 -- Só aparência: nada aqui toca em regras, ouro ou tempo de jogo. Sorteio próprio, para
 -- não gastar o math.random que o jogo usa.
 local function sorte(v)
@@ -950,33 +1000,38 @@ end
 
 -- As vacas vivem nas coordenadas de origem da fazenda: assim a cerca, que é um retângulo
 -- ali, continua valendo com a fazenda movida.
-local RAIO_VACA = 0.33
-local VACA_PONTOS = { 0.72, 0.3, -0.1, -0.42 } -- centros dos círculos do focinho ao rabo
+-- `pontos`: centros dos círculos do focinho ao rabo, cada um com o raio da espécie
+local ESPECIES = {
+  { nome = "vaca", lista = "vacas", ef = "vacas", pos = L.VACAS, modelo = vaca, raio = 0.33, pontos = { 0.72, 0.3, -0.1, -0.42 }, velo = 0.35, velo_extra = 0.3, patas = 5 },
+  { nome = "porco", lista = "porcos", ef = "porcos", pos = L.PORCOS, modelo = porco, raio = 0.24, pontos = { 0.5, 0, -0.32 }, velo = 0.45, velo_extra = 0.35, patas = 8 },
+  { nome = "galinha", lista = "galinhas", ef = "galinhas", pos = L.GALINHAS, modelo = galinha, raio = 0.14, pontos = { 0.1 }, velo = 0.6, velo_extra = 0.5, patas = 14 },
+}
 local OBSTACULOS_FAZENDA = { { "celeiro", 2.05, 1.6 }, { "cocho", 0.8, 0.33 }, { "feno", 1.08, 0.33 } }
 
-local function vaca_circulos(x, z, g)
+local function vaca_circulos(x, z, g, pontos)
   local co, si = math.cos(g), math.sin(g)
   local r = {}
-  for k, d in ipairs(VACA_PONTOS) do r[k] = { x + d * co, z - d * si } end
+  for k, d in ipairs(pontos) do r[k] = { x + d * co, z - d * si } end
   return r
 end
 
 -- os círculos de uma vaca só mudam quando ela anda: guardados, escolher destino custa bem menos
 local function circulos_de(u)
   if u.cc_x ~= u.x or u.cc_z ~= u.z or u.cc_g ~= u.g then
-    u.cc, u.cc_x, u.cc_z, u.cc_g = vaca_circulos(u.x, u.z, u.g), u.x, u.z, u.g
+    u.cc, u.cc_x, u.cc_z, u.cc_g = vaca_circulos(u.x, u.z, u.g, u.esp.pontos), u.x, u.z, u.g
   end
   return u.cc
 end
 
 -- folga da vaca nessa pose até a cerca, os obstáculos e as outras; negativo = encostou
 local function vaca_folga(v, x, z, g, limites)
-  local cs = vaca_circulos(x, z, g)
+  local cs = vaca_circulos(x, z, g, v.esp.pontos)
+  local raio = v.esp.raio
   local folga = math.huge
   for _, q in ipairs(cs) do
     folga = math.min(folga, q[1] - limites[1], limites[2] - q[1], q[2] - limites[3], limites[4] - q[2])
   end
-  folga = folga - 0.2 - RAIO_VACA
+  folga = folga - 0.2 - raio
   for _, ob in ipairs(OBSTACULOS_FAZENDA) do
     if not L.oculto(ob[1]) then
       local c = L.POR_ID[ob[1]]
@@ -984,16 +1039,19 @@ local function vaca_folga(v, x, z, g, limites)
         local ox, oz = L.base(ob[1], L.t("fazenda", q[1], q[2]))
         local dx = math.max(math.abs(ox - c.x) - ob[2], 0)
         local dz = math.max(math.abs(oz - c.z) - ob[3], 0)
-        folga = math.min(folga, math.sqrt(dx * dx + dz * dz) - RAIO_VACA)
+        folga = math.min(folga, math.sqrt(dx * dx + dz * dz) - raio)
       end
     end
   end
-  for _, u in pairs(M.vacas) do
-    if u ~= v then
-      for _, q in ipairs(cs) do
-        for _, e in ipairs(circulos_de(u)) do
-          local dx, dz = q[1] - e[1], q[2] - e[2]
-          folga = math.min(folga, math.sqrt(dx * dx + dz * dz) - 2 * RAIO_VACA - 0.06)
+  -- bicho de qualquer espécie atrapalha; quem está longe nem entra na conta, que é a parte cara
+  for _, esp in ipairs(ESPECIES) do
+    for _, u in pairs(M[esp.lista]) do
+      if u ~= v and math.abs(u.x - x) + math.abs(u.z - z) < 3.5 then
+        for _, q in ipairs(cs) do
+          for _, c in ipairs(circulos_de(u)) do
+            local dx, dz = q[1] - c[1], q[2] - c[2]
+            folga = math.min(folga, math.sqrt(dx * dx + dz * dz) - raio - esp.raio - 0.06)
+          end
         end
       end
     end
@@ -1007,12 +1065,12 @@ local function vaca_pode(v, x, z, g, limites)
   return f >= 0 or f > vaca_folga(v, v.x, v.z, v.g, limites)
 end
 
-local function vaca_casa(i)
-  local id = "vaca" .. i
+local function vaca_casa(esp, i)
+  local id = esp.nome .. i
   local o = L.POR_ID[id]
   local wx, wz = L.t(id, o.x, o.z)
   local x, z = L.base("fazenda", wx, wz)
-  return x, z, L.VACAS[i][3] + L.giro(id) - L.giro("fazenda")
+  return x, z, esp.pos[i][3] + L.giro(id) - L.giro("fazenda")
 end
 
 local function vaca_descansa(v, pastando)
@@ -1093,20 +1151,23 @@ function M.mover_vacas(dt)
   if not M.vacas or (M.anim.fazenda or 0) <= 0 then return end
   local x0, x1, z0, z1 = L.sala("fazenda")
   local limites = { x0, x1, z0, z1 }
-  local pensou = false   -- só uma vaca por quadro faz as contas caras
-  for i = 1, #L.VACAS do
-    if i > math.min(J.ef("vacas"), #L.VACAS) or L.oculto("vaca" .. i) then
-      M.vacas[i] = nil
+  local pensou = false   -- só um bicho por quadro faz as contas caras
+  for _, esp in ipairs(ESPECIES) do
+  local bichos = M[esp.lista]
+  local semente_esp = #esp.nome * 101
+  for i = 1, #esp.pos do
+    if i > math.min(J.ef(esp.ef), #esp.pos) or L.oculto(esp.nome .. i) then
+      bichos[i] = nil
     else
-      local v = M.vacas[i]
-      local cx, cz, cg = vaca_casa(i)
+      local v = bichos[i]
+      local cx, cz, cg = vaca_casa(esp, i)
       -- nasce em casa; volta para casa se ela ou a cerca mudarem
       if not v or v.cx ~= cx or v.cz ~= cz or v.x0 ~= x0 or v.x1 ~= x1 or v.z0 ~= z0 or v.z1 ~= z1 then
         local nova = not v
-        v = v or { s = 7919 * i + 13, velo = 0, pasta = 0, fase = 0 }
-        M.vacas[i] = v
+        v = v or { s = 7919 * i + 13 + semente_esp, velo = 0, pasta = 0, fase = 0, esp = esp }
+        bichos[i] = v
         v.x, v.z, v.g, v.cx, v.cz, v.x0, v.x1, v.z0, v.z1 = cx, cz, cg, cx, cz, x0, x1, z0, z1
-        v.velo = 0.35 + sorte(v) * 0.3
+        v.velo = esp.velo + sorte(v) * esp.velo_extra
         v.pasta, v.passo, v.acomodar = 0, 0, true
         vaca_descansa(v, i % 2 == 0)
         if nova then v.t = v.t * 0.4 + i * 0.5 end
@@ -1138,7 +1199,7 @@ function M.mover_vacas(dt)
               if vaca_pode(v, nx, nz, v.g, limites) then
                 v.x, v.z = nx, nz
                 v.fase = v.fase + dt
-                v.passo = math.sin(v.fase * (5 + v.velo * 6))
+                v.passo = math.sin(v.fase * (esp.patas + v.velo * 6))
               else
                 vaca_descansa(v, false)
               end
@@ -1154,6 +1215,7 @@ function M.mover_vacas(dt)
         end
       end
     end
+  end
   end
 end
 
@@ -1333,20 +1395,24 @@ local function fazenda(e)
     caixa(x + f[1] - 0.25, f[2], z, 0.08, 0.57, 0.64, MAD_MED)
     caixa(x + f[1] + 0.25, f[2], z, 0.08, 0.57, 0.64, MAD_MED)
   end
-  for i = 1, math.min(J.ef("vacas"), #L.VACAS) do
-    local v = L.VACAS[i]
-    local id = "vaca" .. i
-    grupo(id)
-    local a = M.vacas and M.vacas[i]
-    if a then
-      -- de fazenda para o grupo da própria vaca, que o jogador pode ter movido
-      local wx, wz = L.t("fazenda", a.x, a.z)
-      local px, pz = L.base(id, wx, wz)
-      -- mastigando: a cabeça sobe e desce um pouco, cada vaca em seu tempo
-      local masca = a.pasta * (0.94 + 0.06 * math.sin(M.tempo * 3 + i * 1.7))
-      vaca(px, pz, a.g + L.giro("fazenda") - L.giro(id), a.passo, masca)
-    else
-      vaca(v[1], v[2], v[3], 0)
+  for _, esp in ipairs(ESPECIES) do
+    for i = 1, math.min(J.ef(esp.ef), #esp.pos) do
+      local v = esp.pos[i]
+      local id = esp.nome .. i
+      grupo(id)
+      local a = M[esp.lista] and M[esp.lista][i]
+      if a then
+        -- de fazenda para o grupo do próprio bicho, que o jogador pode ter movido
+        local wx, wz = L.t("fazenda", a.x, a.z)
+        local px, pz = L.base(id, wx, wz)
+        -- mastigando: a cabeça sobe e desce um pouco, cada um em seu tempo
+        local velo = esp.nome == "galinha" and 9 or 3
+        local masca = a.pasta * (0.94 + 0.06 * math.sin(M.tempo * velo + i * 1.7))
+        if esp.nome == "galinha" then masca = a.pasta * (0.5 + 0.5 * math.abs(math.sin(M.tempo * velo + i * 1.7))) end
+        esp.modelo(px, pz, a.g + L.giro("fazenda") - L.giro(id), a.passo, masca)
+      else
+        esp.modelo(v[1], v[2], v[3], 0)
+      end
     end
   end
 end
@@ -1938,6 +2004,40 @@ local MODELOS = {
   end },
   arvore = { d = 9, h = 1.5, fn = function() arvore_frutas(0, 0, 1, 1, true) end },
   vaca = { d = 7, h = 0.7, fn = function() vaca(0, 0, 0.6, 0) end },
+  porco = { d = 4.6, h = 0.4, fn = function() porco(0, 0, 0.6, 0) end },
+  galinha = { d = 2.6, h = 0.3, fn = function() galinha(0, 0, 0.6, 0) end },
+  item_trigo = { d = 3, h = 0.4, fn = function()
+    for k = -1, 1 do
+      peca("cone", k * 0.26, 0, 0, 0.2, 0.86, 0.2, 0, "#c9a24a")
+      peca("esfera", k * 0.26, 0.72, 0, 0.16, 0.3, 0.16, 0, "#e8c04a")
+    end
+  end },
+  item_lupulo = { d = 3, h = 0.4, fn = function()
+    peca("cone", 0, 0, 0, 0.3, 0.8, 0.3, 0, "#4f8a3c")
+    for k = -1, 1, 2 do peca("esfera", k * 0.24, 0.42, 0.1, 0.24, 0.32, 0.24, 0, "#b9d67a") end
+    peca("esfera", 0, 0.68, 0.1, 0.22, 0.3, 0.22, 0, "#b9d67a")
+  end },
+  item_fruta = { d = 2.8, h = 0.25, fn = function()
+    esfera(-0.2, 0.22, 0, 0.44, "#c8382e"); esfera(0.25, 0.2, 0.05, 0.4, "#d9c24a")
+    cilindro(-0.2, 0.42, 0, 0.04, 0.12, "#5b3a22"); esfera(-0.12, 0.5, 0, 0.14, "#5a8f42", 0.07)
+  end },
+  item_carne_porco = { d = 3.6, h = 0.35, fn = function()
+    peca("esfera", -0.1, 0.3, 0, 0.9, 0.56, 0.7, 0.4, "#e8a6a0")
+    peca("esfera", -0.1, 0.3, 0, 0.5, 0.58, 0.72, 0.4, "#f0d6c8")
+    peca("caixa", 0.46, 0.3, -0.22, 0.46, 0.13, 0.13, 0.4, "#efe2c4")
+  end },
+  item_ovos = { d = 2.6, h = 0.2, fn = function()
+    cilindro(0, 0, 0, 1.0, 0.14, "#a87a42")
+    esfera(-0.2, 0.22, 0, 0.3, "#f4efe2", 0.36); esfera(0.2, 0.22, 0.05, 0.3, "#efe2c4", 0.36); esfera(0, 0.22, -0.2, 0.3, "#f4efe2", 0.36)
+  end },
+  item_semente_lupulo = { d = 3, h = 0.35, fn = function()
+    esfera(0, 0.36, 0, 0.72, "#a87a42", 0.76); cilindro(0, 0.68, 0, 0.26, 0.14, "#7b4a26")
+    esfera(0, 0.42, 0.33, 0.24, "#b9d67a", 0.3)
+  end },
+  item_semente_fruta = { d = 3, h = 0.35, fn = function()
+    esfera(0, 0.36, 0, 0.72, "#c9a877", 0.76); cilindro(0, 0.68, 0, 0.26, 0.14, "#7b4a26")
+    esfera(0, 0.42, 0.33, 0.24, "#c8382e", 0.26)
+  end },
   -- áreas: o móvel que diz o que é cada uma
   cozinha = { d = 7, h = 0.7, fn = function()
     caixa(0, 0, 0, 1.4, 0.85, 0.8, PEDRA_ESC)

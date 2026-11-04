@@ -41,7 +41,11 @@ C.raro_preco = 0.5             -- preço de cada uso, em valor de pedido
 C.carroca = {
   { id = "bebida", nome = "Bebidas", desc = "Abastece a despensa", tipo = "mantimento", mantimento = "bebida", lote = 10, lote2 = 50, modelo = "item_bebida" },
   { id = "carne", nome = "Carne", desc = "Abastece a despensa", tipo = "mantimento", mantimento = "comida", lote = 10, lote2 = 50, modelo = "item_carne" },
+  { id = "semente_lupulo", nome = "Sementes de bebida", desc = "Lúpulo: colheita dobrada", tipo = "semente", semente = "lupulo", sala = "jardim", lote = 10, lote2 = 50, modelo = "item_semente_lupulo" },
+  { id = "semente_fruta", nome = "Sementes de fruta", desc = "Frutas: colheita dobrada", tipo = "semente", semente = "fruta", sala = "pomar", lote = 10, lote2 = 50, modelo = "item_semente_fruta" },
   { id = "filhote_vaca", nome = "Filhote de vaca", desc = "Vai para a Fazenda de animais", tipo = "filhote", unidade = "vaca", modelo = "vaca" },
+  { id = "filhote_porco", nome = "Filhote de porco", desc = "Vai para a Fazenda de animais", tipo = "filhote", unidade = "porco", modelo = "porco" },
+  { id = "filhote_galinha", nome = "Pintinho", desc = "Vai para a Fazenda de animais", tipo = "filhote", unidade = "galinha", modelo = "galinha" },
   { id = "raro_especiaria", nome = "Especiarias raras", desc = "Os próximos pratos rendem o dobro", tipo = "raro", raro = "comida", modelo = "item_especiaria" },
   { id = "raro_hidromel", nome = "Hidromel raro", desc = "As próximas bebidas rendem o dobro", tipo = "raro", raro = "bebida", modelo = "item_hidromel" },
 }
@@ -61,12 +65,16 @@ C.loja = {
   { id = "garcom", nome = "Garçom", no = "garcom", custo = 120, mult = 2.2, ef = { garcons = 1 }, modelo = "garcom" },
   { id = "quartos", nome = "Quarto", no = "quartos", custo = 4200, mult = 2.8, ef = { renda_quartos = 6 }, modelo = "quarto" },
   { id = "canteiro", nome = "Canteiro", no = "canteiro", custo = 2500, mult = 2.6, ef = { canteiros = 1 }, modelo = "canteiro" },
-  { id = "arvore", nome = "Árvore frutífera", no = "pomar", custo = 96000, mult = 2.6, ef = { frutas = 1, x_colheita = 1.4, x_pedido = 1.1 }, lugar = true, modelo = "arvore" },
+  { id = "arvore", nome = "Árvore frutífera", no = "pomar", custo = 96000, mult = 2.6, ef = { frutas = 1, x_pedido = 1.1 }, lugar = true, modelo = "arvore" },
   { id = "vaca", nome = "Vaca", no = "fazenda", custo = 1190000, mult = 2.8, ef = { vacas = 1, renda_fazenda = 60, x_pedido = 1.15 }, lugar = true, modelo = "vaca" },
+  { id = "porco", nome = "Porco", no = "fazenda", custo = 500000, mult = 2.6, ef = { porcos = 1, renda_fazenda = 25, x_pedido = 1.03 }, lugar = true, modelo = "porco" },
+  { id = "galinha", nome = "Galinha", no = "fazenda", custo = 150000, mult = 2.4, ef = { galinhas = 1, renda_fazenda = 8, x_pedido = 1.01 }, lugar = true, modelo = "galinha" },
 }
 C.limite_mesas = 40            -- objetos prontos em layout.lua: fora isso, o limite é o espaço
 C.limite_arvores = 20
 C.limite_vacas = 20
+C.limite_porcos = 12
+C.limite_galinhas = 16
 C.limite_garcons = 40          -- bonecos em cena; medido com tests/medir.lua (ver docs/plano-obras.md)
 C.garcom_extra_intervalo = 0.05   -- cada garçom acima do limite tira 5% da espera dos outros, somando
 C.garcom_extra_velocidade = 0.02  -- e 2% de velocidade, até o dobro
@@ -105,7 +113,22 @@ C.venda = {
 
 -- Jardim e produção ---------------------------------------------------------------------
 C.ciclo_jardim = 20            -- segundos para colher
-C.colheita = 3                 -- unidades por canteiro em cada colheita
+C.colheita = 3                 -- unidades por canteiro em cada colheita (metade trigo, metade lúpulo)
+C.frutas_por_arvore = 2
+C.carne_por_vaca = 1
+C.carne_por_porco = 1.5
+C.ovos_por_galinha = 1
+C.semente_preco = 0.12         -- preço de cada semente, em valor de pedido
+C.semente_bonus = 2            -- quanto rende o canteiro ou a árvore que recebeu semente
+-- Cada ingrediente tem o próprio estoque. usa: que pedido ele atende; fazenda: quem produz.
+C.estoques = {
+  { id = "trigo", nome = "Trigo", usa = { comida = true }, fazenda = "jardim", modelo = "item_trigo" },
+  { id = "lupulo", nome = "Lúpulo", usa = { bebida = true }, fazenda = "jardim", modelo = "item_lupulo" },
+  { id = "frutas", nome = "Frutas", usa = { comida = true, bebida = true }, fazenda = "pomar", modelo = "item_fruta" },
+  { id = "carne_vaca", nome = "Carne de vaca", usa = { comida = true }, fazenda = "fazenda", modelo = "item_carne" },
+  { id = "carne_porco", nome = "Carne de porco", usa = { comida = true }, fazenda = "fazenda", modelo = "item_carne_porco" },
+  { id = "ovos", nome = "Ovos", usa = { comida = true }, fazenda = "fazenda", modelo = "item_ovos" },
+}
 C.estoque_maximo = 300
 C.bonus_cozinheiro = 1.6       -- comida feita com o que foi colhido rende mais
 C.bonus_cozinheiro_nivel = 0.25

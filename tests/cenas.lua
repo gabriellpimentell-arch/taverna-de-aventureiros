@@ -25,7 +25,7 @@ local function tudo()
       end
     end
   end
-  for tipo, q in pairs({ mesa = 5, garcom = 4, quartos = 9, canteiro = 8, arvore = 5, vaca = 7 }) do
+  for tipo, q in pairs({ mesa = 5, garcom = 4, quartos = 9, canteiro = 8, arvore = 5, vaca = 7, porco = 4, galinha = 6 }) do
     for _ = 1, q do J.estado.ouro = 1e40; if not J.comprar_unidade(tipo) then break end end
   end
 end
@@ -74,7 +74,8 @@ local passos = {
   { 0.5, function() Lj().rolar_lista(-300) end, "51c_decoracao" },
   -- aba Mover: item selecionado, fantasma verde e vermelho, decoração com Excluir
   { 0.4, function() Lj().aba = "mover"; Lj().item = "balcao" end, "53_mover_selecionado" },
-  { 0.3, function() local L = require("layout"); local o, dx, dz = L.POR_ID.balcao, L.desloc("balcao"); local px, py = motor.projetar(o.x + dx, 0.5, o.z + dz)
+  { 0.3, function() for _, p in ipairs(J.pessoas) do if p.estado == "esperando" then p.estado = "comendo" end end
+      local L = require("layout"); local o, dx, dz = L.POR_ID.balcao, L.desloc("balcao"); local px, py = motor.projetar(o.x + dx, 0.5, o.z + dz)
       segurar(px, py); T.tocar(px, py); mover(px - 40, py + 50) end, "54_mover_fantasma" },
   { 0.3, function() local a = Lj().arrasto; mover(a.sx + 2000, a.sy) end, "55_mover_fantasma_fora" },
   { 0.3, function() largar(true); J.estado.ouro = 5000; local x0, x1, z0, z1 = require("layout").sala_mundo("taverna"); local _, _, id = J.comprar_decoracao("barril", x0 + 3, z1 - 1); Lj().item = id end, "56_mover_decoracao" },
@@ -107,6 +108,10 @@ local passos = {
   { 1, function() T.aba = "aventureiros"; comprar_tudo_ate({ "recrutador", "alojamento", "alojamento", "party" }); J.estado.ouro = 5e9; for _ = 1, 6 do J.contratar() end end, "10_aventureiros" },
   { 1, function() tudo(); J.estado.ouro = 5e12; for _, c in ipairs(J.estado.contratados) do for _ = 1, 26 do J.investir(c, "magia") end J.estado.ouro = 5e12; J.promover(c) end; J.estado.fama = 300 end, "11_herois" },
   { 1, function() T.aba = "arvore"; T.arv.zoom = 0.5 end, "12_arvore_toda" },
+  { 1.5, function() T.aba = "producao"; J.estado.ouro = 1e15; J.estado.nos[require("config").carroca_tardio] = 1; for _, d in ipairs(require("config").estoques) do J.estado.estoques[d.id] = 120 end; J.estado.sementes.lupulo = 40; J.estado.sementes.fruta = 20 end, "65_producao_estoques" },
+  { 1.2, function() T.aba = "taverna"; T.modal = "carroca"; J.estado.carroca.presente = true; J.estado.carroca.resta = 60 end, "66_carroca_lista_toda" },
+  { 2.5, function() T.modal = nil; M.zoom_alvo = 2.4; local L = require("layout"); local x0, x1, z0, z1 = L.sala_mundo("fazenda"); M.pan_x = (x0 + x1) / 2 - M.quadro.x; M.pan_z = (z0 + z1) / 2 - M.quadro.z end, "67_animais_perto" },
+  { 1.2, function() M.zoom_alvo = 1; M.pan_x, M.pan_z = 0, 0 end, "68_volta_quadro" },
   { 1, function() T.aba = "invocacao"; J.invocar(); J.estado.ouro = 1e14; J.invocar() end, "13_invocacao" },
   { 3, function() T.aba = "taverna"; M.zoom_alvo = 1 end, "14_tudo_aberto" },
   { 2, function() local L = require("layout"); L.mudar_tamanho("jardim_l", 3); L.mudar_tamanho("jardim_p", 2); L.mudar_tamanho("cerv_l", 2); L.mudar_tamanho("circ_p", 2) end, "14b_salas_maiores" },

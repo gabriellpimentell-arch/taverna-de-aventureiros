@@ -64,8 +64,8 @@ J.NOTICIAS = {
   { id = "jardim", titulo = "A fazenda de sementes!", texto = "Agora você pode abrir a Fazenda de sementes. Ela produz alimentos que abastecem a cozinha e a cervejaria." },
   { id = "fazendeiro", titulo = "Um fazendeiro!", texto = "Agora você pode contratar um Fazendeiro. Ele só cuida da fazenda de sementes e cada colheita rende mais." },
   { id = "cozinha", titulo = "A cozinha!", texto = "Agora você pode construir a Cozinha, uma sala só para preparar a comida. Ela abre espaço para o cozinheiro trabalhar." },
-  { id = "pomar", titulo = "As árvores frutíferas!", texto = "Agora você pode plantar as Árvores frutíferas. As colheitas e os pedidos passam a render mais." },
-  { id = "fazenda", titulo = "A fazenda de animais!", texto = "Agora você pode abrir a Fazenda de animais e criar as próprias vacas. Com alimentos da casa, os pedidos rendem mais e entra ouro todo segundo." },
+  { id = "pomar", titulo = "A fazenda de árvores frutíferas!", texto = "Agora você pode abrir a Fazenda de árvores frutíferas. Frutas viram tortas e sucos, e os pedidos passam a render mais." },
+  { id = "fazenda", titulo = "A fazenda de animais!", texto = "Agora você pode abrir a Fazenda de animais e criar vacas, porcos e galinhas. Carne e ovos da casa fazem os pedidos renderem mais, e entra ouro todo segundo." },
   { id = "cozinheiro", titulo = "Um cozinheiro!", texto = "Agora você pode contratar um Cozinheiro. Ele usa o que você colhe e a comida passa a render bem mais." },
   { id = "cervejaria", titulo = "A cervejaria!", texto = "Agora você pode abrir a Cervejaria, com um cervejeiro próprio. As bebidas da casa rendem bem mais." },
   { id = "ala_leste", titulo = "Uma ala nova!", texto = "Agora você pode construir a Ala leste. A taverna cresce e ganha mais duas mesas." },
@@ -161,7 +161,9 @@ local function estado_inicial()
     prox_id = 1,
     invocados_feitos = 0,
     fama = 0,
-    estoque = 0, ciclo = 0, colhido = 0,
+    estoques = { trigo = 0, lupulo = 0, frutas = 0, carne_vaca = 0, carne_porco = 0, ovos = 0 },
+    sementes = { lupulo = 0, fruta = 0 },
+    ciclo = 0, colhido = 0,
     carroca = { presente = true, resta = C.carroca_fica, visitas = 1, vendidos = {} },
     raros = { comida = 0, bebida = 0 },   -- usos que sobram dos itens raros da carroça
     brigas = 0,
@@ -203,7 +205,7 @@ end
 
 local recalcular
 function J.recalcular() recalcular() end
-local CONTADOR = { canteiro = "canteiros", arvore = "frutas", vaca = "vacas" }
+local CONTADOR = { canteiro = "canteiros", arvore = "frutas", vaca = "vacas", porco = "porcos", galinha = "galinhas" }
 function J.unidades_valendo(tipo)
   local n = J.estado.compras[tipo] or 0
   local c = J.manual() and CONTADOR[tipo] and J.estado.colocados[CONTADOR[tipo]]
@@ -304,7 +306,7 @@ end
 
 local AVISOS = {
   cozinha = "A cozinha está pronta!",
-  pomar = "As árvores frutíferas foram plantadas!",
+  pomar = "A fazenda de árvores frutíferas foi plantada!",
   fazenda = "A fazenda de animais abriu as porteiras!",
   prateleira = "O mural de missões abriu! Aba Missões liberada.",
   mercadinho = "O mercadinho abriu! Os aventureiros vão vender espólios.",
@@ -372,7 +374,7 @@ function J.comecar_endividado()
   e.mantimentos = { comida = 0, bebida = 0 }
   e.divida, e.emprestimos = C.divida_inicial, 0
   if not J.auto_colocar then
-    e.colocados = { mesas = 0, canteiros = 0, frutas = 0, vacas = 0, salas = {}, com_caminho = true }
+    e.colocados = { mesas = 0, canteiros = 0, frutas = 0, vacas = 0, porcos = 0, galinhas = 0, salas = {}, com_caminho = true }
     recalcular()
   end
   J.noticia = { id = "historia", titulo = "A taverna do seu tio",
@@ -429,6 +431,7 @@ end
 function J.preco_carroca(id)
   local d = J.CARROCA[id]
   if d.tipo == "mantimento" then return J.preco_mantimento(d.mantimento) * d.lote end
+  if d.tipo == "semente" then return J.valor_pedido() * C.semente_preco * d.lote end
   if d.tipo == "filhote" then
     local k = J.carroca_tardia() and C.carroca_desconto_tardio or C.carroca_desconto
     return math.floor(J.preco_unidade(d.unidade) * k)
@@ -449,6 +452,7 @@ function J.estado_carroca(id)
     if est.motivo == "Libere na Árvore" then r.motivo = "Libere a Fazenda de animais"
     elseif est.motivo then r.motivo = est.motivo end
   end
+  if d.tipo == "semente" and not L.aberta(d.sala) then r.motivo = "Antes: " .. select(2, L.nome_sala(d.sala)) end
   if (d.tipo == "filhote" or d.tipo == "raro") and c.vendidos[id] then r.motivo = "Só um por visita: acabou" end
   return r
 end
@@ -467,6 +471,9 @@ function J.comprar_carroca(id, mult)
   if e.ouro < preco then return false, "Falta ouro" end
   if d.tipo == "mantimento" then
     return J.comprar_mantimentos(d.mantimento, d.lote * mult)
+  elseif d.tipo == "semente" then
+    e.ouro = e.ouro - preco
+    e.sementes[d.semente] = e.sementes[d.semente] + d.lote * mult
   elseif d.tipo == "filhote" then
     -- mesmo caminho da Loja: cai no primeiro lugar livre e pode ser movido depois
     local ouro = e.ouro
@@ -528,28 +535,60 @@ function J.pagar_divida(v)
   end
 end
 
-function J.tem_caseiro(pedido)
-  if J.estado.estoque < 1 then return false end
-  return (pedido == "comida" and J.ef("cozinheiro") > 0) or (pedido == "bebida" and J.ef("bebida_casa") > 0)
+-- Produção de casa: a cozinha transforma o que há em estoque em comida, e a cervejaria em bebida.
+local function bonus_caseiro(pedido)
+  if pedido == "comida" then
+    local n = J.ef("cozinheiro")
+    return n > 0 and C.bonus_cozinheiro + C.bonus_cozinheiro_nivel * (n - 1) or 1
+  end
+  local n = J.ef("bebida_casa")
+  return n > 0 and C.bonus_bebida_casa + C.bonus_bebida_nivel * (n - 1) or 1
 end
-local function caseiro(p) return J.tem_caseiro(p.pedido) end
+
+-- O ingrediente que atende o pedido: o de maior estoque, para nenhum encalhar. nil = nada serve.
+function J.ingrediente_para(pedido)
+  local e = J.estado
+  if pedido == "comida" then
+    if not L.aberta("cozinha") then return nil end
+  elseif J.ef("a_cerveja") < 1 then return nil end
+  -- save de antes da despensa: servir já é de graça, então só gasta se render mais
+  if not e.mantimentos and bonus_caseiro(pedido) <= 1 then return nil end
+  local melhor, q = nil, 0
+  for _, d in ipairs(C.estoques) do
+    if d.usa[pedido] and (e.estoques[d.id] or 0) >= 1 and e.estoques[d.id] > q then melhor, q = d.id, e.estoques[d.id] end
+  end
+  return melhor
+end
+function J.tem_caseiro(pedido) return J.ingrediente_para(pedido) ~= nil end
+function J.total_estoques()
+  local t = 0
+  for _, d in ipairs(C.estoques) do t = t + (J.estado.estoques[d.id] or 0) end
+  return t
+end
 
 -- tem como atender este pedido agora?
 function J.tem_mantimento(p)
   local e = J.estado
-  if not e.mantimentos or caseiro(p) then return true end
+  if not e.mantimentos or J.tem_caseiro(p.pedido) then return true end
   if (e.mantimentos[p.pedido] or 0) >= 1 then return true end
   return J.ef("fornecedor") > 0 and e.ouro >= J.preco_mantimento(p.pedido) * C.fornecedor_mult
 end
 
+-- gasta o que serve o pedido e devolve quanto ele rende a mais por ser feito em casa
 local function gastar_mantimento(p)
   local e = J.estado
-  if not e.mantimentos or caseiro(p) then return end
+  local id = J.ingrediente_para(p.pedido)
+  if id then
+    e.estoques[id] = e.estoques[id] - 1
+    return bonus_caseiro(p.pedido)
+  end
+  if not e.mantimentos then return 1 end
   if (e.mantimentos[p.pedido] or 0) >= 1 then
     e.mantimentos[p.pedido] = e.mantimentos[p.pedido] - 1
   else
     e.ouro = e.ouro - J.preco_mantimento(p.pedido) * C.fornecedor_mult
   end
+  return 1
 end
 
 -- O gerente: serve sozinho no começo; com garçom fica atrás do balcão; com a sala da guilda, sobe
@@ -869,9 +908,13 @@ function J.para_colocar()
   local cant = (comp.canteiro or 0) - c.canteiros
   if cant > 0 then r[#r + 1] = { tipo = "canteiro", nome = "Canteiro", n = cant, requer = not c.salas.jardim and "Fazenda de sementes" or nil } end
   local arv = (comp.arvore or 0) - c.frutas
-  if arv > 0 then r[#r + 1] = { tipo = "arvore", nome = "Árvore frutífera", n = arv, requer = not c.salas.pomar and "Árvores frutíferas" or nil } end
+  if arv > 0 then r[#r + 1] = { tipo = "arvore", nome = "Árvore frutífera", n = arv, requer = not c.salas.pomar and "Fazenda de árvores frutíferas" or nil } end
   local vac = (comp.vaca or 0) - c.vacas
   if vac > 0 then r[#r + 1] = { tipo = "vaca", nome = "Vaca", n = vac, requer = not c.salas.fazenda and "Fazenda de animais" or nil } end
+  local por = (comp.porco or 0) - (c.porcos or 0)
+  if por > 0 then r[#r + 1] = { tipo = "porco", nome = "Porco", n = por, requer = not c.salas.fazenda and "Fazenda de animais" or nil } end
+  local gal = (comp.galinha or 0) - (c.galinhas or 0)
+  if gal > 0 then r[#r + 1] = { tipo = "galinha", nome = "Galinha", n = gal, requer = not c.salas.fazenda and "Fazenda de animais" or nil } end
   return r
 end
 
@@ -891,6 +934,8 @@ local function objeto_do_item(tipo)
   if tipo == "mesa" then return "mesa" .. (J.num_mesas() + 1) end
   if tipo == "arvore" then return "arvore" .. (J.ef("frutas") + 3) end
   if tipo == "vaca" then return "vaca" .. (J.ef("vacas") + 1) end
+  if tipo == "porco" then return "porco" .. (J.ef("porcos") + 1) end
+  if tipo == "galinha" then return "galinha" .. (J.ef("galinhas") + 1) end
 end
 
 -- Onde o próximo item fica se ninguém escolher outro lugar: o dele, se estiver livre, ou o primeiro livre
@@ -955,12 +1000,14 @@ function J.estado_unidade(tipo)
   local d = J.LOJA[tipo]
   local r = { preco = J.preco_unidade(tipo) }
   if J.nivel(d.no) < 1 then r.motivo = "Libere na Árvore"; return r end
-  local sala = ({ quartos = "quartos_sala", canteiro = "jardim", arvore = "pomar", vaca = "fazenda" })[tipo]
+  local sala = ({ quartos = "quartos_sala", canteiro = "jardim", arvore = "pomar", vaca = "fazenda", porco = "fazenda", galinha = "fazenda" })[tipo]
   if sala and not L.aberta(sala) then r.motivo = "Antes: " .. select(2, L.nome_sala(sala)); return r end
   if tipo == "mesa" and J.num_mesas() >= L.MESAS_MAX then r.motivo = "Limite de " .. L.MESAS_MAX .. " mesas"; return r end
   if tipo == "quartos" and J.compradas(tipo) + 1 >= J.limite_quartos() then r.motivo = "Sem espaço: amplie"; return r end
   if tipo == "arvore" and J.ef("frutas") + 2 >= #L.ARVORES then r.sem_boneco = true end
   if tipo == "vaca" and J.ef("vacas") >= #L.VACAS then r.sem_boneco = true end
+  if tipo == "porco" and J.ef("porcos") >= #L.PORCOS then r.sem_boneco = true end
+  if tipo == "galinha" and J.ef("galinhas") >= #L.GALINHAS then r.sem_boneco = true end
   if tipo == "garcom" and J.ef("garcons") >= C.limite_garcons then r.sem_boneco = true end
   return r
 end
@@ -1040,14 +1087,14 @@ function J.lugar_item(tipo, x, z, extra)
     if not Cam.rota(J.PORTA.x, J.PORTA.z, x - 1.25, z) or not Cam.rota(J.PORTA.x, J.PORTA.z, x + 1.25, z) then return nao("Ninguém consegue chegar aqui") end
   elseif tipo == "arvore" then
     if L.andar_ativo ~= 0 then return nao("Árvores ficam no térreo") end
-    if not dentro("pomar", 0.6) then return nao("Precisa ficar dentro das Árvores frutíferas") end
+    if not dentro("pomar", 0.6) then return nao("Precisa ficar dentro da Fazenda de árvores frutíferas") end
     for i = 1, J.ef("frutas") + 2 do
       local ax, az = L.t("arvore" .. i, L.POR_ID["arvore" .. i].x, L.POR_ID["arvore" .. i].z)
       if util.distancia(x, z, ax, az) < 1.2 then return nao("Muito perto de outra árvore") end
     end
-  elseif tipo == "vaca" then
-    if L.andar_ativo ~= 0 then return nao("Vacas ficam no térreo") end
-    if not dentro("fazenda", 1) then return nao("Precisa ficar dentro da Fazenda de animais") end
+  elseif tipo == "vaca" or tipo == "porco" or tipo == "galinha" then
+    if L.andar_ativo ~= 0 then return nao("Animais ficam no térreo") end
+    if not dentro("fazenda", tipo == "vaca" and 1 or 0.5) then return nao("Precisa ficar dentro da Fazenda de animais") end
   elseif tipo == "decor" then
     if L.andar_ativo ~= 0 then return nao("Decoração só fica no térreo") end
     local onde
@@ -1173,8 +1220,7 @@ function J.por_item(tipo, x, z)
   L.limitar(id)
   L.limitar_carregados(id)
   if tipo == "mesa" then c.mesas = c.mesas + 1
-  elseif tipo == "arvore" then c.frutas = c.frutas + 1
-  else c.vacas = c.vacas + 1 end
+  else c[CONTADOR[tipo]] = (c[CONTADOR[tipo]] or 0) + 1 end
   depois_de_colocar()
   return true
 end
@@ -1427,7 +1473,7 @@ function J.servir(p, por_garcom)
     J.flutuar(p.x, 2.7, p.z, p.pedido == "comida" and "Sem comida!" or "Sem bebida!", "#ff9a8a", 18)
     return false
   end
-  gastar_mantimento(p)
+  local rende_casa = gastar_mantimento(p)
   if not por_garcom then J.chamar_gerente(p) end
   local v = J.valor_pedido()
   if p.tipo.nome ~= "comum" then v = v * C.bonus_aventureiro end
@@ -1435,14 +1481,8 @@ function J.servir(p, por_garcom)
     v = v * C.bonus_rapido
     J.flutuar(p.x, 2.7, p.z, "Rápido!", util.cores.verde, 18)
   end
-  -- comida e bebida feitas em casa usam o que foi colhido
-  if p.pedido == "comida" and J.ef("cozinheiro") > 0 and e.estoque >= 1 then
-    e.estoque = e.estoque - 1
-    v = v * (C.bonus_cozinheiro + C.bonus_cozinheiro_nivel * (J.ef("cozinheiro") - 1))
-  elseif p.pedido == "bebida" and J.ef("bebida_casa") > 0 and e.estoque >= 1 then
-    e.estoque = e.estoque - 1
-    v = v * (C.bonus_bebida_casa + C.bonus_bebida_nivel * (J.ef("bebida_casa") - 1))
-  end
+  -- comida e bebida feitas em casa rendem mais
+  v = v * rende_casa
   if (e.raros[p.pedido] or 0) >= 1 then
     e.raros[p.pedido] = e.raros[p.pedido] - 1
     v = v * C.raro_bonus
@@ -1968,16 +2008,51 @@ function J.renda_passiva() return J.ef("renda_quartos") + J.ef("renda_fazenda") 
 function J.jardim_aberto() return J.ef("a_jardim") > 0 end
 function J.ciclo_jardim() return C.ciclo_jardim * J.ef("x_ciclo") end
 function J.por_colheita() return J.ef("canteiros") * C.colheita * J.ef("x_colheita") end
+function J.estoque_maximo() return C.estoque_maximo * (1 + J.ef("canteiros") * 0.25) end
+
+-- O que a próxima colheita traz, por ingrediente. Canteiros: metade trigo, metade lúpulo.
+-- Semente guardada dobra um canteiro de lúpulo ou uma árvore naquela colheita.
+function J.proxima_colheita()
+  local e, r = J.estado, {}
+  local gasto = { lupulo = 0, fruta = 0 }
+  local function sementes(tipo, base, plantas)
+    if plantas <= 0 then return 0 end
+    local usa = math.min(math.floor(e.sementes[tipo]), math.ceil(plantas))
+    gasto[tipo] = usa
+    return base * (1 + (C.semente_bonus - 1) * usa / plantas)
+  end
+  if J.jardim_aberto() then
+    local q = J.por_colheita()
+    r.trigo = q / 2
+    r.lupulo = sementes("lupulo", q / 2, J.ef("canteiros") / 2)
+  end
+  if J.ef("a_pomar") > 0 then
+    local arvores = J.ef("frutas") + 2
+    r.frutas = sementes("fruta", arvores * C.frutas_por_arvore * J.ef("x_frutas"), arvores)
+  end
+  if J.ef("a_fazenda") > 0 then
+    local k = J.ef("x_animais")
+    r.carne_vaca = J.ef("vacas") * C.carne_por_vaca * k
+    r.carne_porco = J.ef("porcos") * C.carne_por_porco * k
+    r.ovos = J.ef("galinhas") * C.ovos_por_galinha * k
+  end
+  return r, gasto
+end
 
 local function atualizar_jardim(dt)
-  if not J.jardim_aberto() then return end
+  if not J.jardim_aberto() and J.ef("a_pomar") < 1 and J.ef("a_fazenda") < 1 then return end
   local e = J.estado
   e.ciclo = e.ciclo + dt
   if e.ciclo >= J.ciclo_jardim() then
     e.ciclo = 0
-    local q = J.por_colheita()
-    e.estoque = math.min(C.estoque_maximo * (1 + J.ef("canteiros") * 0.25), e.estoque + q)
-    e.colhido = e.colhido + q
+    local r, gasto = J.proxima_colheita()
+    local teto = J.estoque_maximo()
+    for id, q in pairs(r) do
+      e.estoques[id] = math.min(teto, e.estoques[id] + q)
+      e.colhido = e.colhido + q
+    end
+    e.sementes.lupulo = e.sementes.lupulo - gasto.lupulo
+    e.sementes.fruta = e.sementes.fruta - gasto.fruta
   end
 end
 
@@ -2551,7 +2626,14 @@ function J.carregar()
   e.total = math.max(0, saneado(e.total, 0))
   e.rps = math.max(0, saneado(e.rps, 0))
   e.fama = math.max(0, saneado(e.fama, 0))
-  e.estoque = math.max(0, saneado(e.estoque, 0))
+  -- estoque único de antes das fazendas: era o que os canteiros colhiam, então vira trigo e lúpulo
+  local unico = math.max(0, saneado(e.estoque, 0))
+  e.estoque = nil
+  if type(dados.estoques) ~= "table" and unico > 0 then
+    e.estoques.trigo, e.estoques.lupulo = math.ceil(unico / 2), math.floor(unico / 2)
+  end
+  for _, d in ipairs(C.estoques) do e.estoques[d.id] = math.max(0, saneado(e.estoques[d.id], 0)) end
+  for _, k in ipairs({ "lupulo", "fruta" }) do e.sementes[k] = math.max(0, saneado(e.sementes[k], 0)) end
   if type(e.mantimentos) == "table" then
     e.mantimentos.comida = math.max(0, saneado(e.mantimentos.comida, 0))
     e.mantimentos.bebida = math.max(0, saneado(e.mantimentos.bebida, 0))
@@ -2576,7 +2658,7 @@ function J.carregar()
   -- contadores da Loja: arquivo estragado volta a colocar sozinho, nunca trava
   if type(e.colocados) == "table" then
     local c = e.colocados
-    for _, k in ipairs({ "mesas", "canteiros", "frutas", "vacas" }) do c[k] = math.max(0, math.floor(saneado(c[k], 0))) end
+    for _, k in ipairs({ "mesas", "canteiros", "frutas", "vacas", "porcos", "galinhas" }) do c[k] = math.max(0, math.floor(saneado(c[k], 0))) end
     if type(c.salas) ~= "table" then c.salas = {} end
     for id, v in pairs(c.salas) do
       if not NO_DA_SALA[id] or v ~= true then c.salas[id] = nil end

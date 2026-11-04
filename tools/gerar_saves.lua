@@ -36,6 +36,7 @@ gravar("comeco")
 
 motor._save = false
 iniciar()
+J.comecar_endividado(); J.noticia = nil
 R.jogar(30, 0.25, nil, function() return J.nivel("party") > 0 end)
 for _, n in ipairs(J.NOTICIAS) do
   if J.nivel(n.id) > 0 then J.estado.noticias[n.id] = true end
@@ -44,7 +45,10 @@ gravar("metade")
 
 motor._save = false
 iniciar()
+J.comecar_endividado(); J.noticia = nil
 local e = J.estado
+e.emprestimos, e.divida = 1, 0
+e.mantimentos.comida, e.mantimentos.bebida = 500, 500
 for _ = 1, 3 do
   for _, no in ipairs(A.NOS) do
     while not no.em_breve and not J.no_maximo(no) and J.no_liberado(no) do
@@ -54,7 +58,7 @@ for _ = 1, 3 do
   end
 end
 -- o equivalente ao antigo máximo de cada coisa: 5 mesas e a ala leste, 4 garçons...
-for tipo, q in pairs({ mesa = 5, garcom = 4, quartos = 9, canteiro = 8, arvore = 5, vaca = 7 }) do
+for tipo, q in pairs({ mesa = 5, garcom = 4, quartos = 9, canteiro = 8, arvore = 5, vaca = 7, porco = 4, galinha = 6 }) do
   for _ = 1, q do e.ouro = 1e16; assert(J.comprar_unidade(tipo)) end
 end
 for _, n in ipairs(J.NOTICIAS) do e.noticias[n.id] = true end
@@ -89,6 +93,7 @@ end
 e.ouro = 1e15
 e.servidos, e.feitas, e.espolios, e.brigas = 50000, 8000, 7000, 300
 e.total, e.tempo, e.rps = 5e15, 30 * 3600, 2e8
-e.estoque, e.colhido = 500, 100000
+for _, d in ipairs(C.estoques) do e.estoques[d.id] = 300 end
+e.colhido = 100000
 for r = 1, 8 do e.feitas_rank[r] = 1000 end
 gravar("completo")

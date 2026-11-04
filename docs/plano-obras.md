@@ -59,3 +59,13 @@ Pronto em `layout.lua` e `mundo.lua`; a Loja usa estas funções sem tocar em de
 - **Bartolo**: sem nada para vender, socorre se faltar ouro com a carroça aqui ou, com ela longe, mesmo com ouro: traz 5 de comida, 5 de bebida e 40 de ouro, e cobra na dívida.
 - **Filhotes**: 80% do preço da Loja; a partir do rank B, 50%. Um de cada por visita. A Loja continua vendendo pelo preço cheio.
 - **Raros (a partir do rank B)**: especiarias e hidromel, um pacote de cada por visita. 20 pedidos rendem o dobro; custam 0,5 pedido por uso.
+
+## Parte 2: três fazendas (decisões sem o dono)
+- **Ids internos ficam**: `jardim`, `pomar` e `fazenda`, além de `vaca`. Só os nomes na tela mudaram, porque saves e layout antigos dependem deles.
+- **Estoques**: `e.estoques` tem trigo, lúpulo, frutas, carne de vaca, carne de porco e ovos, com teto próprio cada. O estoque único antigo vira metade trigo e metade lúpulo, sem perder unidade.
+- **Colheita**: um só relógio para as três fazendas (20 s, com Irrigação). Canteiros dão metade trigo, metade lúpulo. As árvores frutíferas deixaram de aumentar a colheita das plantas: agora dão frutas. Vaca dá 1 carne, porco 1,5 carne, galinha 1 ovo.
+- **Como a produção alimenta os pedidos**: com a cozinha aberta, comida sai do maior estoque entre trigo, frutas, carnes e ovos. Com a cervejaria, bebida sai do maior entre lúpulo e frutas. Antes da despensa, usa-se a comprada. Sem cozinheiro, o prato da casa só poupa a despensa; com ele, rende mais, como antes.
+- **Saves sem despensa** (bem antigos): continuam servindo de graça, e o estoque só é gasto quando rende mais. A carroça esconde bebidas e carne para eles.
+- **Sementes**: guardadas, cada uma dobra um canteiro de lúpulo ou uma árvore em uma colheita. Sem semente a colheita segue normal: nada trava.
+- **Porco e galinha na Loja**: nó da Fazenda de animais libera; 500 mil e 150 mil, com renda e pedidos menores que a vaca. Em cena: 12 porcos e 16 galinhas, como os 20 de vaca; passou disso, rendem sem boneco.
+- **Painel à esquerda (carroça, despensa, dívida)**: só nas abas Taverna, Loja e Árvore, porque cobria o título das outras.

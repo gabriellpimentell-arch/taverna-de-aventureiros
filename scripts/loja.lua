@@ -23,7 +23,7 @@ local P = { x = 708, y = 60, w = 244, h = 420 }
 Lj.PAINEL = P
 local VERDE, VERMELHO = "#5abf7c", "#e0533f"
 local LADO = { oeste = "esquerda", fundo = "fundo", leste = "direita", frente = "frente" }
-local TAM_ITEM = { mesa = 1.6, arvore = 1.4, vaca = 1.6, barril = 0.9, caixote = 0.9, planta = 0.7, vela = 0.5, tapete = 2.6, estante = 1.5, banco = 0.6, quadro = 1.0 }
+local TAM_ITEM = { mesa = 1.6, arvore = 1.4, vaca = 1.6, porco = 1.0, galinha = 0.6, barril = 0.9, caixote = 0.9, planta = 0.7, vela = 0.5, tapete = 2.6, estante = 1.5, banco = 0.6, quadro = 1.0 }
 
 function Lj.iniciar()
   Lj.aba, Lj.sel, Lj.colocando, Lj.arrasto, Lj.alca, Lj.camera = "itens", nil, nil, nil, nil, nil
@@ -52,7 +52,7 @@ local CAIXAS_NOME = {  -- família: nome sem o número no fim
   caneca = { 0.1, 0.1, 1.3, 1.1 }, garrafa = { 0.08, 0.08, 1.8, 1.4 },
   lampiao = { 0.15, 0.15, 2.4, 1.9 }, janela = { 0.1, 0.6, 2.4, 1.2 }, flamula = { 0.25, 0.05, 3.0, 2.0 },
   moita = { 0.35, 0.35, 0.7 }, abobora = { 0.25, 0.25, 0.35 }, barril_c = { 0.36, 0.36, 1.0 },
-  malte = { 0.3, 0.3, 0.5 }, pilar = { 0.25, 0.25, 1.0 }, arvore = { 0.7, 0.7, 3.0 }, vaca = { 0.7, 0.35, 1.1 },
+  malte = { 0.3, 0.3, 0.5 }, pilar = { 0.25, 0.25, 1.0 }, arvore = { 0.7, 0.7, 3.0 }, vaca = { 0.7, 0.35, 1.1 }, porco = { 0.5, 0.3, 0.7 }, galinha = { 0.25, 0.25, 0.5 },
 }
 local CAIXAS_EXTRA = {
   barril = { 0.43, 0.43, 1.0 }, caixote = { 0.42, 0.42, 0.76 }, planta = { 0.25, 0.25, 1.1 }, vela = { 0.2, 0.2, 1.3 },
@@ -139,6 +139,10 @@ function Lj.existe(id)
   if n then return n <= J.ef("frutas") + 2 end
   n = tonumber(id:match("^vaca(%d+)$"))
   if n then return n <= J.ef("vacas") end
+  n = tonumber(id:match("^porco(%d+)$"))
+  if n then return n <= J.ef("porcos") end
+  n = tonumber(id:match("^galinha(%d+)$"))
+  if n then return n <= J.ef("galinhas") end
   n = tonumber(id:match("^flamula(%d+)$"))
   if n then return n <= math.min(J.nivel("decoracao") + (J.nivel("conforto") > 0 and 1 or 0), 5) end
   if id == "tapete2" then return J.num_mesas() >= 5 end

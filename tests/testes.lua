@@ -316,16 +316,169 @@ ok("poções geram renda", J.renda_venda() > 0)
 novo()
 libera("jardim")
 for _ = 1, 500 do J.atualizar(0.1) end
-ok("jardim colhe", J.estado.estoque > 0)
+ok("jardim colhe", J.total_estoques() > 0)
 libera("cozinheiro")
-local q = J.estado.estoque
+local q = J.total_estoques()
 for _, pp in ipairs(J.pessoas) do pp.pedido = "comida" end
 for _ = 1, 60 do
   J.atualizar(0.1)
   for _, pp in ipairs(J.pessoas) do pp.pedido = "comida"; if pp.estado == "esperando" then J.servir(pp) end end
 end
-ok("cozinheiro usa estoque", J.estado.estoque < q + J.por_colheita() * 2)
-ok("estoque nunca negativo", J.estado.estoque >= 0)
+ok("cozinheiro usa estoque", J.total_estoques() < q + J.por_colheita() * 2)
+for _, d in ipairs(C.estoques) do ok("estoque nunca negativo: " .. d.id, J.estado.estoques[d.id] >= 0) end
+
+-- Três fazendas e estoques por ingrediente -----------------------------------------------------------
+do
+  local Mu, Lj = require("mundo"), require("loja")
+  local Lay = require("layout")
+  local function colher() J.estado.ciclo = J.ciclo_jardim(); J.atualizar(0.01) end
+  ok("nomes novos na árvore", A.POR_ID.jardim.nome == "Fazenda de sementes" and A.POR_ID.pomar.nome == "Fazenda de árvores frutíferas" and A.POR_ID.fazenda.nome == "Fazenda de animais")
+  ok("nomes novos nas salas", select(2, Lay.nome_sala("pomar")) == "Fazenda de árvores frutíferas" and select(2, Lay.nome_sala("jardim")) == "Fazenda de sementes" and select(2, Lay.nome_sala("fazenda")) == "Fazenda de animais")
+  novo()
+  local e = J.estado
+  ok("não existe mais o estoque único", e.estoque == nil and type(e.estoques) == "table")
+  libera("jardim")
+  colher()
+  ok("sementes dão trigo e lúpulo, e só isso", e.estoques.trigo > 0 and e.estoques.lupulo > 0 and e.estoques.frutas == 0 and e.estoques.carne_vaca == 0 and e.estoques.ovos == 0)
+  ok("trigo e lúpulo saem meio a meio", e.estoques.trigo == e.estoques.lupulo and e.estoques.trigo == J.por_colheita() / 2)
+  libera("pomar")
+  local t0 = e.estoques.trigo
+  colher()
+  ok("frutíferas dão frutas", e.estoques.frutas == (J.ef("frutas") + 2) * C.frutas_por_arvore)
+  ok("frutífera não mexe na colheita das plantas", e.estoques.trigo == t0 + J.por_colheita() / 2)
+  libera("fazenda")
+  colher()
+  ok("vaca dá carne de vaca", e.estoques.carne_vaca == C.carne_por_vaca and e.estoques.carne_porco == 0 and e.estoques.ovos == 0)
+  e.ouro = 1e30
+  ok("Loja vende porco", J.comprar_unidade("porco") and J.ef("porcos") == 1)
+  e.ouro = 1e30
+  ok("Loja vende galinha", J.comprar_unidade("galinha") and J.ef("galinhas") == 1)
+  colher()
+  ok("porco dá carne de porco", e.estoques.carne_porco == C.carne_por_porco)
+  ok("galinha dá ovos", e.estoques.ovos == C.ovos_por_galinha)
+  e.estoques.trigo = 1e9
+  colher()
+  ok("estoque tem teto", e.estoques.trigo <= J.estoque_maximo())
+  -- filhotes novos pela carroça
+  e.ouro = 1e30
+  ok("filhote de porco pela carroça", J.comprar_carroca("filhote_porco") and J.ef("porcos") == 2)
+  ok("pintinho pela carroça", J.comprar_carroca("filhote_galinha") and J.ef("galinhas") == 2)
+  -- os animais aparecem, andam dentro da cerca e não saem dela
+  Mu.iniciar()
+  local x0, x1, z0, z1 = Lay.sala("fazenda")
+  local dentro, mudou = true, false
+  local px0
+  for _ = 1, 300 do
+    Mu.atualizar(0.2)
+    for _, lista in ipairs({ Mu.vacas, Mu.porcos, Mu.galinhas }) do
+      for _, a in pairs(lista) do
+        if a.x < x0 or a.x > x1 or a.z < z0 or a.z > z1 then dentro = false end
+      end
+    end
+    local p = Mu.porcos[1]
+    if p then
+      px0 = px0 or p.x
+      if p.x ~= px0 then mudou = true end
+    end
+  end
+  ok("os bichos existem", Mu.vacas[1] and Mu.porcos[1] and Mu.galinhas[1])
+  ok("porco anda", mudou)
+  ok("bichos ficam dentro da cerca", dentro)
+  ok("modelos dos animais", Mu.MODELOS.porco and Mu.MODELOS.galinha and Mu.MODELOS.vaca)
+  for _, d in ipairs(C.estoques) do ok("ingrediente tem imagem: " .. d.id, Mu.MODELOS[d.modelo] ~= nil) end
+  ok("porco e galinha aparecem na aba Mover", Lj.existe("porco1") and Lj.existe("galinha1") and not Lj.existe("porco12"))
+  ok("bicho comprado não se exclui", not Lay.removivel("porco1") and not Lay.removivel("galinha1"))
+  desenhar()
+  -- produção alimenta os pedidos
+  novo()
+  J.comecar_endividado(); J.noticia = nil
+  e = J.estado
+  e.divida = 0
+  e.mantimentos.comida, e.mantimentos.bebida = 3, 3
+  local function pedido(tipo)
+    J.pessoas = {}
+    for _, l in ipairs(J.lugares) do l.dono = nil end
+    local q = J.novo_cliente(); q.estado, q.pedido = "esperando", tipo
+    return q
+  end
+  e.estoques.trigo, e.estoques.lupulo = 5, 5
+  ok("sem cozinha o trigo espera", not J.tem_caseiro("comida") and J.servir(pedido("comida"), true) and e.mantimentos.comida == 2 and e.estoques.trigo == 5)
+  libera("cozinha", "cervejaria")
+  ok("com cozinha, comida sai do trigo", J.servir(pedido("comida"), true) and e.mantimentos.comida == 2 and e.estoques.trigo == 4)
+  ok("bebida sai do lúpulo", J.servir(pedido("bebida"), true) and e.mantimentos.bebida == 3 and e.estoques.lupulo == 4 and e.estoques.trigo == 4)
+  e.estoques.lupulo = 0
+  e.mantimentos.bebida = 0
+  e.estoques.trigo = 9
+  ok("trigo não vira bebida", not J.tem_caseiro("bebida") and not J.tem_mantimento(pedido("bebida")))
+  e.estoques.frutas = 4
+  ok("fruta vira bebida", J.servir(pedido("bebida"), true) and e.estoques.frutas == 3)
+  e.estoques.carne_porco = 20
+  ok("gasta do maior estoque", J.servir(pedido("comida"), true) and e.estoques.carne_porco == 19)
+  e.estoques.trigo, e.estoques.frutas, e.estoques.carne_porco = 0, 0, 0
+  e.mantimentos.comida = 0
+  ok("sem nada a produção não socorre", J.sem_nada())
+  e.estoques.ovos = 1
+  ok("com ovos, não está sem nada", not J.sem_nada() and J.tem_mantimento(pedido("comida")))
+  -- sementes da carroça
+  novo()
+  e = J.estado
+  ok("sementes só com a fazenda aberta", J.estado_carroca("semente_lupulo").motivo ~= nil and J.estado_carroca("semente_fruta").motivo ~= nil and not J.comprar_carroca("semente_lupulo"))
+  libera("jardim", "pomar")
+  e.ouro = 1e20
+  ok("sementes à venda", J.comprar_carroca("semente_lupulo") and e.sementes.lupulo == 10 and J.comprar_carroca("semente_fruta", 5) and e.sementes.fruta == 50)
+  local trigo0, lup0, fruta0 = e.estoques.trigo, e.estoques.lupulo, e.estoques.frutas
+  local sem0 = e.sementes.lupulo
+  colher()
+  ok("semente dobra o lúpulo", e.estoques.lupulo - lup0 == 2 * (e.estoques.trigo - trigo0), e.estoques.lupulo)
+  ok("semente dobra as frutas", e.estoques.frutas - fruta0 == 2 * (J.ef("frutas") + 2) * C.frutas_por_arvore)
+  ok("colheita gasta sementes", e.sementes.lupulo < sem0)
+  e.sementes.lupulo = 0; e.estoques.lupulo, e.estoques.trigo = 0, 0
+  colher()
+  ok("sem semente a colheita segue normal", e.estoques.lupulo == e.estoques.trigo and e.estoques.lupulo > 0)
+  -- aba Produção mostra cada estoque
+  T.iniciar(); T.tela = nil; T.aba = "producao"
+  local escritos = {}
+  local tx = motor.texto
+  motor.texto = function(t, ...) escritos[tostring(t)] = true; return tx(t, ...) end
+  quadros(2)
+  motor.texto = tx
+  for _, d in ipairs(C.estoques) do ok("Produção mostra " .. d.nome, escritos[d.nome]) end
+  for _, n in ipairs({ "Fazenda de sementes", "Fazenda de árvores frutíferas", "Fazenda de animais" }) do ok("Produção mostra " .. n, escritos[n]) end
+  ok("Produção leva à Loja", U.apertar("ir_loja_canteiro") and T.aba == "loja")
+  T.aba = "taverna"
+  -- saves antigos: estoque único vira ingredientes, sem perder nada
+  novo()
+  J.salvar()
+  local d = util.desserializar(motor.carregar())
+  d.estoques, d.sementes = nil, nil
+  d.estoque = 501
+  d.colocados = { mesas = 1, canteiros = 0, frutas = 0, vacas = 3, salas = { fazenda = true } }
+  motor.salvar(util.serializar(d)); iniciar()
+  e = J.estado
+  ok("estoque antigo vira trigo e lúpulo inteiros", e.estoques.trigo + e.estoques.lupulo == 501 and e.estoque == nil)
+  ok("colocados antigos ganham porcos e galinhas", e.colocados.porcos == 0 and e.colocados.galinhas == 0 and e.colocados.vacas == 3)
+  d.estoques = { trigo = "x", lupulo = 0 / 0, frutas = -5 }
+  d.estoque = nil
+  motor.salvar(util.serializar(d)); iniciar()
+  e = J.estado
+  ok("estoque estragado não trava", e.estoques.trigo == 0 and e.estoques.lupulo == 0 and e.estoques.frutas == 0 and e.estoques.ovos == 0)
+  J.estado.colocados = nil
+  novo()
+  -- jogo novo: bichos pedem lugar na Loja como os outros itens
+  J.auto_colocar = false
+  novo(); J.comecar_endividado(); J.noticia = nil
+  e = J.estado
+  e.compras.porco, e.compras.galinha = 1, 1
+  local tem = {}
+  for _, i in ipairs(J.para_colocar()) do tem[i.tipo] = i end
+  ok("porco e galinha ficam para colocar", tem.porco and tem.galinha and tem.porco.requer == "Fazenda de animais")
+  e.colocados.salas.fazenda = true
+  e.nos.fazenda = 1; J.recalcular(); J.aplicar_visual()
+  ok("porco posto passa a valer", J.por_item("porco") and J.ef("porcos") == 1 and e.colocados.porcos == 1)
+  ok("galinha posta passa a valer", J.por_item("galinha") and J.ef("galinhas") == 1)
+  J.auto_colocar = true
+  novo()
+end
 
 -- Contratados, parties e heróis -----------------------------------------------------------------
 novo()
@@ -2656,6 +2809,7 @@ do
   J.comecar_endividado(); J.noticia = nil
   e = J.estado
   e.nos.fornecedor = 1; J.recalcular()
+  e.divida = 0    -- sem a parcela do agiota, a conta do ouro fica exata
   e.mantimentos.comida, e.mantimentos.bebida = 0, 0
   e.ouro = 1000
   fim_visita()

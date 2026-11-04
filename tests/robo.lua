@@ -113,6 +113,15 @@ function R.jogar(limite_horas, passo, marcos, cada)
         end
       end
     end
+    -- filhotes em conta, sementes e raros: só com ouro de sobra
+    if J.carroca_presente() and (t % 5) < passo then
+      for _, d in ipairs(C.carroca) do
+        if d.tipo ~= "mantimento" then
+          local est = J.estado_carroca(d.id)
+          if not est.sumir and not est.motivo and est.preco < ee.ouro * 0.25 then J.comprar_carroca(d.id) end
+        end
+      end
+    end
     -- serve um cliente de vez em quando, como uma pessoa faria
     if J.ef("garcons") < 1 or (t % 3) < passo then
       for _, p in ipairs(J.pessoas) do
