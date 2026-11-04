@@ -22,7 +22,8 @@ Tudo no jogo se faz com um toque (celular) ou um clique (desktop): não há pers
 - **Sistema**: configurações (música, efeitos, tela cheia, sombras, FPS), minimizar, estatísticas, créditos, salvar, apagar progresso com confirmação e sair. Esc abre e fecha o menu.
 - **Tela inicial**: continuar, novo jogo, jogos salvos (3 vagas) e 3 saves de teste: começo, metade e tudo 100%.
 - **Novidades**: quando algo importante pode ser liberado, o jogo pausa e mostra uma tela com os benefícios e o botão para liberar.
-- **Modo de edição** (F2 ou Configurações), no estilo do The Sims: tudo numa tela só. Puxe uma parede para mudar o tamanho do cômodo; toque em qualquer item para movê-lo, girá-lo ou subi-lo. O que não vem da árvore (decoração, por exemplo) pode ser adicionado e excluído; o que a árvore dá (mesas, por exemplo) só pode ser movido. O círculo mágico também se move. As posições valem para as regras e as colisões e continuam após as atualizações.
+- **Loja**, com o jogo rodando: a aba Itens põe no mapa o que foi liberado na árvore e vende decoração; a aba Cômodos move as salas de graça e muda o tamanho pagando por metro; a aba Mover leva qualquer item da cena para outro lugar, de graça. Só a decoração pode ser excluída. Cada save guarda a própria construção.
+- **Lado de fora**: o mercadinho e o mural de missões ficam num caminho de pedras, que o jogador coloca e move inteiro. Quem vem pegar missão ou vender espólio fica nele e não entra na taverna.
 - **Mesmo comportamento nas duas plataformas**: o motor traduz toque e clique para a mesma ação genérica, e o Lua nunca sabe qual foi.
 - **Botões grandes**: alvos de toque com pelo menos 48 px, pensando no polegar.
 - **Sem gestos difíceis**: nada de arrastar com precisão, pinça ou toque duplo como única forma de fazer algo. Rolagem de listas é o único arraste.

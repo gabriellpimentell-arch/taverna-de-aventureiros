@@ -80,7 +80,7 @@ end
 
 function J.procurar_noticia()
   local e = J.estado
-  if J.noticia or J.em_menu or J.sem_noticias or J.editando or J.offline or e.fim then return end
+  if J.noticia or J.em_menu or J.sem_noticias or J.offline or e.fim then return end
   for _, n in ipairs(J.NOTICIAS) do
     local no = A.POR_ID[n.id]
     if not e.noticias[n.id] and J.nivel(n.id) == 0 and J.no_liberado(no) and e.ouro >= J.custo_no(no) then
@@ -218,21 +218,14 @@ local function recalcular()
 end
 
 function J.sala_posta(id)
-  if J.previa or not J.manual() then return true end
+  if not J.manual() then return true end
   return J.estado.colocados.salas[id] == true
 end
 
--- no modo de edição tudo aparece, para dar para mover até o que ainda não foi comprado
-local PREVIA = { a_cozinha = 1, a_pomar = 1, a_fazenda = 1, frutas = 6, vacas = 8, a_leste = 1, a_jardim = 1, a_cerveja = 1, a_circulo = 1, mesas = 7, balcao = 1, cozinheiro = 1, bardo = 1,
-  prateleira = 1, mercadinho = 8, canteiros = 10, venda = 1, pocoes = 1, armaduras = 1, armas = 1, a_segundo_andar = 1, a_subsolo = 1 }
-
 function J.ef(k)
-  if J.previa and PREVIA[k] then return PREVIA[k] end
   return ef[k] or (k:sub(1, 2) == "x_" and 1 or 0)
 end
 function J.nivel(id)
-  if J.previa and id == "quartos" then return 1 end
-  if J.previa and id == "decoracao" then return 5 end   -- flâmulas: tudo o que dá para tocar precisa aparecer
   return J.estado.nos[id] or 0
 end
 
@@ -478,7 +471,7 @@ function J.montar_mapa()
     circulo(m.id, m.bx - 1.25, m.bz, 0.03)
     circulo(m.id, m.bx + 1.25, m.bz, 0.03)
   end
-  -- itens acrescentados no editor também ocupam o chão
+  -- decoração comprada na Loja também ocupa o chão
   for _, o in ipairs(L.OBJETOS) do
     if o.extra then
       local r = L.TIPOS_EXTRAS[o.extra].raio
@@ -508,7 +501,7 @@ function J.montar_mapa()
   Cam.montar({ sa + 0.2, xmax, sc + 0.25, sd - 0.2 }, obs)
 end
 
--- bancos que a pessoa só alcança atravessando móveis (usado para avisar no editor)
+-- bancos que a pessoa só alcança atravessando móveis
 function J.lugares_sem_rota()
   local n = 0
   for _, l in ipairs(J.lugares) do
@@ -517,7 +510,7 @@ function J.lugares_sem_rota()
   return n
 end
 
--- A porta em coordenadas de origem (a parede fica entre x = -6.9 e -6.5): L.t acompanha o editor.
+-- A porta em coordenadas de origem (a parede fica entre x = -6.9 e -6.5): L.t acompanha onde ela está.
 -- soleira é o primeiro ponto livre dentro do salão; fora é atrás da parede, longe do mapa de colisões.
 local function soleira_da_porta(dz)
   local x, z = L.t("porta", -5.9, 1.6 + dz)
@@ -601,7 +594,7 @@ function J.caminho(p, x, z)
   if vao then p.x, p.z, p.fantasma = fx, fz, true end
 end
 
--- Só atualiza onde as coisas estão, para o editor mostrar o resultado na hora
+-- Só atualiza onde as coisas estão
 function J.aplicar_visual()
   for _, m in ipairs(POS_MESAS) do m.x, m.z = L.t(m.id, m.bx, m.bz) end
 end
@@ -2010,6 +2003,8 @@ function J.iniciar()
   J.sem_caminho, J.socorros, J.relogio_preso = 0, 0, 0
   J.noticia, J.banner, J.travados, J.media_travados = nil, nil, 0, 0
   J.espera_porta = 0
+  -- o que estava comprado no save anterior não pode abrir sala no layout deste
+  recalcular()
   L.carregar()
   if not J.em_menu then J.carregar() end
   recalcular()
@@ -2060,7 +2055,7 @@ end
 
 function J.atualizar(dt)
   local e = J.estado
-  if J.offline or J.editando then return end
+  if J.offline then return end
   if J.versao_layout ~= L.versao then J.aplicar_obra() end
   -- notícia na tela: tudo espera o jogador ler
   if J.noticia then return end
@@ -2319,7 +2314,7 @@ end
 
 -- O celular congela o jogo em segundo plano: ao voltar, o tempo parado conta como tempo fora.
 function J.ao_voltar()
-  if J.em_menu or J.editando or J.offline or not J.pronto then return end
+  if J.em_menu or J.offline or not J.pronto then return end
   J.calcular_offline()
 end
 

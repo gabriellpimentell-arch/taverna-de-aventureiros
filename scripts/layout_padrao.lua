@@ -1,5 +1,4 @@
--- Posições oficiais editadas no jogo. Para mudar para todo mundo, cole aqui
--- o texto do botão "Copiar posições" do modo de edição.
+-- Posições oficiais: todo jogo novo nasce com elas. Mesmo formato do que cada save guarda.
 return {
   ["balcao"] = { x = 0, z = -0.4, y = 0, g = 0 },
   ["cozinheiro"] = { x = 0, z = -0.4, y = 0, g = 0 },

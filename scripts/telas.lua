@@ -8,7 +8,6 @@ local C = require("config")
 local util = require("util")
 local U = require("ui")
 local M = require("mundo")
-local Ed = require("editor")
 local S = require("saves")
 local Lj = require("loja")
 local cor = util.cores
@@ -809,7 +808,6 @@ local function janela_config()
   U.botao("minimizar2", bx, y + 60, 200, 44, "Minimizar", { cor = "#4a3627", cor_texto = cor.texto }, function() motor.minimizar() end)
   U.botao("estatisticas", bx, y + 112, 200, 44, "Estatísticas", { cor = "#4a3627", cor_texto = cor.texto }, function() T.modal = "stats" end)
   U.botao("creditos", bx, y + 164, 200, 44, "Créditos", { cor = "#4a3627", cor_texto = cor.texto }, function() T.modal = "creditos" end)
-  U.botao("editar", bx, y + 268, 200, 44, motor.plataforma == "desktop" and "Modo de edição (F2)" or "Modo de edição", { cor = "#57b0c2", cor_texto = "#0d1f24" }, function() T.f2() end)
   U.botao("salvar", bx, y + 216, 200, 44, "Salvar agora", { cor = "#4a3627", cor_texto = cor.texto }, function()
     J.salvar()
     J.avisar("Progresso salvo!", 2)
@@ -946,14 +944,7 @@ local function tela_titulo()
   local outro = { cor = "#3d291b", cor_texto = cor.texto, tam = 18 }
   U.botao("menu_novo", x, y + passo, w, 50, "Novo jogo", outro, function() T.tela = "novo"; T.confirmar = false end)
   U.botao("menu_carregar", x, y + passo * 2, w, 50, "Jogos salvos", outro, function() T.tela = "carregar"; T.confirmar = false end)
-  U.botao("menu_layout", x, y + passo * 3, w, 50, "Modo Layout (sem NPCs)", { cor = "#57b0c2", cor_texto = "#0d1f24", tam = 17 }, function()
-    -- taverna vazia e pausada: só a aparência
-    J.pessoas, J.garcons = {}, {}
-    T.tela = nil
-    Ed.abrir()
-    Ed.ao_fechar = function() J.iniciar(); T.iniciar() end
-  end)
-  local sy = y + passo * 4
+  local sy = y + passo * 3
   if motor.plataforma == "desktop" then
     U.botao("menu_tela", x, sy, w, 50, motor.tela_cheia() and "Modo janela" or "Tela cheia", outro, function() motor.alternar_tela_cheia() end)
     sy = sy + passo
@@ -1170,16 +1161,11 @@ end
 -- Ciclo --------------------------------------------------------------------------------
 
 function T.atualizar(dt)
-  M.painel_alvo = (T.aba == "loja" and not T.tela and not Ed.ativo) and 1 or 0
+  M.painel_alvo = (T.aba == "loja" and not T.tela) and 1 or 0
   if T.aba ~= "loja" then Lj.cancelar() end
   if T.tela then
     M.atualizar(dt)
     motor.roda()
-    return
-  end
-  if Ed.ativo then
-    M.atualizar(dt)
-    Ed.atualizar(dt)
     return
   end
   local e = J.estado
@@ -1233,11 +1219,6 @@ function T.desenhar()
     else tela_carregar() end
     return
   end
-  if Ed.ativo then
-    M.desenhar_cena()
-    Ed.desenhar()
-    return
-  end
   local aba_atual = T.aba
   M.desenhar_cena()
   if T.aba == "taverna" or T.aba == "loja" then
@@ -1272,15 +1253,6 @@ function T.tocar(x, y)
     if z and z.fn then z.fn() end
     return
   end
-  if Ed.ativo then
-    local z = U.achar(x, y)
-    if z then
-      if z.fn then z.fn() end
-    else
-      Ed.tocar(x, y)
-    end
-    return
-  end
   T.toque = { x = x, y = y, ux = x, uy = y, moveu = false, arrasta = false }
   local z = U.achar(x, y)
   if z then
@@ -1301,7 +1273,6 @@ end
 
 function T.soltar(x, y)
   if T.tela then return end
-  if Ed.ativo then Ed.soltar() return end
   local t = T.toque
   T.toque = nil
   if T.aba == "loja" then Lj.soltar() end
@@ -1314,20 +1285,8 @@ end
 -- o toque virou pinça: sem soltar, nada de disparar o botão que estava sob o dedo
 function T.cancelar_toque()
   if T.tela then return end
-  if Ed.ativo then Ed.soltar(true) return end
   T.toque = nil
   Lj.soltar(true)
-end
-
-function T.f2()
-  if T.tela then return end
-  if J.offline or J.estado.fim then return end
-  if Ed.ativo then Ed.fechar()
-  else
-    T.modal = nil
-    T.aba = "taverna"
-    Ed.abrir()
-  end
 end
 
 function T.esc()
@@ -1335,7 +1294,6 @@ function T.esc()
     if T.tela ~= "titulo" then T.tela = "titulo"; T.confirmar = false end
     return
   end
-  if Ed.ativo then Ed.fechar() return end
   if J.offline then return end
   if J.noticia and not T.modal then J.noticia = nil return end
   if T.aba == "loja" and not T.modal and Lj.voltar() then return end

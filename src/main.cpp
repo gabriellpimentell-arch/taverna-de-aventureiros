@@ -1187,7 +1187,6 @@ int main() {
         }
         if (IsKeyPressed(KEY_ESCAPE)) chamar("tecla_esc");
 #endif
-        if (IsKeyPressed(KEY_F2)) chamar("tecla_f2");
 
         chamar("atualizar", {dt});
         chamar("teste", {dt});

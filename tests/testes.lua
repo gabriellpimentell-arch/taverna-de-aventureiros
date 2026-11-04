@@ -22,6 +22,34 @@ J_sem = require("jogo")
 J_sem.auto_colocar = true    -- colocação manual tem teste próprio mais abaixo
 J_sem.sem_noticias = true   -- as notícias pausam o jogo: têm teste próprio mais abaixo
 
+-- Leva o objeto até o ponto sem conferir a regra da Loja: serve para testar o modelo de posições
+Ed = {}
+function Ed.mover_para(id, x, z)
+  local L = require("layout")
+  if id == "porta" then
+    local ok, motivo = L.mover_porta(L.porta_mais_perto(x, z))
+    Ed.mensagem = not ok and motivo or nil
+    J_sem.aplicar_visual()
+    return
+  end
+  local internas, externas = L.salas()
+  for _, lista in ipairs({ internas, externas }) do
+    for _, b in ipairs(lista) do
+      if b.id == id then
+        local o, dx, dz = L.POR_ID[id], L.desloc(id)
+        local px, pz = L.pos_sala(id)
+        L.mover_sala(id, px + x - (o.x + dx), pz + z - (o.z + dz))
+        J_sem.aplicar_visual()
+        return
+      end
+    end
+  end
+  L.colocar(id, x, z)
+  L.limitar(id)
+  L.limitar_carregados(id)
+  J_sem.aplicar_visual()
+end
+
 local falhas, total = 0, 0
 local function ok(nome, cond, extra)
   total = total + 1
@@ -741,40 +769,13 @@ do
   ok("para no quadro para pegar", viu_pegando and perto)
   ok("sai com o papel na mão", viu_papel)
 
-  -- editor
+  -- posições
   novo()
-  T.f2()
-  ok("F2 abre o editor", require("editor").ativo)
-  local Ed = require("editor")
-  local o0 = J.estado.ouro
-  atualizar(0.1); desenhar()
-  ok("jogo pausa no editor", J.editando)
-  Ed.sel = "mesa1"
   Ed.mover_para("mesa1", -2.0, 0.5)
   ok("objeto move", J.POS_MESAS[1].x == -2 and J.POS_MESAS[1].z == 0.5)
-  -- todo botão, em cada painel, com um item selecionado
-  for _, painel in ipairs({ false, "mais", "adicionar", "excluidos" }) do
-    Ed.sel = "mesa1"
-    Ed.painel = painel or nil
-    desenhar()
-    for _, z in ipairs(U.zonas) do
-      if z.fn and z.id ~= "editor_sair" then
-        local bom, erro = pcall(z.fn)
-        ok("botão editor " .. z.id, bom, erro)
-        atualizar(0.05); desenhar()
-      end
-    end
-  end
-  Ed.painel = "mais"; desenhar()
-  ok("botão de copiar existe", U.apertar("editor_copiar"))
-  Ed.painel = nil
   L.restaurar()
-  Ed.sel = "mesa1"
   Ed.mover_para("mesa1", -2.0, 0.5)
   L.salvar()
-  ok("copiar devolve texto", type(motor._copiado) == "string")
-  T.esc()
-  ok("esc sai do editor", not Ed.ativo and not J.editando and not J.previa)
   for _ = 1, 100 do atualizar(0.1); desenhar() end
   iniciar()
   ok("posição sobrevive a reiniciar", J.POS_MESAS[1].x == -2, J.POS_MESAS[1].x)
@@ -793,7 +794,6 @@ do
   end
 
   -- Bugs achados na revisão de caminhos e editor -----------------------------------------------------
-  local Ed = require("editor")
   local function tudo_comprado()
     novo()
     J.estado.ouro = 1e60
@@ -900,62 +900,34 @@ do
   end
   ok("garçom amontoado é socorrido", pior < 20, pior)
 
-  -- garçom que volta do editor não fica atravessando tudo
+  -- garçom que volta de um layout novo não fica atravessando tudo
   novo()
   libera("garcom")
   J.garcons[1].fantasma = true
   J.aplicar_layout()
   ok("editor limpa o atalho do garçom", not J.garcons[1].fantasma)
 
-  -- um clique sem arrastar só seleciona: o encaixe na grade movia o objeto
+  -- soltar longe de tudo não joga o objeto para fora do mundo
   motor._layout = false
   novo()
-  Ed.abrir()
-  local bm = L.POR_ID.mesa1
-  local sx, sy = motor.projetar(bm.x, 0.3, bm.z)
-  motor._mouse = { sx, sy }
-  motor._baixo = true
-  Ed.tocar(sx, sy)
-  for _ = 1, 5 do Ed.atualizar(0.1) end
-  motor._baixo = false
-  Ed.soltar()
-  ok("clique seleciona", Ed.sel == "mesa1")
-  ok("clique não move", L.de("mesa1").x == 0 and L.de("mesa1").z == 0, L.de("mesa1").x)
-  ok("clique não enche o desfazer", #Ed.desfazer == 0, #Ed.desfazer)
-  -- arrastar de verdade move; soltar fora da janela não deixa o arrasto preso
-  motor._baixo = true
-  Ed.tocar(sx, sy)
-  motor._mouse = { sx + 60, sy + 26 }
-  Ed.atualizar(0.1)
-  ok("arrastar move", L.de("mesa1").x ~= 0)
-  motor._baixo = false
-  Ed.atualizar(0.1)
-  ok("soltar fora da janela encerra o arrasto", Ed.arrasto == nil)
-  ok("arrasto vira um desfazer", #Ed.desfazer == 1, #Ed.desfazer)
-  motor._mouse = { 480, 270 }
-  -- soltar longe de tudo não joga o objeto para fora do mundo
+  libera("jardim")
   Ed.mover_para("mesa1", 500, -500)
   ok("arraste para fora fica na área", J.POS_MESAS[1].x <= 13.01 and J.POS_MESAS[1].z >= -5, J.POS_MESAS[1].x)
   -- sala só vai para onde cabe: fora da taverna, o jardim vai; em cima dela, não
   local jx, jz = L.pos_sala("jardim")
   Ed.mover_para("jardim", L.POR_ID.jardim.x + L.desloc("jardim"), select(2, L.desloc("jardim")) + L.POR_ID.jardim.z + 2)
   ok("jardim pode continuar lá fora", select(2, L.pos_sala("jardim")) >= jz + 2 - 0.5, select(2, L.pos_sala("jardim")))
-  Ed.fechar()
   motor._layout = false
 
-  -- abrir e fechar o editor não congela as posições oficiais neste computador
+  -- salvar não congela as posições oficiais neste computador
   novo()
-  T.f2(); T.f2()
-  ok("editor sem edição não fixa o padrão", not tostring(motor._layout):find("balcao"), motor._layout)
-  T.f2()
-  Ed.sel = "mesa2"
+  L.salvar()
+  ok("salvar sem mudança não fixa o padrão", not tostring(motor._layout):find("balcao"), motor._layout)
   Ed.mover_para("mesa2", 1.5, -0.5)
-  Ed.fechar()
-  ok("edição continua salva", tostring(motor._layout):find("mesa2") ~= nil)
-  T.f2()
-  Ed.sel = "mesa2"
+  L.salvar()
+  ok("mudança fica salva", tostring(motor._layout):find("mesa2") ~= nil)
   L.restaurar("mesa2")
-  Ed.fechar()
+  L.salvar()
   ok("restaurar tira do arquivo", not tostring(motor._layout):find("mesa2"), motor._layout)
   motor._layout = false
 
@@ -966,45 +938,15 @@ do
   ok("mesa absurda volta para a área", J.POS_MESAS[1].x >= -7 and L.de("mesa1").y <= 6, J.POS_MESAS[1].x)
   motor._layout = false
 
-  -- botão das Configurações passava por cima da regra do F2 na tela final
+  -- o modo editor saiu do jogo: sem botão, sem tecla, sem arquivo
   novo()
-  J.estado.fim = true
   T.modal = "config"
   desenhar()
-  ok("final: Configurações tem o botão", U.apertar("editar") ~= nil)
-  ok("final: botão não abre o editor", not Ed.ativo and not J.previa)
-  T.f2()
-  ok("final: F2 não abre o editor", not Ed.ativo)
-  J.estado.fim = false
+  ok("Configurações sem botão de edição", not U.apertar("editar"))
   T.modal = nil
-  J.offline = { ganho = 10, segundos = 100 }
-  T.f2()
-  ok("tempo fora: F2 não abre o editor", not Ed.ativo)
-  J.offline = nil
-  T.modal = "stats"
-  T.f2()
-  ok("F2 com janela aberta fecha a janela", Ed.ativo and T.modal == nil)
-  Ed.fechar()
-
-  -- a prévia mostra tudo aberto, mas nada disso vaza para as regras ou para o save
-  novo()
-  libera("garcom")
-  local antes = util.serializar(J.estado)
-  local lugares, mesas = #J.lugares, J.num_mesas()
-  T.f2()
-  ok("prévia mostra tudo", J.num_mesas() == 8 and J.mercadinho_aberto())
-  for _ = 1, 20 do atualizar(0.1); desenhar() end
-  ao_sair()
-  ok("sair na prévia não muda o save", util.desserializar(motor._save).nos.mercadinho == nil and util.desserializar(motor._save).nos.quartos == nil)
-  T.f2()
-  ok("prévia acabou", not J.previa and not J.editando and J.num_mesas() == mesas and not J.mercadinho_aberto())
-  ok("lugares voltam ao real", #J.lugares == lugares, #J.lugares)
-  ok("ala fechada continua bloqueada", Cam.bloqueado(8, 0))
-  local depois = util.desserializar(util.serializar(J.estado))
-  depois.salvo_em = nil
-  local ref = util.desserializar(antes)
-  ref.salvo_em = nil
-  ok("estado igual depois da prévia", util.serializar(depois) == util.serializar(ref))
+  ok("sem tecla de edição", _G.tecla_f2 == nil and T.f2 == nil)
+  ok("sem arquivo do editor", not package.searchpath("editor", package.path))
+  ok("sem estado de edição", J.editando == nil and J.previa == nil)
 
   -- o nome do rank aparece para contratados e na batalha final
   novo()
@@ -1029,7 +971,6 @@ end
 -- Notícias, menestrel, personagens novos, tamanho -----------------------------------------------
 do
   local L = require("layout")
-  local Ed = require("editor")
   motor._layout = false
   J.sem_noticias = false
   novo()
@@ -1094,15 +1035,15 @@ do
   quadros(40)
   libera("cervejaria"); quadros(5)
 
-  -- todo objeto do editor está na lista e os pais existem
+  -- os pais de todo objeto existem
   for _, o in ipairs(L.OBJETOS) do
-    ok("categoria existe: " .. o.id, (function() for _, c in ipairs(L.CATEGORIAS) do if c == o.cat then return true end end end)())
     if o.pai and o.pai:sub(1, 1) ~= "@" then ok("pai existe: " .. o.id, L.POR_ID[o.pai] ~= nil) end
   end
 
   -- tamanho
   novo()
-  T.f2(); atualizar(0.1); desenhar()
+  libera("jardim")
+  atualizar(0.1); desenhar()
   for _ = 1, 45 do L.mudar_tamanho("dir", 1) end
   ok("tamanho tem limite", L.tamanho.dir == L.TAMANHO_MAX)
   L.mudar_tamanho("dir", -100)
@@ -1117,15 +1058,7 @@ do
   ok("jardim acompanha a frente", dz == 6, dz)
   local _, gz = L.desloc("garrafa1")
   ok("garrafa acompanha a prateleira", gz == -3, gz)
-  -- cada painel do editor desenha botões, sem páginas de categoria
-  for _, painel in ipairs({ "mais", "adicionar", "excluidos" }) do
-    ok("abrir painel " .. painel, U.apertar("editor_" .. painel) and Ed.painel == painel)
-    atualizar(0.05); desenhar()
-    ok("painel desenha " .. painel, #U.zonas > 4)
-    U.apertar("editor_" .. painel); atualizar(0.05); desenhar()
-    ok("fechar painel " .. painel, Ed.painel == nil)
-  end
-  T.esc()
+  L.salvar()
   iniciar()
   ok("tamanho sobrevive a reiniciar", L.tamanho.dir == 10 and L.tamanho.frente == 6, L.tamanho.dir)
   ok("porta real acompanha", J.PORTA.x < -10, J.PORTA.x)
@@ -1134,15 +1067,11 @@ do
   ok("funciona numa taverna grande", J.estado.servidos > 5 and (J.sem_caminho or 0) == 0, J.sem_caminho)
   ok("mundo desenha grande", pcall(desenhar))
   -- mover objeto preso a uma parede depois de crescer continua no lugar pedido
-  T.f2(); atualizar(0.1); desenhar()
-  Ed.grade = false
   Ed.mover_para("lampiao1", 2, -6)
   local ax, az = L.desloc("lampiao1")
   ok("mover respeita a âncora", math.abs(L.POR_ID.lampiao1.x + ax - 2) < 0.01 and math.abs(L.POR_ID.lampiao1.z + az + 6) < 0.01, ax)
-  U.apertar("editor_desfazer"); desenhar()
   L.restaurar()
   ok("restaurar zera o tamanho", L.tamanho.dir == 0)
-  T.esc()
   L.salvar()
   motor._layout = false
   novo()
@@ -1150,7 +1079,7 @@ end
 
 -- Notícias que pausam, menestrel, filhos no layout, salão grande e congestionamento --------------
 do
-  local L, Ed, M, Cam = require("layout"), require("editor"), require("mundo"), require("caminhos")
+  local L, M, Cam = require("layout"), require("mundo"), require("caminhos")
   local function limpa_layout() motor._layout = false; novo() end
   local function tudo()
     for _ = 1, 40 do for _, no in ipairs(A.NOS) do J.estado.ouro = 1e40; J.comprar_no(no.id) end end
@@ -1185,7 +1114,7 @@ do
     J.estado.ouro = 1e12
   end
 
-  -- pausa: nunca trava; fecha em qualquer aba, e o editor não a perde
+  -- pausa: nunca trava; fecha em qualquer aba
   novo()
   J.sem_noticias = false
   J.estado.ouro = 100
@@ -1201,9 +1130,7 @@ do
   motor._roda = 3; atualizar(0.1)
   ok("roda não mexe atrás da notícia", T.arv.zoom == z0)
   T.aba = "taverna"; desenhar()
-  T.f2(); quadros(2); T.f2(); quadros(1)
-  ok("editor não perde a notícia", J.noticia ~= nil and not Ed.ativo)
-  ok("notícia fecha depois do editor", U.apertar("noticia_depois") and J.noticia == nil)
+  ok("notícia fecha", U.apertar("noticia_depois") and J.noticia == nil)
   J.sem_noticias = true
   quadros(3)
   ok("jogo volta a correr", J.estado.tempo > t0)
@@ -1276,8 +1203,7 @@ do
   -- objetos filhos ------------------------------------------------------------
   limpa_layout()
   local function perto(a, b, c, e) return math.abs(a - c) < 0.001 and math.abs(b - e) < 0.001 end
-  T.f2(); quadros(1)
-  Ed.sel = "balcao"
+  quadros(1)
   L.de("balcao").g = math.pi / 2
   L.dados.balcao.y = 1
   local g = L.dados.balcao.g
@@ -1292,7 +1218,6 @@ do
   motor.peca = velho
   ok("caneca sobe junto com o balcão", alto)
   -- arrastar o filho com o pai girado
-  Ed.grade = false
   Ed.mover_para("caneca2", 2, 0)
   local dx, dz = L.desloc("caneca2")
   ok("mover filho de pai girado vai ao ponto pedido", perto(L.POR_ID.caneca2.x + dx, L.POR_ID.caneca2.z + dz, 2, 0), dx)
@@ -1301,17 +1226,8 @@ do
   L.dados.balcao.x = L.dados.balcao.x + 1
   ok("filho acompanha o pai", math.abs(L.desloc("caneca2") - a0 - 1) < 0.001)
   L.dados.balcao.y = 0
-  -- desfazer e restaurar
-  local giro_antes = L.dados.balcao.g
-  Ed.sel = "balcao"; desenhar()
-  U.apertar("editor_girar"); desenhar()
-  ok("giro mudou", L.dados.balcao.g ~= giro_antes)
-  U.apertar("editor_desfazer"); desenhar()
-  ok("desfazer devolve o giro", L.dados.balcao.g == giro_antes)
-  Ed.sel = "caneca2"; Ed.painel = "mais"; desenhar()
-  ok("botão de posição original existe", U.apertar("editor_restaurar")); Ed.painel = nil; desenhar()
+  L.restaurar("caneca2")
   ok("restaurar um filho deixa o pai como está", L.dados.caneca2 == nil and L.dados.balcao ~= nil)
-  T.esc()
   limpa_layout()
 
   -- layout antigo: ids que sumiram viram os novos; lixo é ignorado
@@ -1340,14 +1256,12 @@ do
   limpa_layout()
 
   -- tamanho do salão -----------------------------------------------------------
-  T.f2(); quadros(1)
+  quadros(1)
   L.mudar_tamanho("dir", 20)
-  Ed.grade = false
   Ed.mover_para("mesa1", 24, 0.2)
   L.mudar_tamanho("dir", -20)
   ok("encolher traz de volta quem ficou de fora", L.POR_ID.mesa1.x + (L.desloc("mesa1")) <= 6.5 + 6.5 + 0.001, (L.desloc("mesa1")))
   L.restaurar()
-  T.esc()
   L.tamanho.fundo = 10
   local _, cozz = L.desloc("cozinheiro")
   local _, fogz = L.desloc("fogao")
@@ -1533,7 +1447,7 @@ do
   novo()
 end
 
--- Editor: o que a árvore compra não pode ser excluído (GDD), e os saves prontos mostram as paredes iguais
+-- O que a árvore compra não pode ser excluído (GDD), e os saves prontos mostram as paredes iguais
 do
   local L, M = require("layout"), require("mundo")
   ok("canteiros vêm da árvore: só movem", not L.removivel("canteiros"))
@@ -1654,7 +1568,7 @@ do
   novo()
 end
 
--- Excluir e acrescentar itens no editor
+-- Excluir e acrescentar itens
 do
   local L = require("layout")
   motor._layout = false
@@ -1674,8 +1588,6 @@ do
   ok("desenha os novos", pcall(desenhar))
   ok("tipo inválido", L.adicionar("xx", 0, 0) == nil)
   ok("exclui o novo", L.excluir(o2.id) and L.POR_ID[o2.id] == nil)
-  L.devolver("barril1")
-  ok("devolve", not L.oculto("barril1"))
   L.restaurar()
   ok("restaurar tira os novos", L.POR_ID[o.id] == nil)
   L.salvar()
@@ -1690,260 +1602,20 @@ do
   novo()
 end
 
--- Editor estilo The Sims: tocar em qualquer item, alças, excluir e adicionar
+-- Tentar quebrar paredes, salas e arquivos do layout
 do
-  local L, Ed, Mu = require("layout"), require("editor"), require("mundo")
+  local L, Mu = require("layout"), require("mundo")
+  local function abrir_tudo()
+    J.estado.ouro = 1e60
+    for _ = 1, 40 do for _, no in ipairs(A.NOS) do J.estado.ouro = 1e60; J.comprar_no(no.id) end end
+    L.restaurar()
+    J.ajustar_equipe()
+    J.aplicar_layout()
+  end
   motor._layout = false
   novo()
-  L.restaurar()
-  T.f2(); atualizar(0.05); desenhar()
-  local function toque(x, y)
-    motor._mouse = { x, y }; motor._baixo = true
-    Ed.tocar(x, y)
-    Ed.atualizar(0.05)
-    motor._baixo = false
-    Ed.soltar()
-  end
-  local function arrastar(x, y, x2, y2)
-    motor._mouse = { x, y }; motor._baixo = true
-    Ed.tocar(x, y)
-    motor._mouse = { x2, y2 }
-    Ed.atualizar(0.05)
-    desenhar()
-    motor._baixo = false
-    Ed.soltar()
-  end
-  local function zona(id)
-    for _, z in ipairs(U.zonas) do if z.id == id then return z end end
-  end
-  -- o meio do que o objeto ocupa na tela
-  local function centro(id)
-    local x, y, n = 0, 0, 0
-    for _, p in ipairs(Ed.contorno(L.POR_ID[id])) do x, y, n = x + p[1], y + p[2], n + 1 end
-    return x / n, y / n
-  end
-
-  -- qualquer item, de qualquer categoria, responde sem trocar de página
-  for _, o in ipairs(L.OBJETOS) do
-    Ed.sel, Ed.ultimo_toque = nil, nil
-    L.mudar_andar(L.andar_de(o.id))
-    local x, y = centro(o.id)
-    local achou = false
-    for _ = 1, 15 do
-      toque(x, y)
-      if Ed.sel == o.id then achou = true break end
-    end
-    ok("dá para selecionar " .. o.id, achou, Ed.sel)
-  end
-  L.mudar_andar(0)
-  -- o que está mais perto vence; pilar e sala não competem
-  Ed.sel, Ed.ultimo_toque = nil, nil
-  local px, py = centro("pilar3")
-  toque(px, py)
-  ok("toque no pilar pega o pilar, não a sala", Ed.sel == "pilar3", Ed.sel)
-  Ed.sel, Ed.ultimo_toque = nil, nil
-  local cx, cy = centro("circulo")
-  toque(cx, cy)
-  ok("toque no meio pega o círculo", Ed.sel == "circulo", Ed.sel)
-  Ed.sel, Ed.ultimo_toque = nil, nil
-  ok("sala fica por último na lista", (function()
-    local c = Ed.candidatos(centro("tina"))
-    return c[1] == "tina" and c[#c] == "cervejaria"
-  end)())
-  -- de item de sala para a sala inteira, em um toque
-  Ed.sel = "tina"; atualizar(0.05); desenhar()
-  ok("botão pega a sala do item", U.apertar("editor_sala") and Ed.sel == "cervejaria", Ed.sel)
-  Ed.sel = "pilar1"; desenhar(); U.apertar("editor_sala")
-  ok("círculo fácil de pegar pelo pilar", Ed.sel == "circulo", Ed.sel)
-  -- caixa: tocar na ponta do balcão, longe do centro, ainda pega o balcão (o raio antigo era 34)
-  Ed.sel, Ed.ultimo_toque = nil, nil
-  local bo = L.POR_ID.balcao
-  local bx, by = motor.projetar(bo.x - 2.2, 0.5, bo.z)
-  local bcx, bcy = motor.projetar(bo.x, 0.5, bo.z)
-  ok("ponta longe do centro do balcão", util.distancia(bx, by, bcx, bcy) > 34)
-  local pegou_balcao = false
-  for _ = 1, 8 do
-    toque(bx, by)
-    pegou_balcao = pegou_balcao or Ed.sel == "balcao"
-  end
-  ok("balcão responde pela caixa, não só pelo centro", pegou_balcao, Ed.sel)
-  -- arrastar selecionado move e vira um único desfazer, tocar no vazio tira a seleção
-  Ed.sel, Ed.ultimo_toque = nil, nil
-  local n0 = #Ed.desfazer
-  local xc, zc = J.POS_MESAS[1].x, J.POS_MESAS[1].z
-  local sx, sy = centro("mesa1")
-  arrastar(sx, sy, sx + 90, sy)
-  ok("arrastar seleciona e move no mesmo gesto", Ed.sel == "mesa1" and J.POS_MESAS[1].x ~= xc, Ed.sel)
-  ok("um arrasto, um desfazer", #Ed.desfazer == n0 + 1)
-  desenhar(); U.apertar("editor_desfazer")
-  ok("desfazer volta a mesa", J.POS_MESAS[1].x == xc and J.POS_MESAS[1].z == zc)
-  toque(2, 300)
-  ok("tocar no vazio tira a seleção", Ed.sel == nil, Ed.sel)
-  -- os limites valem no arrasto: nada sai da área do jogo
-  sx, sy = centro("mesa1")
-  arrastar(sx, sy, sx + 5000, sy - 5000)
-  local xa, xb, za = L.salao()
-  ok("arrastar respeita os limites", J.POS_MESAS[1].x <= xb + 6.51 and J.POS_MESAS[1].z >= za - 0.51 and J.POS_MESAS[1].x > xa, J.POS_MESAS[1].x)
-  desenhar(); U.apertar("editor_desfazer")
-  Ed.sel = nil; desenhar()
-  ok("sem categorias nem painel de tamanho", not zona("editor_cat_prox") and not zona("editor_tam_mais_dir"))
-
-  -- alças (usa L.paredes de verdade; sem ela, um substituto do mesmo contrato)
-  local substituto = not L.paredes
-  if substituto then
-    function L.paredes()
-      local _, xb2 = L.salao()
-      return { { id = "dir", nome = "Salão, direita", chave = "dir", eixo = "x", sinal = 1, x = xb2, z = 0 } }
-    end
-  end
-  local function alca(chave)
-    for _, a in ipairs(Ed.alcas()) do if a.p.chave == chave then return a end end
-  end
-  Ed.sel = nil
-  ok("alça visível sem seleção", alca("dir") ~= nil)
-  local escala = Mu.quadro.escala
-  local a = alca("dir")
-  motor._mouse = { a.x, a.y }; motor._baixo = true
-  Ed.tocar(a.x, a.y)
-  ok("alça pega o toque", Ed.alca ~= nil and Ed.arrasto == nil)
-  motor._mouse = { a.x + 95, a.y }   -- 95 / 30 = 3,17 m no motor falso
-  Ed.atualizar(0.05)
-  ok("puxar aumenta em passos de 1 m", L.tamanho.dir == 3, L.tamanho.dir)
-  local textos = {}
-  local tx = motor.texto
-  motor.texto = function(t, ...) textos[#textos + 1] = tostring(t); return tx(t, ...) end
-  Mu.atualizar(1); Ed.atualizar(0.05); Ed.desenhar()
-  motor.texto = tx
-  ok("medida ao vivo", table.concat(textos, "|"):find("+3 m", 1, true) ~= nil, table.concat(textos, "|"))
-  ok("câmera não foge do dedo", Mu.quadro.escala == escala)
-  motor._baixo = false
-  Ed.soltar()
-  local n1 = #Ed.desfazer
-  a = alca("dir")
-  motor._mouse = { a.x, a.y }; motor._baixo = true
-  Ed.tocar(a.x, a.y)
-  motor._mouse = { a.x - 30, a.y }
-  Ed.atualizar(0.05)
-  motor._baixo = false
-  Ed.soltar()
-  ok("empurrar diminui", L.tamanho.dir == 2, L.tamanho.dir)
-  ok("cada puxada é um desfazer", #Ed.desfazer == n1 + 1)
-  Ed.voltar()
-  ok("desfazer devolve o tamanho", L.tamanho.dir == 3, L.tamanho.dir)
-  Ed.voltar()
-  ok("desfazer devolve o tamanho original", L.tamanho.dir == 0, L.tamanho.dir)
-  a = alca("dir")
-  toque(a.x, a.y)
-  ok("tocar na alça sem puxar não muda nada", L.tamanho.dir == 0 and Ed.alca == nil)
-  Ed.sel = "mesa1"
-  ok("item selecionado esconde as alças", #Ed.alcas() == 0)
-  if substituto then L.paredes = nil end
-
-  -- excluir: só o que não vem da árvore
-  Ed.sel = "mesa1"; desenhar()
-  textos = {}
-  motor.texto = function(t, ...) textos[#textos + 1] = tostring(t); return tx(t, ...) end
-  Ed.desenhar()
-  motor.texto = tx
-  local junto = table.concat(textos, " ")
-  ok("item da árvore sem Excluir", not zona("editor_excluir"))
-  ok("item da árvore avisa", junto:find("Só pode mover", 1, true) ~= nil, junto)
-  ok("nome do selecionado aparece", junto:find("Mesa 1", 1, true) ~= nil)
-  Ed.sel = "barril1"; desenhar()
-  ok("excluir apaga", U.apertar("editor_excluir") and L.oculto("barril1") and Ed.sel == nil)
-  ok("excluído não é mais tocado", (function()
-    for _, id in ipairs(Ed.candidatos(centro("barril1"))) do if id == "barril1" then return false end end
-    return true
-  end)())
-  desenhar(); U.apertar("editor_desfazer")
-  ok("desfazer devolve o excluído", not L.oculto("barril1"))
-  Ed.excluir("barril1")
-  Ed.painel = "excluidos"; desenhar()
-  ok("excluídos lista e devolve", U.apertar("editor_devolver_barril1") and not L.oculto("barril1"))
-  ok("devolvido volta selecionado", Ed.sel == "barril1")
-  -- quem carrega leva os de cima, e a volta também
-  Ed.painel = nil
-  Ed.excluir("prateleira")
-  ok("garrafa sai com a prateleira", L.oculto("garrafa1"))
-  local lista = Ed.excluidos()
-  ok("lista só mostra a prateleira", #lista == 1 and lista[1].id == "prateleira", #lista)
-  Ed.devolver("prateleira")
-  ok("garrafa volta com a prateleira", not L.oculto("garrafa1"))
-
-  -- adicionar: já selecionado para arrastar
-  Ed.sel = nil; Ed.painel = "adicionar"; atualizar(0.05); desenhar()
-  ok("catálogo tem todos os tipos", (function()
-    for t in pairs(L.TIPOS_EXTRAS) do if not zona("editor_add_" .. t) then return false end end
-    return true
-  end)())
-  ok("adicionar cria", U.apertar("editor_add_planta") and Ed.sel and L.POR_ID[Ed.sel].extra == "planta", Ed.sel)
-  ok("catálogo some depois de escolher", Ed.painel == nil)
-  local novo_id = Ed.sel
-  desenhar()
-  ok("item novo pode ser excluído", zona("editor_excluir") ~= nil)
-  sx, sy = centro(novo_id)
-  arrastar(sx, sy, sx + 60, sy + 26)
-  local dxn = L.desloc(novo_id)
-  ok("item novo arrasta", dxn ~= 0, dxn)
-  ok("item novo salva", tostring(motor._layout):find(novo_id, 1, true) ~= nil)
-  Ed.excluir(novo_id)
-  ok("excluir item novo tira de vez", L.POR_ID[novo_id] == nil)
-  Ed.voltar()
-  ok("desfazer devolve item novo e lugar", L.POR_ID[novo_id] ~= nil and L.desloc(novo_id) == dxn)
-  Ed.voltar()
-  Ed.voltar()
-  ok("desfazer tira o item novo", L.POR_ID[novo_id] == nil and Ed.sel == nil)
-  local criados = {}
-  for i = 1, 65 do criados[i] = Ed.adicionar("banco") end
-  ok("itens novos têm limite", criados[60] and not criados[61] and Ed.mensagem ~= nil)
-  ok("pilha de desfazer tem teto", #Ed.desfazer == 30, #Ed.desfazer)
-
-  -- restaurar tudo pede confirmação
-  Ed.mover_para("mesa2", 1.5, -0.5)
-  Ed.painel = "mais"; atualizar(0.05); desenhar()
-  U.apertar("editor_tudo"); desenhar()
-  ok("restaurar pede confirmação", Ed.confirmar and L.dados.mesa2 and L.dados.mesa2.x ~= 0)
-  U.apertar("editor_tudo_nao"); desenhar()
-  ok("não mantém", not Ed.confirmar and L.dados.mesa2.x ~= 0)
-  U.apertar("editor_tudo"); desenhar()
-  U.apertar("editor_tudo_sim"); desenhar()
-  ok("sim restaura", (not L.dados.mesa2 or L.dados.mesa2.x == 0) and Ed.painel == nil)
-  ok("restaurar tira os novos", L.POR_ID[criados[1]] == nil)
-  U.apertar("editor_desfazer"); desenhar()
-  ok("desfazer devolve os novos", L.POR_ID[criados[1]] ~= nil)
-  L.restaurar()
-
-  -- no celular, todo botão tem pelo menos 60 de altura e nada sai da tela
-  motor.plataforma = "android"
-  for _, p in ipairs({ false, "mais", "adicionar", "excluidos" }) do
-    for _, s in ipairs({ false, "barril1", "tina", "mesa1" }) do
-      Ed.sel = s or nil
-      Ed.painel = p or nil
-      desenhar()
-      for _, z in ipairs(U.zonas) do
-        if z.fn then
-          ok("alvo no celular " .. z.id, z.h >= 56 and z.w >= 56, z.h)
-          ok("na tela " .. z.id, z.x >= 0 and z.y >= 0 and z.x + z.w <= 960 and z.y + z.h <= 540)
-        end
-      end
-    end
-  end
-  motor.plataforma = "desktop"
-  Ed.painel, Ed.sel = nil, nil
-  T.esc()
-  ok("sai do editor", not Ed.ativo)
-  motor._layout = false
-  J.sem_noticias = true
-  novo()
-end
-
--- Editor: tentar quebrar paredes, salas e arquivos do layout
-do
-  local L, Ed, Mu = require("layout"), require("editor"), require("mundo")
-  motor._layout = false
-  novo()
-  L.restaurar()
-  T.f2(); atualizar(0.05); desenhar()
+  abrir_tudo()
+  atualizar(0.05); desenhar()
   local function mundo(id)
     local dx, dz = L.desloc(id)
     return L.POR_ID[id].x + dx, L.POR_ID[id].z + dz
@@ -2038,64 +1710,31 @@ do
   -- empurrado pelo salão menor: desfazer e recarregar não esquecem o lugar
   Ed.mover_para("mesa3", 4.5, 0.25)
   local mx = mundo("mesa3")
-  Ed.desfazer = {}
   L.mudar_tamanho("dir", -5)
   ok("empurrada", mundo("mesa3") < mx)
   L.salvar(); L.carregar()
   L.mudar_tamanho("dir", 5)
   ok("recarregar não esquece o lugar da mesa empurrada", mundo("mesa3") == mx, mundo("mesa3"))
   L.mudar_tamanho("dir", -5)
-  Ed.mudou = true
-  Ed.excluir("barril1")   -- guarda um desfazer com a mesa empurrada
-  Ed.voltar()
   L.mudar_tamanho("dir", 5)
-  ok("desfazer não esquece o lugar da mesa empurrada", mundo("mesa3") == mx, mundo("mesa3"))
   L.restaurar()
 
-  -- tudo o que se pode tocar aparece na edição: nada de selecionar o invisível
-  J.aplicar_visual()
+  -- tudo o que pode ser escondido por um layout antigo some mesmo da cena
+  abrir_tudo()
   for _ = 1, 100 do atualizar(0.1) end
-  ok("edição mostra todas as vacas", J.ef("vacas") >= #L.VACAS)
   local conta = 0
   rawset(motor, "peca", function() conta = conta + 1 end)
   local function pecas() conta = 0; Mu.desenhar_cena(); return conta end
   local base = pecas()
   for _, o in ipairs(L.OBJETOS) do
     if L.removivel(o.id) then
-      Ed.excluir(o.id)
+      L.excluir(o.id)
       ok("excluir some da cena: " .. o.id, pecas() < base)
-      Ed.voltar()
+      if L.dados[o.id] then L.dados[o.id].oculto = nil end
     end
   end
   rawset(motor, "peca", nil)
   L.restaurar()
-
-  -- pinça que começa sobre um item não troca a seleção
-  Ed.sel = "mesa2"
-  local px, py = motor.projetar(-3.6, 0.5, 0.2)
-  motor._mouse = { px, py }; motor._baixo = true
-  T.tocar(px, py)
-  ok("toque pegou outro item", Ed.sel == "mesa1", Ed.sel)
-  T.cancelar_toque()
-  ok("pinça devolve a seleção", Ed.sel == "mesa2", Ed.sel)
-  motor._baixo = false
-
-  -- sair no meio do arrasto: fica o que foi movido, e nada preso
-  Ed.sel = nil
-  motor._mouse = { px, py }; motor._baixo = true
-  T.tocar(px, py)
-  motor._mouse = { px + 90, py }
-  atualizar(0.05)
-  local movida = mundo("mesa1")
-  T.esc()
-  ok("sair no arrasto fecha limpo", not Ed.ativo and not Ed.arrasto and not J.editando)
-  motor._mouse = { px + 300, py }
-  atualizar(0.05); desenhar()
-  motor._baixo = false
-  T.soltar(px + 300, py)
-  ok("o dedo depois de sair não move mais", mundo("mesa1") == movida)
-  L.restaurar()
-  L.salvar()
 
   -- o cozinheiro não sai da cozinha, mesmo com os móveis colados na parede (save antigo)
   motor._layout = false
@@ -2189,42 +1828,32 @@ do
   T.modal = "config"; desenhar(); U.apertar("voltar_menu"); desenhar()
   U.apertar("menu_carregar"); desenhar()
   ok("recomeçar save pronto", U.apertar("menu_pronto_refazer_3") and J.estado.ouro > 1e14, J.estado.ouro)
-  -- Modo Layout: taverna vazia, nada é gravado, volta para a tela inicial
+  -- o Modo Layout saiu junto com o editor
   T.modal = "config"; desenhar(); U.apertar("voltar_menu"); desenhar()
-  local n_saves = 0
-  for _ in pairs(motor._saves) do n_saves = n_saves + 1 end
+  ok("tela inicial sem Modo Layout", not U.apertar("menu_layout") and T.tela == "titulo")
   atualizar(3); desenhar()
-  U.apertar("menu_layout"); desenhar()
-  local Ed2 = require("editor")
-  ok("modo layout abre o editor", Ed2.ativo and T.tela == nil)
-  ok("modo layout sem NPCs", #J.pessoas == 0 and #J.garcons == 0)
-  for _ = 1, 100 do atualizar(0.1) end
-  desenhar()
-  ok("continua sem NPCs", #J.pessoas == 0 and #J.garcons == 0)
-  U.apertar("editor_sair"); desenhar()
-  ok("sai para a tela inicial", T.tela == "titulo" and J.em_menu and not J.previa and not J.editando)
-  local n2 = 0
-  for _ in pairs(motor._saves) do n2 = n2 + 1 end
-  ok("modo layout não cria save", n2 == n_saves)
   -- save estragado na vaga
   motor._saves["jogo3.sav"] = "lixo"
   ok("resumo de save estragado", S.resumo("jogo3.sav") == nil)
   -- tamanhos das salas
   local L = require("layout")
   local function aberta_em_todas(id) return (L.desloc(id)) end
-  J.previa = true
+  local function abrir_tudo()
+    J.estado.ouro = 1e60
+    for _ = 1, 40 do for _, no in ipairs(A.NOS) do J.estado.ouro = 1e60; J.comprar_no(no.id) end end
+    L.restaurar()
+  end
+  abrir_tudo()
   local cerv0, circ0, pomar0, faz0 = aberta_em_todas("cervejaria"), aberta_em_todas("circulo"), aberta_em_todas("pomar"), aberta_em_todas("fazenda")
   L.mudar_tamanho("coz_l", 3); L.mudar_tamanho("cerv_l", 2); L.mudar_tamanho("jardim_l", 1); L.mudar_tamanho("pomar_l", 4)
   ok("cervejaria anda com a cozinha", L.desloc("cervejaria") - cerv0 == 3)
   ok("invocação anda com as duas", L.desloc("circulo") - circ0 == 5)
   ok("pomar anda com o jardim", L.desloc("pomar") - pomar0 == 1)
   ok("fazenda anda com o pomar", L.desloc("fazenda") - faz0 == 5)
-  J.previa = false
   ok("mundo desenha salas maiores", pcall(desenhar))
   L.restaurar()
 
   -- fileira de salas: mesma linha de fundo, sem buraco e sem tirar nada do lugar
-  J.previa = true
   L.restaurar()
   local function sm(id) return L.sala_mundo(id) end
   local _, xb, za, zb = L.salao()
@@ -2234,16 +1863,15 @@ do
   ok("cozinha colada na ala leste", cx0 == xb + 5.5, cx0)
   ok("salas encostadas", bx0 == cx1 and ix0 == bx1)
   ok("sala com o fundo e a profundidade do salão", cz0 == za and cz1 == zb)
-  J.previa = false
   motor._layout = false
   novo()
   local x_so = sm("circulo")
   ok("sem as outras compradas não fica buraco", x_so == select(2, L.salao()), x_so)
   libera("cozinha")
   ok("cozinheiro nasce dentro da cozinha", L.POR_ID.cozinheiro.pai == "cozinha")
-  J.previa = true
+  abrir_tudo()
 
-  -- alças do editor
+  -- alças da Loja
   local alcas = {}
   for _, a in ipairs(L.paredes()) do alcas[a.id] = a end
   for _, id in ipairs({ "salao_dir", "salao_frente", "salao_fundo", "salao_oeste", "cozinha_largura", "cozinha_fundo",
@@ -2257,15 +1885,13 @@ do
   for _, a in ipairs(L.paredes()) do if a.id == "cervejaria_largura" then a1 = a end end
   ok("puxar a alça leva a borda junto", a1.x == a0 + 1, a1.x)
   L.restaurar()
-  J.previa = false
   novo()
   local abertas = 0
   for _, a in ipairs(L.paredes()) do if a.id:find("cervejaria") then abertas = abertas + 1 end end
   ok("sala fechada não tem alça", abertas == 0, abertas)
 
   -- encolher
-  J.previa = true
-  L.restaurar()
+  abrir_tudo()
   for _ = 1, 12 do
     for _, k in ipairs({ "dir", "oeste", "frente", "fundo", "coz_l", "coz_p", "cerv_l", "cerv_p", "circ_l", "circ_p", "jardim_l", "jardim_p", "pomar_l", "pomar_p", "faz_l", "faz_p" }) do
       L.mudar_tamanho(k, -1)
@@ -2298,7 +1924,6 @@ do
   ok("salvo estragado respeita o mínimo", L.tamanho.dir + L.tamanho.oeste >= -5 and L.tamanho.jardim_l == -4, L.tamanho.dir)
   motor._layout = false
   L.restaurar()
-  J.previa = false
 
   -- save antigo: posição do dono continua, ids antigos também
   motor._layout = util.serializar({ cervejaria = { x = 0.5, z = 0.5, y = 0, g = 0 }, tina = { x = -0.3, z = 0, y = 0, g = 0 }, barris_fundo = { x = 1, z = 0, y = 0, g = 0 } })
@@ -2562,7 +2187,6 @@ do
   T.aba = "loja"
   Lj.aba = "comodos"
   quadros(1)
-  ok("jogo não pausa na Loja", not J.editando and not J.previa)
   local t0 = J.estado.tempo
   quadros(2)
   ok("tempo segue com a Loja aberta", J.estado.tempo > t0)
@@ -2653,14 +2277,6 @@ do
   T.soltar(motor._mouse[1], motor._mouse[2])
   ok("porta muda de parede de graça", L.pos_porta() == "frente" and lado0 ~= "frente")
 
-  -- Editor F2 continua abrindo e fechando depois da Loja
-  T.aba = "loja"
-  T.f2()
-  ok("F2 abre o editor", require("editor").ativo and T.aba == "taverna")
-  quadros(1)
-  T.f2()
-  ok("F2 fecha o editor", not require("editor").ativo)
-
   -- saves antigos e auto_colocar: nada muda
   J.auto_colocar = true
   motor._layout = nil
@@ -2679,13 +2295,6 @@ do
   libera("mesa")
   ok("save antigo: mesa conta na hora", J.num_mesas() == 2)
   ok("auto também tem a aba", (function() T.aba = "loja"; quadros(1); return U.apertar("loja_aba_comodos") end)())
-  -- prévia do editor mostra tudo mesmo com colocação manual
-  jogo_novo()
-  comprar("garcom", "cozinha")
-  J.previa = true
-  ok("prévia mostra sala não posta", L.aberta("cozinha"))
-  J.previa = false
-  ok("fim da prévia volta a esperar", not L.aberta("cozinha"))
   J.auto_colocar = true
   T.aba = "taverna"
   motor._layout = nil
@@ -2723,10 +2332,9 @@ ok("save antigo não tem mantimentos: serve como antes", J.estado.mantimentos ==
 ok("gerente existe", J.gerente ~= nil)
 -- Salas em blocos: posição, encaixe, portas, paredes e andares ------------------------------------
 do
-  local L, Ed, Mu = require("layout"), require("editor"), require("mundo")
+  local L, Mu = require("layout"), require("mundo")
   local function zerar()
     motor._layout = false
-    J.previa = false
     novo()
     J.sem_noticias = true
   end
@@ -2972,14 +2580,13 @@ do
   ok("carrega posição", perto((L.pos_sala("jardim")), jx2) and perto(select(2, L.pos_sala("jardim")), jz2))
   ok("carrega taverna", perto((L.salao()), xa))
   ok("carrega porta", (L.pos_porta()) == "frente" and perto(select(2, L.pos_porta()), 11))
-  ok("texto copia blocos", L.texto():find("_salas", 1, true) ~= nil and L.texto():find("_porta", 1, true) ~= nil)
+  ok("o salvo guarda os blocos", tostring(motor._layout):find("_salas", 1, true) ~= nil and tostring(motor._layout):find("_porta", 1, true) ~= nil)
   ok("carrega sala interna", perto((L.pos_sala("cozinha")), px2) or perto(select(2, L.pos_sala("cozinha")), pz2))
   zerar()
 
   -- layouts antigos: nada se perde
   motor._layout = util.serializar({ jardim = { x = 2, z = 3, y = 0, g = 0 }, cozinha = { x = 1, z = 0, y = 0, g = 0 }, mesa1 = { x = 1, z = 1, y = 0, g = 0 },
     porta = { x = 0, z = -1, y = 0, g = 0 }, _tamanho = { frente = 2, fundo = 1 } })
-  J.previa = false
   novo()
   abre("cozinha", "jardim")
   ok("antigo: mesa onde estava", perto(L.dados.mesa1.x, 1))
@@ -2998,44 +2605,19 @@ do
   -- arquivo estragado não derruba
   motor._layout = util.serializar({ _salas = { jardim = "x", cozinha = { x = "a", z = {} }, nada = { x = 1, z = 1 }, pomar = { x = 1 / 0, z = 0 / 0, andar = 9 } },
     _taverna = "lixo", _porta = { lado = "nada", t = "x" } })
-  J.previa = false
   novo()
   ok("arquivo estragado: abre", pcall(Mu.desenhar_cena))
-  J.previa = true
+  libera("jardim")
   ok("arquivo estragado: sala aberta tem lugar", type((L.pos_sala("jardim"))) == "number")
-  J.previa = false
 
-  -- editor: arrastar sala é fantasma, recusa volta e desfazer funciona
+  -- recusas que continuam valendo na Loja
   zerar()
-  abre("ala_leste", "cozinha")
-  T.f2(); atualizar(0.1); desenhar()
-  Ed.dica = false
-  local xc, _, zc = L.sala_mundo("cozinha")
-  local x1c, _, z1c = select(2, L.sala_mundo("cozinha")), nil, select(4, L.sala_mundo("cozinha"))
-  local ax0 = L.pos_sala("cozinha")
-  local tx0, ty0 = motor.projetar(xc + 0.8, 0, zc + 1.5)
-  Ed.sel = "cozinha"
-  motor._mouse = { tx0, ty0 }; motor._baixo = true
-  Ed.tocar(tx0, ty0)
-  motor._mouse = { tx0 - 500, ty0 }
-  atualizar(0.05); desenhar()
-  ok("sala não anda até soltar", L.pos_sala("cozinha") == ax0)
-  ok("arrastar sala mostra fantasma", Ed.arrasto and Ed.arrasto.fantasma ~= nil)
-  ok("arrastar para cima da taverna: vermelho", Ed.arrasto and Ed.arrasto.fantasma and Ed.arrasto.fantasma.ok == false)
-  motor._baixo = false
-  Ed.soltar()
-  ok("soltar em vermelho: não muda", L.pos_sala("cozinha") == ax0)
-  ok("soltar em vermelho: sem desfazer", #Ed.desfazer == 0, #Ed.desfazer)
+  abre("ala_leste", "cozinha", "jardim")
   local ai, aj2 = L.pos_sala("cozinha")
   ok("subir sala: nada sem o andar", not L.encaixe_valido("cozinha", ai, aj2, 1))
-  Ed.mover_para("porta", 4, select(4, L.salao()) - 0.2)
-  -- na edição o pomar aparece ali, cobrindo a frente: a porta fica e o motivo aparece
-  ok("porta arrastada para parede coberta avisa", (L.pos_porta()) == "oeste" and Ed.mensagem and Ed.mensagem:find("coberta", 1, true), Ed.mensagem)
-  local dl = L.pos_porta()
-  Ed.voltar()
-  ok("desfazer sem pilha não quebra", true)
-  ok("porta continua", (L.pos_porta()) == dl)
-  Ed.fechar()
+  local fx0, _, _, fz1 = L.sala_mundo("taverna")
+  local pf, pm = L.mover_porta("frente", 2)
+  ok("porta recusa parede coberta", not pf and pm and pm:find("coberta", 1, true) and (L.pos_porta()) == "oeste", pm)
   zerar()
 end
 
@@ -3263,6 +2845,44 @@ do
     for _, c in ipairs(Lj.candidatos(centro("tina"))) do if c == "cervejaria" then return false end end
     return true
   end)())
+  -- um clique sem arrastar só seleciona; soltar fora da janela não deixa o arrasto preso
+  do
+    Lj.item = nil
+    local d0 = L.dados.mesa1 and L.dados.mesa1.x
+    local mx1, my1 = centro("mesa1")
+    motor._mouse = { mx1, my1 }; motor._baixo = true
+    Lj.tocar(mx1, my1)
+    for _ = 1, 5 do Lj.atualizar(0.1) end
+    motor._baixo = false
+    Lj.soltar()
+    ok("clique seleciona", Lj.item == "mesa1", Lj.item)
+    ok("clique não move", (L.dados.mesa1 and L.dados.mesa1.x) == d0)
+    motor._baixo = true
+    Lj.tocar(mx1, my1)
+    motor._mouse = { mx1 + 8, my1 + 8 }
+    Lj.atualizar(0.1)
+    motor._baixo = false
+    Lj.atualizar(0.1)
+    ok("soltar fora da janela encerra o arrasto", Lj.arrasto == nil and Lj.camera == nil)
+    motor._mouse = { 480, 270 }
+  end
+  -- caixa: tocar na ponta do balcão, longe do centro, ainda pega o balcão
+  do
+    local bo = L.POR_ID.balcao
+    local bdx, bdz = L.desloc("balcao")
+    local bx, by = motor.projetar(bo.x + bdx - 2.2, 0.5, bo.z + bdz)
+    local bcx, bcy = motor.projetar(bo.x + bdx, 0.5, bo.z + bdz)
+    ok("ponta longe do centro do balcão", util.distancia(bx, by, bcx, bcy) > 34)
+    local pegou = false
+    Lj.item = nil
+    for _ = 1, 8 do
+      toque(bx, by)
+      pegou = pegou or Lj.item == "balcao"
+    end
+    ok("balcão responde pela caixa, não só pelo centro", pegou, Lj.item)
+    toque(2, 530)
+    ok("tocar no vazio tira a seleção", Lj.item == nil, Lj.item)
+  end
   -- o que não foi comprado não existe para o toque
   novo()
   T.iniciar(); T.aba = "loja"; Lj.iniciar(); Lj.aba = "mover"

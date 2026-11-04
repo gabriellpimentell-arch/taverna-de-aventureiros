@@ -905,11 +905,6 @@ local function sorte(v)
   return v.s / 2147483647
 end
 
-local function editando()
-  local E = package.loaded["editor"]
-  return E and E.ativo
-end
-
 -- gira `a` em direção a `alvo` pelo caminho mais curto, no máximo `passo` radianos
 local function virar(a, alvo, passo)
   local d = (alvo - a + math.pi) % (2 * math.pi) - math.pi
@@ -918,7 +913,7 @@ local function virar(a, alvo, passo)
 end
 
 -- As vacas vivem nas coordenadas de origem da fazenda: assim a cerca, que é um retângulo
--- ali, continua valendo com a fazenda movida ou girada no editor.
+-- ali, continua valendo com a fazenda movida.
 local RAIO_VACA = 0.33
 local VACA_PONTOS = { 0.72, 0.3, -0.1, -0.42 } -- centros dos círculos do focinho ao rabo
 local OBSTACULOS_FAZENDA = { { "celeiro", 2.05, 1.6 }, { "cocho", 0.8, 0.33 }, { "feno", 1.08, 0.33 } }
@@ -1062,7 +1057,6 @@ function M.mover_vacas(dt)
   if not M.vacas or (M.anim.fazenda or 0) <= 0 then return end
   local x0, x1, z0, z1 = L.sala("fazenda")
   local limites = { x0, x1, z0, z1 }
-  local fixas = editando()
   local pensou = false   -- só uma vaca por quadro faz as contas caras
   for i = 1, #L.VACAS do
     if i > math.min(J.ef("vacas"), #L.VACAS) or L.oculto("vaca" .. i) then
@@ -1070,8 +1064,8 @@ function M.mover_vacas(dt)
     else
       local v = M.vacas[i]
       local cx, cz, cg = vaca_casa(i)
-      -- nasce em casa; volta para casa se ela ou a cerca mudarem, e fica lá durante a edição
-      if not v or fixas or v.cx ~= cx or v.cz ~= cz or v.x0 ~= x0 or v.x1 ~= x1 or v.z0 ~= z0 or v.z1 ~= z1 then
+      -- nasce em casa; volta para casa se ela ou a cerca mudarem
+      if not v or v.cx ~= cx or v.cz ~= cz or v.x0 ~= x0 or v.x1 ~= x1 or v.z0 ~= z0 or v.z1 ~= z1 then
         local nova = not v
         v = v or { s = 7919 * i + 13, velo = 0, pasta = 0, fase = 0 }
         M.vacas[i] = v
@@ -1081,48 +1075,46 @@ function M.mover_vacas(dt)
         vaca_descansa(v, i % 2 == 0)
         if nova then v.t = v.t * 0.4 + i * 0.5 end
       end
-      if not fixas then
-        if v.acomodar and not pensou then
-          v.acomodar, pensou = false, true
-          vaca_acha_lugar(v, limites)
-        end
-        v.pasta = util.limitar(v.pasta + (v.est == "pasta" and dt or -dt) / 0.8, 0, 1)
-        v.passo = 0
-        if v.est == "anda" then
-          if v.pasta <= 0 then
-            local ng, pronto = virar(v.g, v.ag, dt * 1.1)
-            if not vaca_pode(v, v.x, v.z, ng, limites) then
-              vaca_descansa(v, false)
-            elseif not pronto then
-              v.g = ng
-              v.fase = v.fase + dt
-              v.passo = math.sin(v.fase * 5) * 0.5
+      if v.acomodar and not pensou then
+        v.acomodar, pensou = false, true
+        vaca_acha_lugar(v, limites)
+      end
+      v.pasta = util.limitar(v.pasta + (v.est == "pasta" and dt or -dt) / 0.8, 0, 1)
+      v.passo = 0
+      if v.est == "anda" then
+        if v.pasta <= 0 then
+          local ng, pronto = virar(v.g, v.ag, dt * 1.1)
+          if not vaca_pode(v, v.x, v.z, ng, limites) then
+            vaca_descansa(v, false)
+          elseif not pronto then
+            v.g = ng
+            v.fase = v.fase + dt
+            v.passo = math.sin(v.fase * 5) * 0.5
+          else
+            v.g = ng
+            local dx, dz = v.ax - v.x, v.az - v.z
+            local d = math.sqrt(dx * dx + dz * dz)
+            local p = math.min(d, v.velo * dt)
+            if d < 0.05 then
+              vaca_descansa(v, sorte(v) < 0.65)
             else
-              v.g = ng
-              local dx, dz = v.ax - v.x, v.az - v.z
-              local d = math.sqrt(dx * dx + dz * dz)
-              local p = math.min(d, v.velo * dt)
-              if d < 0.05 then
-                vaca_descansa(v, sorte(v) < 0.65)
+              local nx, nz = v.x + dx / d * p, v.z + dz / d * p
+              if vaca_pode(v, nx, nz, v.g, limites) then
+                v.x, v.z = nx, nz
+                v.fase = v.fase + dt
+                v.passo = math.sin(v.fase * (5 + v.velo * 6))
               else
-                local nx, nz = v.x + dx / d * p, v.z + dz / d * p
-                if vaca_pode(v, nx, nz, v.g, limites) then
-                  v.x, v.z = nx, nz
-                  v.fase = v.fase + dt
-                  v.passo = math.sin(v.fase * (5 + v.velo * 6))
-                else
-                  vaca_descansa(v, false)
-                end
+                vaca_descansa(v, false)
               end
             end
           end
-        else
-          v.t = v.t - dt
-          if v.t <= 0 and not pensou then
-            pensou = true
-            if v.tentativa or v.est == "pasta" or sorte(v) < 0.6 then vaca_escolhe_destino(v, limites)
-            else vaca_descansa(v, true) end
-          end
+        end
+      else
+        v.t = v.t - dt
+        if v.t <= 0 and not pensou then
+          pensou = true
+          if v.tentativa or v.est == "pasta" or sorte(v) < 0.6 then vaca_escolhe_destino(v, limites)
+          else vaca_descansa(v, true) end
         end
       end
     end
@@ -1214,7 +1206,7 @@ local function fazenda(e)
     grupo(id)
     local a = M.vacas and M.vacas[i]
     if a then
-      -- de fazenda para o grupo da própria vaca, que o editor pode ter movido ou girado
+      -- de fazenda para o grupo da própria vaca, que o jogador pode ter movido
       local wx, wz = L.t("fazenda", a.x, a.z)
       local px, pz = L.base(id, wx, wz)
       -- mastigando: a cabeça sobe e desce um pouco, cada vaca em seu tempo
@@ -1337,7 +1329,7 @@ local function circulo(e)
   casca_sala("circulo", x0, x1, z0, z1, o, { piso1 = "#39344e", piso2 = "#322d46", parede = "#2c2838", parede_lado = "#322e40", rodape = "#54497a",
     viga = "#1f1c29", folha = "#2a2030", acento = VIOLETA })
   faixa_fundo("circulo", x0, x1, z0 + 0.03, 1.05 * o, 0.05, 0.05, VIOLETA, 1.2)
-  -- o círculo em si é um objeto: anda no editor, os pilares acompanham
+  -- o círculo em si é um objeto: anda com a sala, os pilares acompanham
   grupo("circulo")
   local cx, cz = CIRC_X, CIRC_Z
   cilindro(cx, 0, cz, 3.3, 0.08, PEDRA_ESC)
@@ -1504,8 +1496,6 @@ function M.desenhar_botoes_andar()
     local ativo = n == L.andar_ativo
     U.botao("andar_" .. n, 8, y, a, a, curto[n], { cor = ativo and cor.ouro or "#21150ee8", cor_texto = ativo and cor.texto_ouro or cor.texto, tam = 18 }, function()
       L.mudar_andar(n)
-      local E = package.loaded["editor"]
-      if E then E.sel = nil end
     end)
     y = y + a + 6
   end
@@ -1643,7 +1633,7 @@ local function garcom(g)
 end
 
 -- Ponto do cozinheiro (nas coordenadas de origem dele) e para onde olha, em cada posto.
--- Vêm do próprio móvel, para acompanhar o que for movido no editor.
+-- Vêm do próprio móvel, para acompanhar o que for movido na Loja.
 local function posto_cozinheiro(qual)
   -- no fogão fica de lado, à esquerda da panela: de frente ele a esconderia da câmera
   local id, px, pz, ox, oz = "fogao", 13.0, -3.25, 13.7, -3.95
@@ -1667,15 +1657,6 @@ function M.mover_cozinheiro(dt)
     M.cozinheiro = c
   end
   c.andando, c.fazendo = false, nil
-  if editando() then
-    -- na edição ele fica no lugar que o editor mostra e deixa selecionar
-    c.parado = true
-    return
-  end
-  if c.parado then
-    c.parado = false
-    c.x, c.z = posto_cozinheiro(c.posto)
-  end
   if c.posto == "mesa" and L.oculto("mesa_preparo") then c.posto, c.t = "fogao", 5 end
   local ax, az, ag = posto_cozinheiro(c.posto)
   local dx, dz = ax - c.x, az - c.z
@@ -1730,7 +1711,7 @@ local function equipe_fixa()
   if J.ef("cozinheiro") > 0 and L.andar_de("cozinha") == L.andar_ativo then
     local c = M.cozinheiro
     local x, z, giro = 14, -2.5, math.pi
-    if c and not c.parado then x, z, giro = c.x, c.z, c.giro end
+    if c then x, z, giro = c.x, c.z, c.giro end
     local fazendo = c and c.fazendo
     local mao
     if fazendo == "fogao" then mao = 0.26 + math.sin(M.tempo * 4) * 0.02
@@ -1769,7 +1750,7 @@ local function poeira_briga(p)
   end
 end
 
--- Itens acrescentados no editor
+-- Decoração comprada na Loja
 local function extras()
   for _, o in ipairs(L.OBJETOS) do
     if o.extra then

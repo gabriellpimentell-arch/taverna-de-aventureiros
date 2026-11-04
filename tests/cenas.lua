@@ -84,56 +84,20 @@ local passos = {
   { 2, function() local L = require("layout"); L.mudar_tamanho("jardim_l", 3); L.mudar_tamanho("jardim_p", 2); L.mudar_tamanho("cerv_l", 2); L.mudar_tamanho("circ_p", 2) end, "14b_salas_maiores" },
   { 0.5, function() require("layout").restaurar() end, "14c_salas_normais" },
   -- blocos: as salas nos quatro lados da taverna. Conferir: nada escondido, nada sobreposto.
-  { 1.2, function() local L = require("layout"); J.previa = true; L.restaurar(); local _, xb, za, zb = L.salao(); local xa = select(1, L.salao())
-      assert(L.mover_sala("circulo", xa - 5.5, za)); assert(L.mover_sala("cervejaria", xa, za - 9.2)); J.previa = false; M.iniciar() end, "30_atras_e_esquerda" },
-  { 1.2, function() local L = require("layout"); local xa, _, za, zb = L.salao(); J.previa = true; assert(L.mover_sala("caminho", xa - 22, za)); assert(L.mover_sala("jardim", xa - 8, zb + 0.5)); assert(L.mover_sala("fazenda", xa + 19, zb + 0.5)); assert(L.mover_sala("pomar", xa + 9, zb + 0.5)); assert(L.mover_sala("cozinha", xa + 3, zb)); J.previa = false; M.iniciar() end, "31_frente" },
+  { 1.2, function() local L = require("layout"); L.restaurar(); local _, xb, za, zb = L.salao(); local xa = select(1, L.salao())
+      assert(L.mover_sala("circulo", xa - 5.5, za)); assert(L.mover_sala("cervejaria", xa, za - 9.2)); M.iniciar() end, "30_atras_e_esquerda" },
+  { 1.2, function() local L = require("layout"); local xa, _, za, zb = L.salao(); assert(L.mover_sala("caminho", xa - 24, za)); assert(L.mover_sala("jardim", xa - 8, zb + 0.5)); assert(L.mover_sala("fazenda", xa + 19, zb + 0.5)); assert(L.mover_sala("pomar", xa + 9, zb + 0.5)); assert(L.mover_sala("cozinha", xa + 3, zb)); M.iniciar() end, "31_frente" },
   { 1.2, function() local L = require("layout"); local ok, m = L.mover_porta("leste", 4); assert(ok, m); J.aplicar_obra(); M.iniciar() end, "32_porta_movida" },
-  { 1.2, function() local L = require("layout"); local xa, xb, za, zb = L.salao(); J.previa = true; assert(L.mover_sala("pomar", xb + 1, za - 7)); assert(L.mover_sala("jardim", xa - 13, za)); J.previa = false; M.iniciar() end, "33_externas_em_volta" },
+  { 1.2, function() local L = require("layout"); local xa, xb, za, zb = L.salao(); assert(L.mover_sala("pomar", xb + 1, za - 7)); assert(L.mover_sala("jardim", xa - 13, za)); M.iniciar() end, "33_externas_em_volta" },
   { 1.2, function() local L = require("layout"); L.restaurar(); assert(L.mudar_andar(1)); M.iniciar() end, "34_segundo_andar" },
   { 1.2, function() local L = require("layout"); assert(L.mudar_andar(-1)); M.iniciar() end, "35_subsolo" },
   { 1.2, function() local L = require("layout"); local x, z = L.vaga_sala("circulo", -1); assert(L.mover_sala("circulo", x, z, -1)); x, z = L.vaga_sala("cervejaria", -1); assert(L.mover_sala("cervejaria", x, z, -1)); M.iniciar() end, "36_subsolo_salas" },
   { 1.2, function() local L = require("layout"); L.restaurar(); L.mudar_andar(0); J.aplicar_layout(); M.iniciar() end, "37_terreo_volta" },
-  -- arrastando uma sala no editor: fantasma vermelho com o motivo escrito, depois verde
-  { 0.4, function()
-      local E, L = require("editor"), require("layout")
-      E.abrir(); E.dica = false
-      local x0, x1, z0, z1 = L.sala_mundo("circulo")
-      local px, py = motor.projetar((x0 + x1) / 2, 0, (z0 + z1) / 2)
-      T._baixo, T._mouse = motor.mouse_baixo, motor.mouse
-      motor.mouse_baixo = function() return true end
-      motor.mouse = function() return px, py end
-      E.tocar(px, py)
-      motor.mouse = function() return px - 300, py + 10 end
-    end, "38_fantasma_vermelho" },
-  { 0.4, function()
-      local E, L = require("editor"), require("layout")
-      local x0, x1, z0, z1 = L.sala_mundo("circulo")
-      local _, _, _, zb = L.salao()
-      local px, py = motor.projetar((x0 + x1) / 2, 0, zb + 7)
-      motor.mouse = function() return px, py end
-    end, "39_fantasma" },
-  { 0.3, function()
-      local E = require("editor")
-      motor.mouse_baixo, motor.mouse = T._baixo, T._mouse
-      E.soltar(true); E.fechar()
-      require("layout").restaurar(); J.aplicar_layout(); M.iniciar()
-    end, "39b_fim_fantasma" },
   { 1, function() T.modal = "config" end, "15_config" },
   { 0.5, function() T.confirmar = true end, "16_apagar" },
   { 0.5, function() T.confirmar = false; T.modal = "stats" end, "17_stats" },
   { 0.5, function() T.modal = "creditos" end, "18_creditos" },
-  { 0.5, function() T.modal = nil; require("editor").abrir() end, "18b_editor" },
-  { 0.5, function() local E = require("editor"); E.dica = false; E.sel = "mesa2"; E.mover_para("mesa2", 1.5, -0.5) end, "18c_editor_mesa" },
-  { 0.5, function() require("editor").sel = "barril1" end, "18d_editor_removivel" },
-  { 0.5, function() require("editor").sel = "circulo" end, "18e_editor_sala_alcas" },
-  { 0.5, function() require("editor").sel = "tina" end, "18f_editor_item_de_sala" },
-  { 0.5, function() local E = require("editor"); E.sel = nil; E.painel = "adicionar" end, "18g_editor_adicionar" },
-  { 0.5, function() local E = require("editor"); E.painel = nil; E.adicionar("planta") end, "18h_editor_novo" },
-  { 0.5, function() local E = require("editor"); E.excluir("barril2"); E.excluir("carga"); E.sel = nil; E.painel = "excluidos" end, "18i_editor_excluidos" },
-  { 0.5, function() local E = require("editor"); E.painel = "mais"; E.confirmar = true end, "18j_editor_mais" },
-  { 1.5, function() local E = require("editor"); local L = require("layout"); E.painel, E.confirmar = nil, false; L.mudar_tamanho("dir", 6); L.mudar_tamanho("frente", 4); require("jogo").aplicar_visual() end, "18k_editor_maior" },
-  { 0.5, function() local E = require("editor"); local L = require("layout"); L.restaurar(); E.fechar() end, "18l_editor_fim" },
-  { 0.4, function() J.fofoca_conta = 11; J.chamar_menestrel() end, "18h_menestrel_entra" },
+  { 0.4, function() T.modal = nil; J.fofoca_conta = 11; J.chamar_menestrel() end, "18h_menestrel_entra" },
   { 7, function() end, "18i_menestrel_banner" },
   { 0.4, function() J.noticia = J.NOTICIAS[6] end, "18j_noticia" },
   { 0.3, function() J.noticia = nil end, "18k_fim" },

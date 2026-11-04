@@ -1,16 +1,15 @@
 -- =============================================================================
 --  POSIÇÕES DOS OBJETOS
---  Guarda quanto cada objeto foi movido no modo de edição. Regras (mesas, rotas,
---  colisões) e desenho usam estes dados, então tudo acompanha o que você mover.
+--  Guarda quanto cada objeto foi movido pela Loja. Regras (mesas, rotas, colisões)
+--  e desenho usam estes dados, então tudo acompanha o que o jogador mover.
 -- =============================================================================
 
 local util = require("util")
 
 local L = {}
 
--- cat: categoria na lista do editor. pai: o objeto acompanha outro objeto ou uma
+-- cat: de que parte da taverna o objeto é. pai: o objeto acompanha outro objeto ou uma
 -- parede ("@fundo", "@oeste", "@leste", "@frente", "@canto") quando a taverna muda de tamanho.
-L.CATEGORIAS = { "Tamanho", "Salas", "Extras", "Móveis", "Balcão", "Paredes", "Decoração", "Áreas", "Jardim", "Pomar", "Fazenda", "Cozinha", "Cervejaria", "Círculo", "Segundo andar", "Subsolo", "Quartos", "Guilda" }
 L.OBJETOS = {}
 L.POR_ID = {}
 local function ob(id, nome, x, z, cat, pai)
@@ -129,7 +128,7 @@ ob("tapete_cima", "Passadeira", 0, 0.1, "Segundo andar", "@hall_cima")
 ob("escada_baixo", "Escada do subsolo", -4.3, -3.6, "Subsolo", "@hall_baixo")
 ob("barris_baixo", "Barris do subsolo", 4.8, -3.6, "Subsolo", "@hall_baixo")
 
--- a taverna inteira só entra pelo botão do editor: nunca rouba o toque do chão
+-- a taverna inteira não está na lista: nunca rouba o toque do chão
 L.POR_ID.taverna = { id = "taverna", nome = "Taverna inteira", x = 0, z = 0, cat = "Salas" }
 
 -- metros acrescentados em cada lado do salão
@@ -261,9 +260,6 @@ local function assinatura()
   if L.andar_existe(1) then v = v + bit end
   bit = bit * 2
   if L.andar_existe(-1) then v = v + bit end
-  bit = bit * 2
-  local J = package.loaded.jogo
-  if J and J.previa then v = v + bit end
   return v
 end
 
@@ -646,7 +642,7 @@ end
 local function porta_foge()
   local lado, t = L.pos_porta()
   if not L.porta_parede then
-    -- porta antiga, solta no editor: só foge se ainda estiver na parede de origem e for coberta
+    -- porta de layout antigo, solta no salão: só foge se ainda estiver na parede de origem e for coberta
     local _, _, wx = L.pos_porta()
     local x0 = L.sala_mundo("taverna")
     if math.abs(wx - x0) > 1 or (L.dados.porta and L.dados.porta.g ~= 0) then return end
@@ -837,22 +833,12 @@ function L.vaga_sala(id, andar)
 end
 
 -- Dá lugar a quem abriu e resolve o que ficou errado. O save de cada sala continua valendo.
-local function aberta_de_verdade(id)
-  local J = package.loaded.jogo
-  if not (J and J.previa) then return L.aberta(id) end
-  local p = J.previa
-  J.previa = false
-  local r = L.aberta(id)
-  J.previa = p
-  return r
-end
-
 garantir = function()
   if L._em_garantir then return end
   L._em_garantir = true
   L._sig = assinatura()
   if not L.andar_existe(L.andar_ativo) then L.andar_ativo = 0 end
-  -- provisórias são refeitas: sala fechada ou só de prévia não guarda lugar
+  -- provisórias são refeitas: sala fechada não guarda lugar
   for id, p in pairs(L.blocos) do
     if p.prov then L.blocos[id] = nil end
   end
@@ -894,21 +880,19 @@ garantir = function()
     end
   end
   -- quem abriu agora entra na vaga livre
-  local real = {}
   for _, lista in ipairs({ INTERNAS, EXTERNAS }) do
     for _, b in ipairs(lista) do
       if L.aberta(b.id) and not L.blocos[b.id] then
-        real[b.id] = aberta_de_verdade(b.id)
         local andar = b.andar or 0
         local x, z = primeira_vaga(b, andar)
         local aj = L._ajuste and L._ajuste[b.id]
-        if aj and real[b.id] then
+        if aj then
           -- layout antigo: a área que o jogador tinha movido continua deslocada, se couber
           local nx, nz = r3(x + aj.x), r3(z + aj.z)
           if not bloqueio(b.id, nx, nx + largura(b), nz, nz + fundura(b), andar) then x, z = nx, nz end
           L._ajuste[b.id] = nil
         end
-        L.blocos[b.id] = { x = x, z = z, andar = andar, prov = not real[b.id] or nil }
+        L.blocos[b.id] = { x = x, z = z, andar = andar }
         ASSENTADAS[b.id] = true
       end
     end
@@ -1156,7 +1140,7 @@ function L.mudar_tamanho(lado, delta)
   for _, o in ipairs(L.OBJETOS) do L.limitar(o.id) end
 end
 
--- Alças do editor: uma por lado redimensionável, com x e z no centro da borda, no mundo.
+-- Alças da Loja: uma por lado redimensionável, com x e z no centro da borda, no mundo.
 -- Puxar 1 m no sentido de `sinal` equivale a L.mudar_tamanho(chave, 1).
 function L.paredes()
   local xa, xb, za, zb = L.salao()
@@ -1304,7 +1288,7 @@ function L.carregar()
   aplicar_tabela(util.desserializar(motor.layout_carregar()))
 end
 
--- Itens que o jogador acrescenta pelo editor: entram como objetos comuns da lista
+-- Decoração que o jogador compra na Loja: entra como objeto comum da lista
 L.TIPOS_EXTRAS = {
   barril = { nome = "Barril", raio = 0.43 },
   caixote = { nome = "Caixote", raio = 0.45 },
@@ -1358,7 +1342,7 @@ end
 
 -- O que a árvore de habilidades constrói não pode ser excluído: só movido
 local FIXOS = { mesa = true, balcao = true, fogao = true, cozinheiro = true, bardo = true, barraca = true, estantes = true,
-  quadro = true, porta = true, palco = true, jardim = true, cervejaria = true, circulo = true, quartos = true,
+  quadro = true, porta = true, palco = true, jardim = true, caminho = true, cervejaria = true, circulo = true, quartos = true,
   cozinha = true, pomar = true, fazenda = true, celeiro = true, canteiros = true,
   taverna = true, quartos_sala = true, sala_guilda = true, alcapao = true }
 -- móveis dos andares extras vêm junto com o andar comprado
@@ -1379,16 +1363,12 @@ function L.oculto(id)
   return d ~= nil and d.oculto == true
 end
 
--- Exclui: item novo some de vez; item original fica escondido e pode voltar
+-- Exclui: decoração comprada some de vez; layout antigo ainda pode trazer item original escondido
 function L.excluir(id)
   if not L.removivel(id) then return false end
   if L.POR_ID[id].extra then tirar_extra(id)
   else L.de(id).oculto = true end
   return true
-end
-
-function L.devolver(id)
-  if L.dados[id] then L.dados[id].oculto = nil end
 end
 
 function L.restaurar(id)
@@ -1438,16 +1418,7 @@ function L.lista_extras()
   return l
 end
 
-function L.texto()
-  local t = {}
-  for id, d in pairs(L.dados) do t[id] = d end
-  t._tamanho = L.tamanho
-  t._extras = L.lista_extras()
-  L.gravar_blocos(t)
-  return util.serializar(t)
-end
-
--- só guarda o que difere das posições oficiais: senão abrir o editor congelaria as de hoje para sempre
+-- só guarda o que difere das posições oficiais: senão salvar congelaria as de hoje para sempre
 function L.salvar()
   local padrao, editado = require("layout_padrao"), {}
   for id, d in pairs(L.dados) do
