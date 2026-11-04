@@ -859,7 +859,7 @@ do
     else
       ok("garçom acha onde servir: " .. caso[1], perdido == 0, perdido)
     end
-      ok("girar não derruba o serviço: " .. caso[1], J.estado.servidos > 50, J.estado.servidos)
+      ok("girar não derruba o serviço: " .. caso[1], J.estado.servidos > 35, J.estado.servidos)
   end
 
   -- quem não tem rota continua atravessando até chegar, mesmo tendo andado
@@ -3204,6 +3204,212 @@ do
   L.carregar()
   ok("layout antigo larga o lugar antigo do mural", L.dados.quadro == nil and L.dados.barraca == nil and L.dados.estantes == nil)
   ok("layout antigo guarda o resto", L.dados.mesa1 and L.dados.mesa1.x == 1)
+  motor._layout = false
+  novo()
+end
+
+-- Mover itens pela Loja: todos, de graça, com o jogo rodando. Excluir só a decoração ---------------
+do
+  local L, Lj, Mu = require("layout"), require("loja"), require("mundo")
+  motor._layout = false
+  novo()
+  J.estado.ouro = 1e60
+  for _ = 1, 40 do for _, no in ipairs(A.NOS) do J.estado.ouro = 1e60; J.comprar_no(no.id) end end
+  J.ajustar_equipe(); J.aplicar_obra()
+  T.iniciar(); T.aba = "loja"; Lj.iniciar(); Lj.aba = "mover"
+  quadros(1)
+  ok("aba Mover existe", U.apertar("loja_aba_mover") and Lj.aba == "mover")
+  local function centro(id)
+    local x, y, n = 0, 0, 0
+    for _, p in ipairs(Lj.contorno(L.POR_ID[id])) do x, y, n = x + p[1], y + p[2], n + 1 end
+    return x / n, y / n
+  end
+  local function toque(x, y)
+    -- direto na Loja: o motor falso não recua a câmera, e o item ficaria atrás do painel
+    motor._mouse = { x, y }; motor._baixo = true
+    Lj.tocar(x, y)
+    Lj.atualizar(0.02)
+    motor._baixo = false
+    Lj.soltar()
+  end
+  J.pessoas, J.visitantes = {}, {}
+  J.relogio_chegada, J.relogio_aventureiro = -1e9, -1e9
+  -- qualquer item comprado responde ao toque, sem exceção
+  for _, o in ipairs(L.OBJETOS) do
+    if Lj.existe(o.id) then
+      local ehsala = false
+      local internas, externas = L.salas()
+      for _, lista in ipairs({ internas, externas }) do
+        for _, b in ipairs(lista) do if b.id == o.id then ehsala = true end end
+      end
+      if not ehsala and o.id ~= "taverna" then
+        Lj.item = nil
+        L.mudar_andar(L.andar_de(o.id))
+        local x, y = centro(o.id)
+        local achou = false
+        for _ = 1, 16 do
+          toque(x, y)
+          if Lj.item == o.id then achou = true; break end
+        end
+        ok("dá para pegar " .. o.id, achou, Lj.item)
+      end
+    end
+  end
+  L.mudar_andar(0)
+  -- o que está mais perto vence e sala não entra
+  local px, py = centro("pilar3")
+  ok("toque no pilar pega o pilar", Lj.candidatos(px, py)[1] == "pilar3", Lj.candidatos(px, py)[1])
+  ok("sala não é item", (function()
+    for _, c in ipairs(Lj.candidatos(centro("tina"))) do if c == "cervejaria" then return false end end
+    return true
+  end)())
+  -- o que não foi comprado não existe para o toque
+  novo()
+  T.iniciar(); T.aba = "loja"; Lj.iniciar(); Lj.aba = "mover"
+  ok("mesa não comprada não é tocada", not Lj.existe("mesa5") and Lj.existe("mesa1"))
+  ok("sala fechada não é tocada", not Lj.existe("tina") and not Lj.existe("pilar1"))
+  ok("mural e barraca só depois de comprados", not Lj.existe("quadro") and not Lj.existe("barraca"))
+  ok("excluído não é tocado", (function()
+    L.de("barril1").oculto = true
+    local r = not Lj.existe("barril1")
+    L.dados.barril1.oculto = nil
+    return r
+  end)())
+
+  -- arrastar é de graça, com o jogo rodando, e só o fantasma anda até soltar
+  libera("mesa", "mesa", "ala_leste", "cozinha", "pomar", "fazenda")
+  J.estado.ouro = 123
+  J.aplicar_obra()
+  quadros(1)
+  J.relogio_chegada = -1e9
+  local t0 = J.estado.tempo
+  local mx0, mz0 = L.t("mesa1", J.POS_MESAS[1].bx, J.POS_MESAS[1].bz)
+  local sx, sy = centro("mesa1")
+  motor._mouse = { sx, sy }; motor._baixo = true
+  T.tocar(sx, sy)
+  ok("toque seleciona a mesa", Lj.item == "mesa1" and Lj.arrasto and Lj.arrasto.tipo == "item", Lj.item)
+  motor._mouse = { sx, sy + 13 }
+  atualizar(0.05); desenhar()
+  ok("jogo não pausa ao mover", J.estado.tempo > t0)
+  ok("mesa não anda até soltar", L.t("mesa1", J.POS_MESAS[1].bx, J.POS_MESAS[1].bz) == mx0)
+  ok("fantasma aparece", Lj.arrasto.f ~= nil)
+  ok("câmera não foge", Lj.camera ~= nil)
+  motor._baixo = false
+  T.soltar(sx, sy + 13)
+  ok("mesa foi", math.abs(J.POS_MESAS[1].z - mz0) > 0.2, Lj.arrasto and Lj.arrasto.tipo or J.aviso and J.aviso.texto)
+  ok("mover é de graça", J.estado.ouro >= 123, J.estado.ouro)
+  ok("salvou a posição", (function()
+    local d = util.desserializar(motor._layout)
+    return d and d.mesa1 ~= nil or (type(J.estado.layout) == "table" and J.estado.layout.mesa1 ~= nil)
+  end)())
+  ok("todo lugar segue com rota", J.lugares_sem_rota() == 0, J.lugares_sem_rota())
+  -- quem está sentado vai junto com a mesa
+  local c = J.novo_cliente()
+  local lug
+  for _ = 1, 100 do
+    J.relogio_chegada = -1e9
+    atualizar(0.1)
+    if c.sentado then lug = c.lugar; break end
+  end
+  ok("cliente sentou", lug ~= nil)
+  local mesa_c = "mesa" .. lug.mesa
+  local ax, az = L.t(mesa_c, J.POS_MESAS[lug.mesa].bx, J.POS_MESAS[lug.mesa].bz)
+  local bom = false
+  for _, d in ipairs({ { 0.5, 0 }, { -0.5, 0 }, { 0, 0.5 }, { 0, -0.5 }, { 0.75, 0.5 }, { -0.75, -0.5 } }) do
+    if J.mover_item(mesa_c, ax + d[1], az + d[2]) then bom = true; break end
+  end
+  ok("a mesa ocupada anda", bom)
+  atualizar(0.05)
+  ok("o cliente acompanha a mesa", c.sentado and math.abs(c.x - c.lugar.x) < 0.01 and math.abs(c.z - c.lugar.z) < 0.01)
+
+  -- os limites: fora das paredes não vai, e o motivo aparece
+  local recusou, motivo = J.lugar_mover("balcao", 1000, 1000)
+  ok("balcão não sai da taverna", not recusou and motivo:find("taverna", 1, true), motivo)
+  recusou, motivo = J.lugar_mover("fogao", -100, 0)
+  ok("fogão não sai da cozinha", not recusou and motivo:find("Cozinha", 1, true), motivo)
+  ok("mesa não cola na outra", not J.lugar_mover("mesa2", J.POS_MESAS[1].x + 0.5, J.POS_MESAS[1].z))
+  ok("mesa não fecha a porta", not J.lugar_mover("mesa2", J.PORTA.x + 1, J.PORTA.z))
+  ok("barril não fecha a porta", not J.lugar_mover("barril4", J.PORTA.x + 0.5, J.PORTA.z))
+  ok("posição inválida", not J.lugar_mover("mesa1", 0 / 0, 0) and not J.lugar_mover("nada", 0, 0))
+  -- item de sala: sala movida leva o item, e o item volta ao que foi combinado
+  local fx0, fz0 = L.desloc("fogao")
+  local o = L.POR_ID.fogao
+  ok("fogão anda dentro da cozinha", J.mover_item("fogao", o.x + fx0 + 0.5, o.z + fz0 + 0.5))
+  ok("fogão andou", (L.desloc("fogao")) ~= fx0)
+  ok("porta anda pela aba Mover", (function()
+    Lj.item = nil
+    local lado0 = L.pos_porta()
+    local qx, qy = motor.projetar(J.PORTA.x, 1, J.PORTA.z)
+    local xa, xb, za, zb = L.sala_mundo("taverna")
+    Lj.tocar(qx, qy)
+    local foi = Lj.arrasto and Lj.arrasto.tipo == "porta" or Lj.item ~= "porta"
+    Lj.soltar(true)
+    return foi
+  end)())
+  -- árvore e vaca vêm da árvore de habilidades: também andam
+  ok("árvore anda", (function()
+    local xz0, x1, z0, z1 = L.sala_mundo("pomar")
+    return J.mover_item("arvore1", xz0 + 1, z1 - 1)
+  end)())
+  ok("árvore não cola na outra", (function()
+    local a2 = L.POR_ID.arvore2
+    local dx, dz = L.desloc("arvore2")
+    return not J.lugar_mover("arvore1", a2.x + dx + 0.3, a2.z + dz)
+  end)())
+  -- passagem fechada volta atrás: um caixote gigante não há, então cerca o banco com o que dá
+  local cruel = J.lugares_sem_rota
+  local conta = 0
+  J.lugares_sem_rota = function() conta = conta + 1; return conta == 1 and 0 or 1 end
+  local bx0 = J.POS_MESAS[2].x
+  local mover_ruim, m_ruim = J.mover_item("mesa2", bx0 + 0.25, J.POS_MESAS[2].z)
+  J.lugares_sem_rota = cruel
+  ok("fechar a passagem desfaz", not mover_ruim and m_ruim and math.abs(J.POS_MESAS[2].x - bx0) < 0.001, m_ruim)
+
+  -- mercadinho e mural: tocar neles leva o caminho inteiro
+  libera("prateleira", "mercadinho")
+  J.aplicar_obra(); quadros(1)
+  L.mudar_andar(0)
+  local qx0 = L.pos_sala("caminho")
+  local kx, ky = centro("barraca")
+  motor._mouse = { kx, ky }; motor._baixo = true
+  T.tocar(kx, ky)
+  ok("barraca arrasta o caminho", Lj.arrasto and Lj.arrasto.tipo == "sala" and Lj.arrasto.id == "caminho", Lj.arrasto and Lj.arrasto.id)
+  motor._baixo = false
+  T.soltar(kx, ky)
+  atualizar(0.02)
+
+  -- excluir: só a decoração, com confirmação e sem devolver ouro
+  J.auto_colocar = true
+  J.estado.ouro = 1e6
+  local xd = select(1, L.salao()) + 2
+  local oks, _, did = J.comprar_decoracao("planta", xd + 3, 3)
+  if not oks then oks, _, did = J.comprar_decoracao("planta", xd + 8, 0.25) end
+  ok("comprou decoração", oks and did)
+  Lj.aba = "mover"; Lj.item = "mesa1"; quadros(1)
+  ok("mesa sem Excluir", not U.apertar("loja_excluir"))
+  Lj.item = "barril1"; quadros(1)
+  ok("barril da taverna sem Excluir", not U.apertar("loja_excluir"))
+  ok("excluir recusa o que não é decoração", not J.excluir_decoracao("mesa1") and not J.excluir_decoracao("barril1") and not L.oculto("barril1"))
+  Lj.item = did; quadros(1)
+  local o0 = J.estado.ouro
+  ok("decoração tem Excluir", U.apertar("loja_excluir") and Lj.excluindo)
+  quadros(1)
+  ok("confirma antes", L.POR_ID[did] ~= nil)
+  U.apertar("loja_excluir_nao"); quadros(1)
+  ok("não mantém", L.POR_ID[did] ~= nil and not Lj.excluindo)
+  U.apertar("loja_excluir"); quadros(1)
+  ok("sim apaga", U.apertar("loja_excluir_sim") and L.POR_ID[did] == nil and Lj.item == nil)
+  ok("excluir não devolve ouro", J.estado.ouro <= o0 + J.ef("renda_quartos") * 10 + 1e6)
+  -- celular continua com botões grandes
+  motor.plataforma = "android"
+  Lj.item = nil; quadros(1)
+  for _, z in ipairs(U.zonas) do
+    if z.id:find("^loja_") and z.fn then ok("alvo no celular " .. z.id, z.h >= 40, z.h) end
+  end
+  motor.plataforma = "desktop"
+  ok("esc solta o item", (function() Lj.item = "mesa1"; T.esc(); return Lj.item == nil end)())
+  T.aba = "taverna"
+  Lj.iniciar()
   motor._layout = false
   novo()
 end

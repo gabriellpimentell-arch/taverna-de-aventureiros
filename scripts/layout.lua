@@ -447,7 +447,19 @@ end
 
 function L.salas() return INTERNAS, EXTERNAS end
 
+function L.nome_sala(id)
+  return id, SALA_DE[id] and SALA_DE[id].nome or id
+end
+
 -- Em que andar o objeto (ou a sala) está
+-- A sala que carrega o objeto (ela mesma, se for sala), ou nil se ele fica no salão ou num hall
+function L.sala_do_item(id)
+  local o = L.POR_ID[id]
+  if not o then return nil end
+  local r = raiz(o)
+  return SALA_DE[r.id] and r.id or nil
+end
+
 function L.andar_de(id)
   local o = L.POR_ID[id]
   if not o then return 0 end
@@ -1336,6 +1348,12 @@ function L.limpar_extras()
   for i = #L.OBJETOS, 1, -1 do
     if L.OBJETOS[i].extra then tirar_extra(L.OBJETOS[i].id) end
   end
+end
+
+-- Decoração comprada na Loja: é a única coisa que o jogador pode excluir
+function L.decoracao(id)
+  local o = L.POR_ID[id]
+  return o ~= nil and o.extra ~= nil
 end
 
 -- O que a árvore de habilidades constrói não pode ser excluído: só movido

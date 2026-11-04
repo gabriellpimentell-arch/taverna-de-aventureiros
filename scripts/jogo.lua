@@ -732,11 +732,11 @@ function J.lugar_padrao(tipo)
   if o then return L.t(id, o.x, o.z) end
 end
 
-local function perto_de_mesa(x, z)
+local function perto_de_mesa(x, z, ignorar)
   for i = 1, J.num_mesas() do
     local m = POS_MESAS[i]
     local mx, mz = L.t(m.id, m.bx, m.bz)
-    if math.abs(mx - x) < 3.1 and math.abs(mz - z) < 1.9 then return "Mesa " .. i end
+    if m.id ~= ignorar and math.abs(mx - x) < 3.1 and math.abs(mz - z) < 1.9 then return "Mesa " .. i end
   end
 end
 
@@ -785,6 +785,83 @@ function J.lugar_item(tipo, x, z, extra)
     if d and d.raio and onde == "taverna" and Cam.bloqueado(x, z) then return nao("Tem um móvel neste lugar") end
   end
   return true, nil, x, z
+end
+
+-- Mover o que já está na cena ------------------------------------------------------------------
+
+-- quem bloqueia o chão não pode parar na frente da porta
+local CHAO = { balcao = true, lareira = true, lenha = true, prateleira = true, barril1 = true, barril2 = true, barril3 = true,
+  barril4 = true, barril5 = true, carga = true, carga_leste = true, bardo = true, quartos = true }
+
+-- Dá para levar este item até aqui? Devolve ok, motivo e o ponto no passo de 0,25 m.
+function J.lugar_mover(id, x, z)
+  if type(x) ~= "number" or type(z) ~= "number" or x ~= x or z ~= z then return false, "Posição inválida" end
+  if not L.POR_ID[id] then return false, "Item desconhecido" end
+  x, z = math.floor(x * 4 + 0.5) / 4, math.floor(z * 4 + 0.5) / 4
+  local function nao(motivo) return false, motivo, x, z end
+  local sala = L.sala_do_item(id)
+  local x0, x1, z0, z1
+  if sala then x0, x1, z0, z1 = L.sala_mundo(sala)
+  elseif L.andar_de(id) == 0 then x0, x1, z0, z1 = L.sala_mundo("taverna")
+  else x0, x1, z0, z1 = L.salao() end
+  -- móvel de parede encosta nela: meio metro de folga, como em L.limitar
+  if x < x0 - 0.5 or x > x1 + 0.5 or z < z0 - 0.5 or z > z1 + 0.55 then
+    return nao("Precisa ficar dentro " .. (sala and ("de " .. select(2, L.nome_sala(sala))) or "da taverna"))
+  end
+  if id:match("^mesa%d") then
+    if x < x0 + 1.6 or x > x1 - 1.6 or z < z0 + 0.9 or z > z1 - 0.9 then return nao("Colada na parede") end
+    local q = perto_de_mesa(x, z, id)
+    if q then return nao("Muito perto da " .. q) end
+    if util.distancia(x, z, J.PORTA.x, J.PORTA.z) < 2 then return nao("Bloquearia a porta") end
+  elseif id:match("^arvore%d") then
+    for i = 1, J.ef("frutas") + 2 do
+      local a = "arvore" .. i
+      if a ~= id then
+        local ax, az = L.t(a, L.POR_ID[a].x, L.POR_ID[a].z)
+        if util.distancia(x, z, ax, az) < 1.2 then return nao("Muito perto de outra árvore") end
+      end
+    end
+  elseif CHAO[id] or (L.decoracao(id) and L.TIPOS_EXTRAS[L.POR_ID[id].extra].raio) then
+    if not sala and util.distancia(x, z, J.PORTA.x, J.PORTA.z) < 1.5 then return nao("Bloquearia a porta") end
+  end
+  return true, nil, x, z
+end
+
+-- Leva o item para o ponto, de graça e com o jogo rodando. Quem fechou a passagem até um lugar volta atrás.
+function J.mover_item(id, x, z)
+  local ok, motivo, nx, nz = J.lugar_mover(id, x, z)
+  if not ok then return false, motivo end
+  local antes = J.lugares_sem_rota()
+  local o = L.POR_ID[id]
+  local d0, extra0 = L.dados[id], o.extra and { x = o.x, z = o.z } or nil
+  if d0 then d0 = { x = d0.x, z = d0.z, y = d0.y, g = d0.g, oculto = d0.oculto, orig = d0.orig } end
+  L.colocar(id, nx, nz)
+  L.limitar(id)
+  L.limitar_carregados(id)
+  J.aplicar_visual()
+  J.montar_mapa()
+  if J.lugares_sem_rota() > antes then
+    L.dados[id] = d0
+    L.limitar_carregados(id)
+    J.aplicar_visual()
+    J.montar_mapa()
+    return false, "Fecharia a passagem até um lugar"
+  end
+  L.versao = L.versao + 1
+  J.aplicar_obra()
+  L.salvar()
+  J.salvar()
+  return true
+end
+
+-- Excluir só vale para decoração: o resto foi comprado na árvore e não se perde
+function J.excluir_decoracao(id)
+  if not L.decoracao(id) then return false, "Só a decoração pode ser excluída" end
+  L.excluir(id)
+  J.montar_mapa()
+  L.salvar()
+  J.salvar()
+  return true
 end
 
 -- depois de pôr algo: quem conta muda, e a próxima abertura já encontra o jogo salvo

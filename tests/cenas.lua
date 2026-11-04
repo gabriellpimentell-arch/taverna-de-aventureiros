@@ -37,7 +37,7 @@ local passos = {
   -- Loja com o jogo rodando: jogo novo com colocação manual. Conferir: painel à direita, fantasma, etiqueta, selo.
   { 1.2, function()
       local S = require("saves"); J.auto_colocar = false; S.novo("jogo2.sav"); T.iniciar(); J.noticia = nil
-      comprar_tudo_ate({ "mesa", "mesa", "garcom", "cozinha", "cervejaria" }); J.estado.ouro = 900; J.estado.mantimentos.comida = 20; J.estado.mantimentos.bebida = 20
+      comprar_tudo_ate({ "mesa", "mesa", "garcom", "cozinha", "cervejaria", "prateleira", "mercadinho" }); J.estado.ouro = 900; J.estado.mantimentos.comida = 20; J.estado.mantimentos.bebida = 20
       T.aba = "loja" end, "40_loja_itens" },
   { 0.3, function() Lj().colocar_sala("cozinha") end, "41_colocar_sala_verde" },
   { 0.3, function() local c = Lj().colocando; c.x = c.x - 40 end, "42_colocar_sala_vermelha" },
@@ -55,6 +55,12 @@ local passos = {
   { 0.3, function() largar(true); Lj().selecionar("porta"); local px, py = 480, 300; segurar(px, py); T.tocar(px, py)
       local L = require("layout"); local x0, x1, z0, z1 = L.sala_mundo("taverna"); local qx, qy = motor.projetar((x0 + x1) / 2 - 2, 0, z1 + 0.5); mover(qx, qy) end, "50_porta" },
   { 0.3, function() largar(true); Lj().iniciar(); T.aba = "loja"; Lj().aba = "itens"; comprar_tudo_ate({ "mesa", "mesa", "balcao", "quartos", "segundo_andar" }) end, "51_itens_varios" },
+  -- aba Mover: item selecionado, fantasma verde e vermelho, decoração com Excluir
+  { 0.4, function() Lj().aba = "mover"; Lj().item = "balcao" end, "53_mover_selecionado" },
+  { 0.3, function() local L = require("layout"); local o, dx, dz = L.POR_ID.balcao, L.desloc("balcao"); local px, py = motor.projetar(o.x + dx, 0.5, o.z + dz)
+      segurar(px, py); T.tocar(px, py); mover(px - 40, py + 50) end, "54_mover_fantasma" },
+  { 0.3, function() local a = Lj().arrasto; mover(a.sx + 2000, a.sy) end, "55_mover_fantasma_fora" },
+  { 0.3, function() largar(true); J.estado.ouro = 5000; local x0, x1, z0, z1 = require("layout").sala_mundo("taverna"); local _, _, id = J.comprar_decoracao("barril", x0 + 3, z1 - 1); Lj().item = id end, "56_mover_decoracao" },
   { 0.3, function() T.aba = "taverna"; J.auto_colocar = true; require("layout").restaurar(); M.iniciar() end, "52_fim_loja" },
   { 0.2, function() local S = require("saves"); S.novo("jogo3.sav"); T.iniciar(); J.noticia = nil end, "00d_entrou" },
   { 3, function() end, "01_inicio" },
