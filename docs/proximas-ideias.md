@@ -178,7 +178,18 @@ Um quarto capítulo fica para o futuro.
 
 ### Área de avaliação
 
-Fora da taverna, há uma arena de treino onde os contratados tentam subir de rank enfrentando um examinador de rank maior. Ela faz parte do capítulo da guilda: é liberada depois da sala da guilda, como um dos passos dessa fase.
+Fora da taverna, há uma arena de treino onde os contratados tentam subir de rank enfrentando um examinador de rank maior. Ela faz parte do capítulo da guilda.
+
+A liberação segue a árvore de habilidades:
+
+1. O jogador compra o nó da sala da guilda na árvore.
+2. A sala fica disponível na Loja, e ele escolhe onde colocá-la.
+3. A partir daí, a área de avaliação entra entre as próximas habilidades da árvore. Ela não precisa ser o nó logo seguinte, mas depende da sala da guilda.
+4. Ao comprar esse nó, a área fica disponível na Loja, e o jogador a coloca do lado de fora.
+
+Hoje, a sala da guilda abre junto com o segundo andar. Ela precisa passar a ter um nó próprio.
+
+Como funciona o uso da área:
 
 1. O jogador escolhe um contratado e paga uma taxa.
 2. O jogo mostra a chance de vitória, baseada no poder do contratado contra o do examinador.
