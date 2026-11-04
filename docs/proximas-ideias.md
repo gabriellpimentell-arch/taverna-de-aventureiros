@@ -243,7 +243,7 @@ Os números marcados como sugestão são pontos de partida, não pedidos.
 - Os 4 são "um pré-requisito para desbloquear a invocação de herói".
 - Ele deixou com o Claude a melhor forma de introduzir: contratar um mago e evoluí-lo até virar sacerdote, ou desbloquear direto na árvore.
 
-**Sugestão do Claude, ainda sem resposta do dono:** desbloquear na árvore, sem evoluir um mago.
+**O dono aprovou** ("da forma que você falou, eu gostei mais"): desbloquear na árvore, sem evoluir um mago.
 
 1. Um nó da árvore da invocação, por exemplo "Ordem dos Sumos Sacerdotes", libera os sacerdotes.
 2. O jogador contrata os 4 um a um, cada um mais caro que o anterior.
@@ -370,10 +370,9 @@ O dono disse "gostei das ideias" sobre esta divisão. Cada parte é publicada pa
 
 ## 16. A decidir
 
-1. **Sumos sacerdotes:** falta o dono confirmar a forma sugerida na seção 10.1.
-2. **Autorização:** o dono ainda não mandou começar. Na mensagem anterior a esta, ele pediu só este documento.
-3. **Preços:** metro de obra, decoração e tudo o que for vendido na Loja ou na carroça. Os atuais são chutes iniciais e devem ser ajustados depois de jogar.
-4. **Salas em cadeia e o herdar de saves:** ficaram como limitações da entrega anterior. Uma sala que dá acesso a outra só sai depois que a outra for movida. Tamanhos e decoração ficam salvos para todos os saves, então um jogo novo herda o que foi construído. O Claude disse que o herdar é a primeira coisa que corrigiria. Sem o editor, faz sentido resolver isso junto da Parte 1.
+1. **Autorização:** o dono vai ler este documento e, se gostar, dá o aval para começar.
+2. **Preços:** metro de obra, decoração e tudo o que for vendido na Loja ou na carroça. Os atuais são chutes iniciais e devem ser ajustados depois de jogar.
+3. **Salas em cadeia e o herdar de saves:** ficaram como limitações da entrega anterior. Uma sala que dá acesso a outra só sai depois que a outra for movida. Tamanhos e decoração ficam salvos para todos os saves, então um jogo novo herda o que foi construído. O Claude disse que o herdar é a primeira coisa que corrigiria. Sem o editor, faz sentido resolver isso junto da Parte 1.
 
 ---
 
