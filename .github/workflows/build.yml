@@ -12,6 +12,11 @@ on:
       - "CMakeLists.txt"
       - ".github/workflows/**"
   workflow_dispatch:
+    inputs:
+      android:
+        description: "Gerar também o APK (o foco atual é o PC)"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -53,8 +58,10 @@ jobs:
           name: TavernaDeAventureiros-windows
           path: dist/
 
+  # Android pausado: o processo continua aqui, mas só roda quando pedido à mão.
   android:
     needs: testes
+    if: github.event_name == 'workflow_dispatch' && inputs.android
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -93,7 +100,7 @@ jobs:
 
   publicar:
     needs: [windows, android]
-    if: github.ref == 'refs/heads/main'
+    if: always() && github.ref == 'refs/heads/main' && needs.windows.result == 'success' && (needs.android.result == 'success' || needs.android.result == 'skipped')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -102,17 +109,20 @@ jobs:
         with:
           path: dist
 
+      # Atualiza só os arquivos novos: o último APK continua disponível na versão de teste.
       - name: Publicar versão de teste
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release delete teste --yes --cleanup-tag || true
-          gh release create teste \
+          gh release view teste > /dev/null 2>&1 || gh release create teste --prerelease --title "Versão de teste" --notes "Versão de teste" --target "$GITHUB_SHA"
+          gh release upload teste \
             dist/TavernaDeAventureiros-windows/TavernaDeAventureiros.exe \
             dist/TavernaDeAventureiros-windows/versao.txt \
-            dist/TavernaDeAventureiros-android/TavernaDeAventureiros.apk \
-            dist/TavernaDeAventureiros-android/pacote-m1.bin \
-            --prerelease \
-            --title "Versão de teste" \
-            --notes "Gerada automaticamente a partir do commit ${GITHUB_SHA::7}. No computador, baixe o TavernaDeAventureiros.exe. No Android, baixe o TavernaDeAventureiros.apk. Os dois se atualizam sozinhos ao abrir." \
-            --target "$GITHUB_SHA"
+            --clobber
+          if [ -d dist/TavernaDeAventureiros-android ]; then
+            gh release upload teste \
+              dist/TavernaDeAventureiros-android/TavernaDeAventureiros.apk \
+              dist/TavernaDeAventureiros-android/pacote-m1.bin \
+              --clobber
+          fi
+          gh release edit teste --notes "Commit ${GITHUB_SHA::7}. No computador, baixe o TavernaDeAventureiros.exe, que se atualiza sozinho ao abrir. O APK é de uma versão anterior: o foco atual é o PC."
