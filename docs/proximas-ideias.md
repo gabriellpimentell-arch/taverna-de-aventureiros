@@ -128,6 +128,24 @@ Só haverá três animais: vaca, porco e galinha. Cada um produz algo diferente,
 
 ## Parte 3: árvores por ambiente e receitas
 
+### Nova forma da árvore: revelar aos poucos
+
+Hoje a árvore já mostra todas as ramificações, e isso tira a surpresa. Ela passa a revelar o caminho conforme o jogador avança: no começo, quase tudo está apagado ou escondido, e comprar um nó faz surgir as ramificações seguintes.
+
+Exemplos da sequência:
+
+- Liberar a sala da guilda faz aparecer o ramo com a área de avaliação.
+- Liberar a primeira fazenda faz aparecer a fazenda de árvores frutíferas, e liberar essa faz aparecer a fazenda de animais.
+
+**Pesquisa obrigatória antes de produzir:** ao iniciar esta parte, usar dois agentes de pesquisa para estudar minuciosamente as árvores de habilidades de jogos incrementais. A pesquisa ainda não foi feita. Os dois devem:
+
+- Entender primeiro a ideia acima, de revelar novas ramificações só depois de liberar um nó.
+- Analisar como esses jogos escondem e revelam nós, mostram o progresso e criam vontade de ver o que vem depois.
+- Dividir o trabalho para não repetir os mesmos jogos, por exemplo um focado nos jogos e outro em como a tela da árvore é apresentada.
+- Entregar recomendações práticas para a Taverna, incluindo a árvore principal e as árvores por ambiente.
+
+O formato final da árvore só é decidido depois dessa pesquisa, e o resultado é mostrado ao dono antes de construir.
+
 ### Uma árvore para cada ambiente
 
 A árvore principal libera ambientes e funções. Cada ambiente liberado ganha uma árvore própria, o que transforma cada abertura em um novo conjunto de metas: cozinha, cervejaria, as três fazendas e a invocação.
@@ -214,7 +232,7 @@ A avaliação vira o único caminho de promoção e dá um uso claro ao dinheiro
 | --- | --- | --- |
 | 1. Base | PC, fim do editor, lado de fora, mover itens, Mestre de Obras, Loja, saves independentes | Resolve o travamento e prepara a Loja, de que as outras partes dependem |
 | 2. Produção | Carroça, fazendas, animais, fazendeiros | Cria os ingredientes das receitas |
-| 3. Árvores e receitas | Árvores por ambiente, receitas, sumos sacerdotes | Precisa dos ingredientes e rebalanceia a economia |
+| 3. Árvores e receitas | Pesquisa com dois agentes, nova forma da árvore, árvores por ambiente, receitas, sumos sacerdotes | Precisa dos ingredientes e rebalanceia a economia |
 | 4. Vida na taverna | Escada, quartos, hóspedes | Usa a compra na Loja |
 | 5. Estrutura | Capítulos, área de avaliação | Organiza o que já existe, então fica melhor no fim |
 
