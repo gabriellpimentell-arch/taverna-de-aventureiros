@@ -75,6 +75,8 @@ for _, c in ipairs(e.contratados) do
   c.fama = 500
   e.fama = e.fama + 500
 end
+for _ = 1, #C.sacerdotes do e.ouro = 1e16; J.contratar_sacerdote() end
+J.chegada_sacerdote = nil
 for _ = 1, #C.invocados do e.ouro = 1e16; J.invocar() end
 local ids = {}
 for _, c in ipairs(e.contratados) do

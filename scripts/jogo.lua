@@ -75,7 +75,8 @@ J.NOTICIAS = {
   { id = "party", titulo = "Parties!", texto = "Agora você pode juntar quatro aventureiros em uma party, um grupo mais forte que vai junto nas missões." },
   { id = "heroi", titulo = "O caminho do herói!", texto = "Agora seus contratados de rank A podem virar heróis e ganhar muito mais." },
   { id = "propaganda", titulo = "Propaganda!", texto = "Agora você pode divulgar seus heróis. A fama traz reputação, e a reputação atrai aventureiros de rank mais alto." },
-  { id = "invocacao", titulo = "O círculo de invocação!", texto = "Agora você pode construir o Círculo e invocar heróis de outro mundo, os únicos capazes de enfrentar o Lorde Demônio." },
+  { id = "invocacao", titulo = "O círculo de invocação!", texto = "Agora você pode construir o Círculo. Depois, quatro sumos sacerdotes precisam acender os pilares para invocar heróis de outro mundo, os únicos capazes de enfrentar o Lorde Demônio." },
+  { id = "ordem_sacerdotes", titulo = "A Ordem dos Sumos Sacerdotes!", texto = "Agora você pode chamar a Ordem, na árvore da Invocação, e contratar os quatro sacerdotes que acendem o círculo." },
 }
 for _, r in ipairs({ { "rank_e", "E" }, { "rank_d", "D" }, { "rank_c", "C" }, { "rank_b", "B" }, { "rank_a", "A" }, { "rank_s", "S" }, { "rank_ss", "SS" } }) do
   J.NOTICIAS[#J.NOTICIAS + 1] = { id = r[1], titulo = "Missões rank " .. r[2] .. "!", texto = "Agora você pode abrir as missões rank " .. r[2] .. ". Elas pagam muito mais do que as anteriores." }
@@ -160,6 +161,7 @@ local function estado_inicial()
     parties = {},
     prox_id = 1,
     invocados_feitos = 0,
+    sacerdotes = 0,         -- sumos sacerdotes contratados: um por pilar
     fama = 0,
     estoques = { trigo = 0, lupulo = 0, frutas = 0, carne_vaca = 0, carne_porco = 0, ovos = 0 },
     sementes = { lupulo = 0, fruta = 0 },
@@ -2419,9 +2421,38 @@ function J.invocacao_aberta() return J.ef("invocar") > 0 end
 
 function J.custo_invocar() return C.invocar_custo * C.invocar_mult ^ J.estado.invocados_feitos * J.ef("x_invocar") end
 
+-- Sumos sacerdotes: pré-requisito para invocar
+function J.ordem_liberada() return J.ef("ordem") > 0 end
+function J.num_sacerdotes() return J.estado.sacerdotes end
+function J.circulo_ativo() return J.estado.sacerdotes >= #C.sacerdotes end
+function J.custo_sacerdote() return math.floor(C.sacerdote_custo * C.sacerdote_mult ^ J.estado.sacerdotes) end
+
+function J.contratar_sacerdote()
+  local e = J.estado
+  if not J.ordem_liberada() or J.circulo_ativo() then return false end
+  local custo = J.custo_sacerdote()
+  if e.ouro < custo then return false end
+  e.ouro = e.ouro - custo
+  e.sacerdotes = e.sacerdotes + 1
+  -- só a tela anda: o relógio de cada um não vai para o save
+  J.chegada_sacerdote = J.chegada_sacerdote or {}
+  J.chegada_sacerdote[e.sacerdotes] = C.sacerdote_caminhada
+  J.avisar(C.sacerdotes[e.sacerdotes] .. " foi para o pilar " .. e.sacerdotes .. ".", 4)
+  J.som("invocar")
+  J.salvar()
+  return true
+end
+
+-- 0 = na porta da sala; 1 = no pilar. Pilar aceso = sacerdote chegou.
+function J.progresso_sacerdote(i)
+  if i > J.estado.sacerdotes then return nil end
+  local resta = J.chegada_sacerdote and J.chegada_sacerdote[i] or 0
+  return 1 - resta / C.sacerdote_caminhada
+end
+
 function J.invocar()
   local e = J.estado
-  if not J.invocacao_aberta() or e.invocados_feitos >= #C.invocados then return nil end
+  if not J.invocacao_aberta() or not J.circulo_ativo() or e.invocados_feitos >= #C.invocados then return nil end
   local custo = J.custo_invocar()
   if e.ouro < custo then return nil end
   e.ouro = e.ouro - custo
@@ -2523,6 +2554,8 @@ function J.objetivo()
       return o[2]
     end
   end
+  if J.nivel("ordem_sacerdotes") < 1 then return "Compre a Ordem dos Sumos Sacerdotes, na árvore da Invocação" end
+  if not J.circulo_ativo() then return "Contrate os sumos sacerdotes: " .. e.sacerdotes .. " de " .. #C.sacerdotes .. " pilares acesos" end
   if e.invocados_feitos < #C.invocados then return "Invoque os 4 heróis de outro mundo" end
   if not J.party_final() then return "Forme uma party com os 4 invocados" end
   if not J.pode_final() then return "Fortaleça os invocados até " .. util.formatar(C.sss.poder) .. " de poder" end
@@ -2555,6 +2588,7 @@ function J.iniciar()
   J.fofoca_conta = 0
   J.sem_caminho, J.socorros, J.relogio_preso = 0, 0, 0
   J.noticia, J.banner, J.travados, J.media_travados = nil, nil, 0, 0
+  J.chegada_sacerdote = nil
   J.espera_porta = 0
   -- o que estava comprado no save anterior não pode abrir sala no layout deste
   recalcular()
@@ -2659,6 +2693,12 @@ function J.atualizar(dt)
   atualizar_missoes(dt)
   atualizar_jardim(dt)
   atualizar_carroca(dt)
+  if J.chegada_sacerdote then
+    for i, r in pairs(J.chegada_sacerdote) do
+      r = r - dt
+      J.chegada_sacerdote[i] = r > 0 and r or nil
+    end
+  end
 
   local passiva = J.renda_passiva()
   if passiva > 0 then J.ganhar(passiva * dt) end
@@ -2757,6 +2797,11 @@ local function migrar_arvore(e, dados)
   -- árvores dos ambientes: a Loja vendia os três animais com a fazenda; continua vendendo
   if v < 5 and (tonumber(nos.fazenda) or 0) > 0 then
     nos.galinheiro, nos.chiqueiro, nos.curral = 1, 1, 1
+  end
+  -- quem já invocou ou aperfeiçoou o ritual fazia isso sem sacerdotes: o círculo já está aceso
+  if v < 5 and ((tonumber(dados.invocados_feitos) or 0) > 0 or (tonumber(nos.ritual) or 0) > 0) then
+    nos.ordem_sacerdotes = 1
+    e.sacerdotes = #C.sacerdotes
   end
   e.arvore_v = J.VERSAO_ARVORE
 end
@@ -2893,6 +2938,7 @@ function J.carregar()
   if e.fim then e.final_resta = nil end
   if e.final_resta then e.final_resta = util.limitar(e.final_resta, 0, C.sss.duracao) end
   e.invocados_feitos = util.limitar(math.floor(e.invocados_feitos), 0, #C.invocados)
+  e.sacerdotes = util.limitar(math.floor(e.sacerdotes), 0, #C.sacerdotes)
   for r, n in pairs(e.feitas_rank) do
     if type(n) ~= "number" then e.feitas_rank[r] = nil end
   end

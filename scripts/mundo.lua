@@ -1560,6 +1560,8 @@ local function cervejaria(e)
   caixa(bx + math.sin(gc) * 0.26, 0.45, bz + math.cos(gc) * 0.26, 0.42, 0.5, 0.03, "#efe2c4", gc)
 end
 
+local TIPO_SACERDOTE = { nome = "clerigo", corpo = "#efe6d2", perna = "#cbbd9c", braco = "#e2d7bf", temperamento = "sabio" }
+
 local function circulo(e)
   if e <= 0 then return end
   local t = M.tempo
@@ -1572,25 +1574,45 @@ local function circulo(e)
   -- o círculo em si é um objeto: anda com a sala, os pilares acompanham
   grupo("circulo")
   local cx, cz = CIRC_X, CIRC_Z
+  local ativo = J.circulo_ativo()
   cilindro(cx, 0, cz, 3.3, 0.08, PEDRA_ESC)
-  peca("cilindro", cx, 0.07, cz, 2.95, 0.03, 2.95, 0, VIOLETA, 0, 0, 1.2)
-  cilindro(cx, 0.09, cz, 2.7, 0.03, FUNDO_MAGIA)
-  -- hexagrama girando devagar
-  for k = 0, 5 do
-    local a = k * math.pi / 3 + t * 0.3
-    peca("caixa", cx + 0.58 * math.cos(a), 0.13, cz + 0.58 * math.sin(a), 0.08, 0.02, 2.0, -a, CIANO, 0, 0, 1.3)
+  if ativo then
+    peca("cilindro", cx, 0.07, cz, 2.95, 0.03, 2.95, 0, VIOLETA, 0, 0, 1.2)
+  else
+    cilindro(cx, 0.07, cz, 2.95, 0.03, "#3a3448")
   end
-  for i = 0, 3 do
-    local a = t * 0.6 + i * math.pi / 2
-    brilho("esfera", cx + math.cos(a) * 1.4, 0.5 + math.sin(t * 2 + i) * 0.1, cz + math.sin(a) * 1.4, 0.2, 0.2, 0.2, "#c9a7ff", 1.6)
+  cilindro(cx, 0.09, cz, 2.7, 0.03, FUNDO_MAGIA)
+  if ativo then
+    -- hexagrama girando devagar: só com os quatro pilares acesos
+    for k = 0, 5 do
+      local a = k * math.pi / 3 + t * 0.3
+      peca("caixa", cx + 0.58 * math.cos(a), 0.13, cz + 0.58 * math.sin(a), 0.08, 0.02, 2.0, -a, CIANO, 0, 0, 1.3)
+    end
+    for i = 0, 3 do
+      local a = t * 0.6 + i * math.pi / 2
+      brilho("esfera", cx + math.cos(a) * 1.4, 0.5 + math.sin(t * 2 + i) * 0.1, cz + math.sin(a) * 1.4, 0.2, 0.2, 0.2, "#c9a7ff", 1.6)
+    end
   end
   for i = 0, 3 do
     local a = i * math.pi / 2 + math.pi / 4
-    -- pilares de pedra com cristal aceso
+    -- pilares de pedra; o cristal acende quando o sacerdote chega
     grupo("pilar" .. (i + 1))
     local px, pz = cx + math.cos(a) * 2.35, cz + math.sin(a) * 1.75
     caixa(px, 0, pz, 0.36, 0.3 * e, 0.36, PEDRA)
-    peca("cone", px, 0.3 * e, pz, 0.3, 0.5 * e, 0.3, 0, CIANO, 0, 0, 1.3)
+    local prog = J.progresso_sacerdote(i + 1)
+    if prog and prog >= 1 then
+      peca("cone", px, 0.3 * e, pz, 0.3, 0.5 * e, 0.3, 0, CIANO, 0, 0, 1.3)
+    else
+      peca("cone", px, 0.3 * e, pz, 0.3, 0.5 * e, 0.3, 0, PEDRA_ESC)
+    end
+    -- o sacerdote sai do centro da parede da frente da sala e vai até o pilar
+    if prog then
+      local ox, oz = cx + (px > cx and 0.5 or -0.5), cz + 2.1
+      local fx, fz = px + (px > cx and -0.42 or 0.42), pz + 0.32
+      local bx, bz = ox + (fx - ox) * prog, oz + (fz - oz) * prog
+      M.boneco({ x = bx, z = bz, giro = math.atan(fx - ox, fz - oz), fase = t, andando = prog < 1,
+        pele = "#e0ac7e", tipo = TIPO_SACERDOTE })
+    end
   end
 end
 

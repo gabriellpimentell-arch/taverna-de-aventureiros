@@ -117,6 +117,7 @@ local function comprar_tudo(ouro)
       if not J.comprar_unidade(tipo) then break end
     end
   end
+  for _ = 1, 4 do J.estado.ouro = ouro or 1e60; J.contratar_sacerdote() end
   J.estado.ouro = ouro or 1e60
 end
 
@@ -639,6 +640,7 @@ do
   end
 end
 for _ = 1, 8 do J.contratar() end
+for _ = 1, 4 do J.estado.ouro = 1e60; J.contratar_sacerdote() end
 for _ = 1, 4 do J.invocar() end
 for _, id in ipairs({ "taverna", "loja", "arvore", "missoes", "mercadinho", "producao", "aventureiros", "invocacao" }) do
   T.aba = id
@@ -3903,6 +3905,60 @@ do
   motor._save = '{ ["versao"] = 2, ["receitas"] = "estragado" }'
   iniciar()
   ok("save estragado não trava", #J.estado.receitas.cardapio == 0)
+  motor._save = false
+  novo()
+end
+
+-- Sumos sacerdotes -----------------------------------------------------------------------------------
+do
+  novo()
+  local e = J.estado
+  ok("Ordem fica na árvore da invocação", A.POR_ID.ordem_sacerdotes.arvore == "invocacao")
+  e.ouro = 1e30
+  ok("sem a Ordem não contrata", not J.contratar_sacerdote() and e.sacerdotes == 0)
+  libera_no("invocacao")
+  e.ouro = 1e30
+  ok("círculo sem sacerdotes não invoca", J.invocacao_aberta() and not J.invocar() and e.invocados_feitos == 0)
+  T.iniciar(); T.aba = "invocacao"; desenhar()
+  ok("sem a Ordem a aba leva à árvore", U.apertar("ir_ordem") and T.aba == "arvore" and T.arv.arvore == "invocacao")
+  libera_no("ordem_sacerdotes")
+  e.ouro = 0
+  ok("sem ouro não contrata", not J.contratar_sacerdote())
+  local preco_ant = 0
+  T.aba = "invocacao"
+  for i = 1, 4 do
+    local p = J.custo_sacerdote()
+    ok("cada um mais caro: " .. i, p > preco_ant); preco_ant = p
+    e.ouro = p
+    ok("não invoca antes do quarto", not J.invocar())
+    desenhar()
+    ok("contrata pela aba: " .. i, U.apertar("contratar_sacerdote") and e.sacerdotes == i and e.ouro == 0)
+    ok("anda até o pilar", J.progresso_sacerdote(i) < 1 and not J.progresso_sacerdote(i + 1))
+    desenhar()
+    for _ = 1, 40 do J.atualizar(0.1) end
+    ok("pilar acende: " .. i, J.progresso_sacerdote(i) == 1)
+  end
+  e.ouro = 1e30
+  ok("não há quinto", not J.contratar_sacerdote() and e.sacerdotes == 4)
+  ok("com os quatro, círculo ativa e invoca", J.circulo_ativo() and J.invocar() and e.invocados_feitos == 1)
+  T.aba = "taverna"; desenhar()
+  -- migração: quem já invocou segue, com os pilares acesos; quem não invocou contrata
+  local function save_v4(extra)
+    local t = { versao = 2, arvore_v = 4, ouro = 1e30, nos = { invocacao = 1, propaganda = 1, heroi = 1, party = 1, recrutador = 1 } }
+    for k, v in pairs(extra) do t[k] = v end
+    motor._save = util.serializar(t)
+    iniciar()
+    J.offline = nil
+    return J.estado
+  end
+  local m = save_v4({ invocados_feitos = 2, contratados = { { id = 1, nome = "Akira", titulo = "Espadachim", tipo = "guerreiro", invocado = true } }, prox_id = 2 })
+  ok("save com invocados não trava", J.circulo_ativo() and J.nivel("ordem_sacerdotes") == 1 and J.invocar() and m.invocados_feitos == 3)
+  m = save_v4({ nos = { invocacao = 1, ritual = 2 } })
+  ok("save com ritual também", J.circulo_ativo() and J.nivel("ritual") == 2)
+  m = save_v4({})
+  ok("save sem invocar precisa da Ordem", not J.circulo_ativo() and J.nivel("ordem_sacerdotes") == 0 and J.estado_no(A.POR_ID.ordem_sacerdotes) == "revelado")
+  m = save_v4({ sacerdotes = 99, arvore_v = 5 })
+  ok("número estranho não passa de 4", m.sacerdotes == 4)
   motor._save = false
   novo()
 end

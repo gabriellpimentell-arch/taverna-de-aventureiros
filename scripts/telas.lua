@@ -1120,7 +1120,34 @@ end
 
 local function tela_invocacao()
   local e = J.estado
-  fundo_aba("Círculo de invocação", "Heróis de outro mundo, mais fortes que qualquer contratado. Reúna os quatro para enfrentar o Lorde Demônio.")
+  fundo_aba("Círculo de invocação", J.circulo_ativo() and "Heróis de outro mundo, mais fortes que qualquer contratado. Reúna os quatro para enfrentar o Lorde Demônio."
+    or "Quatro sumos sacerdotes, um em cada pilar, precisam acender o círculo antes da primeira invocação.")
+  if not J.circulo_ativo() then
+    -- os pilares no lugar dos heróis: cada contratação acende um
+    for i, nome in ipairs(C.sacerdotes) do
+      local x, y = AREA.x + (i - 1) * 234, AREA.y + 62
+      local aceso = i <= e.sacerdotes
+      U.painel(x, y, 222, 170, aceso and "#2c2340" or "#2a2019", aceso and "#9c78ff" or cor.carta_borda)
+      -- pilar: pedra e cristal
+      motor.retangulo(x + 99, y + 34, 24, 44, aceso and "#6c6684" or "#3d3730", 4)
+      motor.triangulo(x + 99, y + 34, x + 123, y + 34, x + 111, y + 12, aceso and "#7be0f0" or "#4a443c")
+      if aceso then
+        local g = 1 + math.sin(motor.tempo() * 3 + i) * 0.1
+        motor.anel(x + 111, y + 26, 16 * g, 18 * g, "#7be0f080")
+        motor.texto(nome, x + 111, y + 86, 16, "#c9a7ff", "centro", true)
+        motor.texto("Pilar " .. i .. " aceso", x + 111, y + 110, 14, cor.verde, "centro", true)
+      elseif i == e.sacerdotes + 1 and J.ordem_liberada() then
+        local custo = J.custo_sacerdote()
+        motor.texto(nome, x + 111, y + 86, 14, cor.texto_fraco, "centro", true)
+        U.botao("contratar_sacerdote", x + 16, y + 112, 190, 46, "Contratar", { preco = custo, ativo = e.ouro >= custo, cor = e.ouro >= custo and "#9c78ff" or nil, cor_texto = "#120c20" },
+          function() J.contratar_sacerdote() end)
+      elseif not J.ordem_liberada() and i == 1 then
+        U.botao("ir_ordem", x + 16, y + 100, 190, 46, "Abrir a árvore", { tam = 14 }, function() T.abrir_arvore("invocacao") end)
+      else
+        motor.texto("Pilar apagado", x + 111, y + 94, 14, cor.texto_fraco, "centro")
+      end
+    end
+  else
   for i, d in ipairs(C.invocados) do
     local x = AREA.x + (i - 1) * 234
     local y = AREA.y + 62
@@ -1143,6 +1170,7 @@ local function tela_invocacao()
     else
       U.cadeado(x + 111, y + 72)
     end
+  end
   end
 
   local y = AREA.y + 244

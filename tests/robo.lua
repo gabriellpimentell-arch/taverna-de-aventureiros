@@ -14,8 +14,11 @@ local function comprar_melhor()
   local em = J.estado.mantimentos
   if em and J.ef("fornecedor") < 1 and J.carroca_presente() and (em.comida < 3 or em.bebida < 3) then return false end
   local rps = math.max(J.estado.rps, 1)
-  -- na reta final, guarda ouro para invocar os heróis
-  if J.invocacao_aberta() and J.estado.invocados_feitos < 4 then return false end
+  -- na reta final, guarda ouro para os sacerdotes e para invocar os heróis
+  if J.invocacao_aberta() and J.estado.invocados_feitos < 4 then
+    if J.nivel("ordem_sacerdotes") < 1 then return J.comprar_no("ordem_sacerdotes") end
+    return false
+  end
   for _, id in ipairs(CHAVE) do
     local no = A.POR_ID[id]
     if J.nivel(id) == 0 and J.no_liberado(no) then
@@ -93,6 +96,8 @@ local function jogar_contratados()
     if J.pode_promover(c) then J.promover(c) end
   end
   if J.invocacao_aberta() then
+    -- os pilares primeiro: sem os quatro acesos, não há invocação
+    while J.contratar_sacerdote() do end
     if J.invocar() then
       -- os invocados precisam formar a party final
     end

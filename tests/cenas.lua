@@ -112,7 +112,7 @@ local passos = {
   { 1.2, function() T.aba = "taverna"; T.modal = "carroca"; J.estado.carroca.presente = true; J.estado.carroca.resta = 60 end, "66_carroca_lista_toda" },
   { 2.5, function() T.modal = nil; M.zoom_alvo = 2.4; local L = require("layout"); local x0, x1, z0, z1 = L.sala_mundo("fazenda"); M.pan_x = (x0 + x1) / 2 - M.quadro.x; M.pan_z = (z0 + z1) / 2 - M.quadro.z end, "67_animais_perto" },
   { 1.2, function() M.zoom_alvo = 1; M.pan_x, M.pan_z = 0, 0 end, "68_volta_quadro" },
-  { 1, function() T.aba = "invocacao"; J.invocar(); J.estado.ouro = 1e14; J.invocar() end, "13_invocacao" },
+  { 1, function() T.aba = "invocacao"; J.estado.ouro = 1e14; for _ = 1, 4 do J.contratar_sacerdote() end; J.chegada_sacerdote = nil; J.invocar(); J.estado.ouro = 1e14; J.invocar() end, "13_invocacao" },
   { 3, function() T.aba = "taverna"; M.zoom_alvo = 1 end, "14_tudo_aberto" },
   { 2, function() local L = require("layout"); L.mudar_tamanho("jardim_l", 3); L.mudar_tamanho("jardim_p", 2); L.mudar_tamanho("cerv_l", 2); L.mudar_tamanho("circ_p", 2) end, "14b_salas_maiores" },
   { 0.5, function() require("layout").restaurar() end, "14c_salas_normais" },

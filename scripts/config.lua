@@ -175,6 +175,11 @@ C.promover_custo_mult = 8      -- custo de virar herói = pagamento do rank atua
 C.rank_para_heroi = 6          -- A
 
 -- Invocação ------------------------------------------------------------------------------------
+-- Sumos sacerdotes: contratados um a um; cada um vai a um pilar do círculo. Com todos, o círculo ativa.
+C.sacerdote_custo = 2e8
+C.sacerdote_mult = 1.8
+C.sacerdotes = { "Irmã Odília", "Frei Anselmo", "Irmã Berenice", "Frei Tadeu" }
+C.sacerdote_caminhada = 3      -- segundos até chegar ao pilar, que então acende
 C.invocar_custo = 1.5e9
 C.invocar_mult = 3
 C.poder_invocado = 2200
