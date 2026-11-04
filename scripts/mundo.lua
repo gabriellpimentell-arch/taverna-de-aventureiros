@@ -66,6 +66,8 @@ function M.iniciar()
   M.dt_cena = 0
   M.painel, M.painel_alvo = 0, 0
   M.fazendeiro = { x = -5.7, z = 6.35, giro = 0, fase = 0, t = 0, i = 1 }
+  M.fazendeiro_arvores = { x = 1.7, z = 6.4, giro = 0, fase = 0, t = 0, i = 1 }
+  M.fazendeiro_animais = { x = 10.5, z = 7.1, giro = 0, fase = 0, t = 0, i = 1 }
   M.cozinheiro = nil
   M.vacas, M.porcos, M.galinhas = {}, {}, {}
   M.estrada_z = nil
@@ -834,6 +836,25 @@ local function area_externa(id, x0, x1, z0, z1, o, g1, g2, gc)
   cerca_com_porteira(id, x0, x1, z0, z1, o, x0 + math.min(2, (x1 - x0) / 2))
 end
 
+-- Leva o fazendeiro até (ax, az) e o deixa um tempo ali; depois passa para o próximo dos n lugares.
+-- Cada fazendeiro só recebe lugares da própria fazenda. Devolve se está andando.
+local function fazendeiro_anda(f, ax, az, n)
+  local dx, dz = ax - f.x, az - f.z
+  local d = math.sqrt(dx * dx + dz * dz)
+  if d > 0.1 then
+    f.x, f.z = f.x + dx / d * M.dt_cena * 1.6, f.z + dz / d * M.dt_cena * 1.6
+    f.giro, f.fase = math.atan(dx, dz), f.fase + M.dt_cena
+    return true
+  end
+  f.giro = math.pi
+  f.t = f.t + M.dt_cena
+  if f.t > 2.5 then
+    f.t = 0
+    f.i = f.i % n + 1
+  end
+  return false
+end
+
 local function jardim(e)
   if e <= 0 then return end
   local o = e + math.sin(e * math.pi) * 0.12
@@ -881,25 +902,11 @@ local function jardim(e)
       if cresce > 0.7 then peca("esfera", x + k * 0.3, 0.12 + a * 0.6, z + 0.1, 0.12, 0.12, 0.12, 0, trigo and "#e8c04a" or "#b9d67a") end
     end
   end
-  -- fazendeiro: anda entre os canteiros e cuida de um de cada vez
+  -- fazendeiro das plantações: anda entre os canteiros e cuida de um de cada vez
   if J.ef("fazendeiro") > 0 and n > 0 then
     local f = M.fazendeiro
     local col, lin = (f.i - 1) % 5, math.floor((f.i - 1) / 5)
-    local ax, az = -5.7 + col * 1.1, 5.6 + lin * 1.45 + 0.75
-    local dx, dz = ax - f.x, az - f.z
-    local d = math.sqrt(dx * dx + dz * dz)
-    local andando = d > 0.1
-    if andando then
-      f.x, f.z = f.x + dx / d * M.dt_cena * 1.6, f.z + dz / d * M.dt_cena * 1.6
-      f.giro, f.fase = math.atan(dx, dz), f.fase + M.dt_cena
-    else
-      f.giro = math.pi
-      f.t = f.t + M.dt_cena
-      if f.t > 2.5 then
-        f.t = 0
-        f.i = f.i % n + 1
-      end
-    end
+    local andando = fazendeiro_anda(f, -5.7 + col * 1.1, 5.6 + lin * 1.45 + 0.75, n)
     M.boneco({ x = f.x, z = f.z, giro = f.giro, fase = f.fase, andando = andando, pele = "#c68a5a", chapeu = "#c9a24a",
       tipo = { nome = "comum", corpo = "#5f7a3a", perna = "#4b3b2c", braco = "#54702f" } })
     -- enxada
@@ -1357,7 +1364,26 @@ local function pomar(e)
   caixa(x - 0.27, 0.3, z, 0.08, 0.28, 0.08, "#7b4a26")
   caixa(x + 0.27, 0.3, z, 0.08, 0.28, 0.08, "#7b4a26")
   caixa(x, 0.58, z, 0.62, 0.08, 0.08, "#7b4a26")
+  -- fazendeiro das árvores: vai de árvore em árvore, com um cesto de frutas no braço
+  if J.ef("fazendeiro_arvores") > 0 then
+    grupo("pomar")
+    local f = M.fazendeiro_arvores
+    local n = math.min(J.ef("frutas") + 2, #L.ARVORES)
+    if f.i > n then f.i = 1 end
+    local id = "arvore" .. f.i
+    local wx, wz = L.t(id, L.ARVORES[f.i][1], L.ARVORES[f.i][2])
+    local bx, bz = L.base("pomar", wx, wz)
+    local andando = fazendeiro_anda(f, util.limitar(bx, x0 + 0.5, x1 - 0.5), util.limitar(bz + 0.9, z0 + 0.5, z1 - 0.5), n)
+    M.boneco({ x = f.x, z = f.z, giro = f.giro, fase = f.fase, andando = andando, pele = "#e0ac7e", chapeu = "#8f3a2c",
+      tipo = { nome = "comum", corpo = "#a8622f", perna = "#3a3028", braco = "#94562a" } })
+    local cx, cz = f.x + 0.42 * math.cos(f.giro), f.z - 0.42 * math.sin(f.giro)
+    cilindro(cx, 0.72, cz, 0.3, 0.2, "#a87a42")
+    esfera(cx, 0.92, cz, 0.2, "#c8382e", 0.1)
+  end
 end
+
+-- onde o fazendeiro dos animais para: { objeto, deslocamento em x, deslocamento em z }
+local FAZENDEIRO_PONTOS = { { "cocho", 0, 0.8 }, { "feno", -0.3, -1 }, { "celeiro", 0, 2.1 } }
 
 local function fazenda(e)
   if e <= 0 then return end
@@ -1414,6 +1440,20 @@ local function fazenda(e)
         esp.modelo(v[1], v[2], v[3], 0)
       end
     end
+  end
+  -- fazendeiro dos animais: leva o balde do cocho ao feno e passa pela frente do celeiro
+  if J.ef("fazendeiro_animais") > 0 then
+    grupo("fazenda")
+    local f = M.fazendeiro_animais
+    local p = FAZENDEIRO_PONTOS[f.i]
+    local wx, wz = L.t(p[1], L.POR_ID[p[1]].x + p[2], L.POR_ID[p[1]].z + p[3])
+    local bx, bz = L.base("fazenda", wx, wz)
+    local andando = fazendeiro_anda(f, util.limitar(bx, x0 + 0.5, x1 - 0.5), util.limitar(bz, z0 + 0.5, z1 - 0.5), #FAZENDEIRO_PONTOS)
+    M.boneco({ x = f.x, z = f.z, giro = f.giro, fase = f.fase, andando = andando, pele = "#b97a4e", chapeu = "#3d5a8a",
+      tipo = { nome = "comum", corpo = "#3d5a8a", perna = "#2b3a52", braco = "#33507c" } })
+    local cx, cz = f.x + 0.42 * math.cos(f.giro), f.z - 0.42 * math.sin(f.giro)
+    cilindro(cx, 0.32, cz, 0.24, 0.28, "#8a857c")
+    caixa(cx, 0.6, cz, 0.05, 0.14, 0.05, "#4e4a48")
   end
 end
 
@@ -2006,6 +2046,18 @@ local MODELOS = {
   vaca = { d = 7, h = 0.7, fn = function() vaca(0, 0, 0.6, 0) end },
   porco = { d = 4.6, h = 0.4, fn = function() porco(0, 0, 0.6, 0) end },
   galinha = { d = 2.6, h = 0.3, fn = function() galinha(0, 0, 0.6, 0) end },
+  fazendeiro = { d = 5.5, h = 1.0, fn = function()
+    M.boneco({ x = 0, z = 0, giro = 0.5, fase = 0, pele = "#c68a5a", chapeu = "#c9a24a", tipo = { nome = "comum", corpo = "#5f7a3a", perna = "#4b3b2c", braco = "#54702f" } })
+    peca("caixa", 0.44, 0.75, 0.2, 0.06, 1.3, 0.06, 0.5, "#7b4a26")
+  end },
+  fazendeiro_arvores = { d = 5.5, h = 1.0, fn = function()
+    M.boneco({ x = 0, z = 0, giro = 0.5, fase = 0, pele = "#e0ac7e", chapeu = "#8f3a2c", tipo = { nome = "comum", corpo = "#a8622f", perna = "#3a3028", braco = "#94562a" } })
+    cilindro(0.42, 0.72, 0.2, 0.3, 0.2, "#a87a42"); esfera(0.42, 0.92, 0.2, 0.2, "#c8382e", 0.1)
+  end },
+  fazendeiro_animais = { d = 5.5, h = 1.0, fn = function()
+    M.boneco({ x = 0, z = 0, giro = 0.5, fase = 0, pele = "#b97a4e", chapeu = "#3d5a8a", tipo = { nome = "comum", corpo = "#3d5a8a", perna = "#2b3a52", braco = "#33507c" } })
+    cilindro(0.42, 0.32, 0.2, 0.24, 0.28, "#8a857c")
+  end },
   item_trigo = { d = 3, h = 0.4, fn = function()
     for k = -1, 1 do
       peca("cone", k * 0.26, 0, 0, 0.2, 0.86, 0.2, 0, "#c9a24a")

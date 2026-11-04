@@ -12,7 +12,7 @@ local Cam = require("caminhos")
 
 local J = {}
 
-J.VERSAO_ARVORE = 3      -- sobe quando a forma da árvore muda: o save antigo passa pela migração
+J.VERSAO_ARVORE = 4      -- sobe quando a forma da árvore muda: o save antigo passa pela migração
 
 J.PORTA = { x = -6.4, z = 1.6 }
 J.RUA_Z = 1.6
@@ -62,7 +62,7 @@ J.NOTICIAS = {
   { id = "bardo", titulo = "Um bardo na taverna!", texto = "Agora você pode chamar um Bardo. A música faz cada pedido render mais." },
   { id = "mercadinho", titulo = "O mercadinho!", texto = "Agora você pode abrir o Mercadinho. Os aventureiros voltam com espólios, você compra e revende com lucro." },
   { id = "jardim", titulo = "A fazenda de sementes!", texto = "Agora você pode abrir a Fazenda de sementes. Ela produz alimentos que abastecem a cozinha e a cervejaria." },
-  { id = "fazendeiro", titulo = "Um fazendeiro!", texto = "Agora você pode contratar um Fazendeiro. Ele só cuida da fazenda de sementes e cada colheita rende mais." },
+  { id = "fazendeiro", titulo = "Um fazendeiro!", texto = "A Loja agora vende o Fazendeiro das plantações. Ele só cuida da Fazenda de sementes, e cada colheita dela rende mais." },
   { id = "cozinha", titulo = "A cozinha!", texto = "Agora você pode construir a Cozinha, uma sala só para preparar a comida. Ela abre espaço para o cozinheiro trabalhar." },
   { id = "pomar", titulo = "A fazenda de árvores frutíferas!", texto = "Agora você pode abrir a Fazenda de árvores frutíferas. Frutas viram tortas e sucos, e os pedidos passam a render mais." },
   { id = "fazenda", titulo = "A fazenda de animais!", texto = "Agora você pode abrir a Fazenda de animais e criar vacas, porcos e galinhas. Carne e ovos da casa fazem os pedidos renderem mais, e entra ouro todo segundo." },
@@ -1000,8 +1000,12 @@ function J.estado_unidade(tipo)
   local d = J.LOJA[tipo]
   local r = { preco = J.preco_unidade(tipo) }
   if J.nivel(d.no) < 1 then r.motivo = "Libere na Árvore"; return r end
-  local sala = ({ quartos = "quartos_sala", canteiro = "jardim", arvore = "pomar", vaca = "fazenda", porco = "fazenda", galinha = "fazenda" })[tipo]
+  local sala = d.sala or ({ quartos = "quartos_sala", canteiro = "jardim", arvore = "pomar", vaca = "fazenda", porco = "fazenda", galinha = "fazenda" })[tipo]
   if sala and not L.aberta(sala) then r.motivo = "Antes: " .. select(2, L.nome_sala(sala)); return r end
+  if d.max then
+    if J.compradas(tipo) >= d.max then r.motivo = "Já está no máximo"; return r end
+    if J.compradas(tipo) >= 1 then r.sem_boneco = true end
+  end
   if tipo == "mesa" and J.num_mesas() >= L.MESAS_MAX then r.motivo = "Limite de " .. L.MESAS_MAX .. " mesas"; return r end
   if tipo == "quartos" and J.compradas(tipo) + 1 >= J.limite_quartos() then r.motivo = "Sem espaço: amplie"; return r end
   if tipo == "arvore" and J.ef("frutas") + 2 >= #L.ARVORES then r.sem_boneco = true end
@@ -2551,22 +2555,31 @@ local limpar_contratados
 -- Save da árvore antiga: nada comprado se perde.
 -- A sala da guilda vinha com o segundo andar; a cervejaria tinha níveis que agora são um nó à parte.
 local function migrar_arvore(e, dados)
-  if tonumber(dados.arvore_v) == J.VERSAO_ARVORE then return end
+  local v = tonumber(dados.arvore_v) or 0
+  if v >= J.VERSAO_ARVORE then return end
   local nos = e.nos
-  if (tonumber(nos.segundo_andar) or 0) > 0 then nos.sala_guilda = 1 end
-  local cerv = tonumber(nos.cervejaria) or 0
-  if cerv > 1 then
-    nos.cervejaria, nos.cerveja_melhor = 1, math.floor(cerv) - 1
-  end
-  -- quem já jogava podia fazer obras: continua podendo
-  if next(nos) ~= nil then nos.mestre_obras = 1 end
-  -- os níveis viram unidades da Loja; o primeiro nível de quartos, frutíferas e animais já vinha com o nó
-  for no, tipo, gratis in string.gmatch("mesa:mesa:0 garcom:garcom:0 canteiro:canteiro:0 quartos:quartos:1 pomar:arvore:1 fazenda:vaca:1", "(%w+):(%w+):(%d)") do
-    local nv = math.floor(tonumber(nos[no]) or 0)
-    if nv > 0 then
-      nos[no] = 1
-      e.compras[tipo] = (e.compras[tipo] or 0) + nv - tonumber(gratis)
+  if v < 3 then
+    if (tonumber(nos.segundo_andar) or 0) > 0 then nos.sala_guilda = 1 end
+    local cerv = tonumber(nos.cervejaria) or 0
+    if cerv > 1 then
+      nos.cervejaria, nos.cerveja_melhor = 1, math.floor(cerv) - 1
     end
+    -- quem já jogava podia fazer obras: continua podendo
+    if next(nos) ~= nil then nos.mestre_obras = 1 end
+    -- os níveis viram unidades da Loja; o primeiro nível de quartos, frutíferas e animais já vinha com o nó
+    for no, tipo, gratis in string.gmatch("mesa:mesa:0 garcom:garcom:0 canteiro:canteiro:0 quartos:quartos:1 pomar:arvore:1 fazenda:vaca:1", "(%w+):(%w+):(%d)") do
+      local nv = math.floor(tonumber(nos[no]) or 0)
+      if nv > 0 then
+        nos[no] = 1
+        e.compras[tipo] = (e.compras[tipo] or 0) + nv - tonumber(gratis)
+      end
+    end
+  end
+  -- o Fazendeiro tinha níveis na árvore: cada nível vira uma unidade do mesmo fazendeiro na Loja
+  local nv = math.floor(tonumber(nos.fazendeiro) or 0)
+  if nv > 0 then
+    nos.fazendeiro = 1
+    e.compras.fazendeiro = (tonumber(e.compras.fazendeiro) or 0) + nv
   end
   e.arvore_v = J.VERSAO_ARVORE
 end

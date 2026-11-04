@@ -1,6 +1,14 @@
 {
-["arvore_v"] = 3,
+["arvore_v"] = 4,
 ["brigas"] = 0,
+["carroca"] = {
+["presente"] = true,
+["resta"] = 90,
+["vendidos"] = {
+
+},
+["visitas"] = 1
+},
 ["ciclo"] = 0,
 ["colhido"] = 0,
 ["compras"] = {
@@ -12,7 +20,14 @@
 ["divida"] = 200,
 ["emprestimos"] = 0,
 ["espolios"] = 0,
-["estoque"] = 0,
+["estoques"] = {
+["carne_porco"] = 0,
+["carne_vaca"] = 0,
+["frutas"] = 0,
+["lupulo"] = 0,
+["ovos"] = 0,
+["trigo"] = 0
+},
 ["fama"] = 0,
 ["feitas"] = 0,
 ["feitas_rank"] = {
@@ -49,7 +64,15 @@
 
 },
 ["prox_id"] = 1,
+["raros"] = {
+["bebida"] = 0,
+["comida"] = 0
+},
 ["rps"] = 0,
+["sementes"] = {
+["fruta"] = 0,
+["lupulo"] = 0
+},
 ["servidos"] = 0,
 ["tempo"] = 0,
 ["total"] = 0,

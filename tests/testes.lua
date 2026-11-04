@@ -69,8 +69,8 @@ local function quadros(n, dt)
 end
 -- Compra o nó (e o que vem antes). Mesa, garçom, canteiro, quarto, árvore e vaca: repetir compra na Loja,
 -- como comprar outro nível fazia; mesa, garçom e canteiro já vêm com a primeira unidade, como antes.
-local UNIDADE = { mesa = "mesa", garcom = "garcom", canteiro = "canteiro", quartos = "quartos", pomar = "arvore", fazenda = "vaca" }
-local PRIMEIRA = { mesa = true, garcom = true, canteiro = true }
+local UNIDADE = { mesa = "mesa", garcom = "garcom", canteiro = "canteiro", quartos = "quartos", pomar = "arvore", fazenda = "vaca", fazendeiro = "fazendeiro", fazendeiro_arvores = "fazendeiro_arvores", fazendeiro_animais = "fazendeiro_animais" }
+local PRIMEIRA = { mesa = true, garcom = true, canteiro = true, fazendeiro = true, fazendeiro_arvores = true, fazendeiro_animais = true }
 local function libera_no(id)
   local no = A.POR_ID[id]
   for _, p in ipairs(no.pre) do if J.nivel(p) < 1 then libera_no(p) end end
@@ -108,7 +108,7 @@ local function comprar_tudo(ouro)
       end
     end
   end
-  for tipo, q in pairs({ mesa = 5, garcom = 4, quartos = 9, canteiro = 8, arvore = 5, vaca = 7 }) do
+  for tipo, q in pairs({ mesa = 5, garcom = 4, quartos = 9, canteiro = 8, arvore = 5, vaca = 7, fazendeiro = 2, fazendeiro_arvores = 2, fazendeiro_animais = 2 }) do
     for _ = 1, q do
       J.estado.ouro = ouro or 1e60
       if not J.comprar_unidade(tipo) then break end
@@ -463,6 +463,67 @@ do
   e = J.estado
   ok("estoque estragado não trava", e.estoques.trigo == 0 and e.estoques.lupulo == 0 and e.estoques.frutas == 0 and e.estoques.ovos == 0)
   J.estado.colocados = nil
+  novo()
+  -- Três fazendeiros, comprados na Loja, um por fazenda
+  novo()
+  e = J.estado
+  ok("fazendeiro tem nó para liberar", A.POR_ID.fazendeiro.max == 1 and A.POR_ID.fazendeiro_arvores.pai == "pomar" and A.POR_ID.fazendeiro_animais.pai == "fazenda")
+  ok("sem o nó, a Loja não vende", J.estado_unidade("fazendeiro").motivo == "Libere na Árvore")
+  libera_no("fazenda"); libera_no("canteiro"); libera_no("fazendeiro"); libera_no("fazendeiro_arvores"); libera_no("fazendeiro_animais")
+  ok("o nó sozinho não contrata ninguém", J.ef("fazendeiro") == 0 and J.ef("fazendeiro_arvores") == 0 and J.ef("fazendeiro_animais") == 0)
+  local r0 = J.proxima_colheita()
+  e.ouro = 1e20
+  ok("compra o das plantações", J.comprar_unidade("fazendeiro") and J.ef("fazendeiro") == 1)
+  local r1 = J.proxima_colheita()
+  ok("das plantações só muda as plantações", r1.trigo == r0.trigo * 1.25 and r1.frutas == r0.frutas and r1.carne_vaca == r0.carne_vaca)
+  ok("compra o das árvores", J.comprar_unidade("fazendeiro_arvores") and J.ef("fazendeiro_arvores") == 1)
+  local r2 = J.proxima_colheita()
+  ok("das árvores só muda as frutas", r2.frutas == r1.frutas * 1.25 and r2.trigo == r1.trigo and r2.carne_vaca == r1.carne_vaca)
+  ok("compra o dos animais", J.comprar_unidade("fazendeiro_animais") and J.ef("fazendeiro_animais") == 1)
+  local r3 = J.proxima_colheita()
+  ok("dos animais só muda os animais", r3.carne_vaca == r2.carne_vaca * 1.25 and r3.trigo == r2.trigo and r3.frutas == r2.frutas)
+  ok("segundo nível não põe outro boneco", J.estado_unidade("fazendeiro").sem_boneco and J.comprar_unidade("fazendeiro") and J.ef("fazendeiro") == 2)
+  e.compras.fazendeiro = C.loja[1] and 6 or 6; J.recalcular()
+  ok("fazendeiro tem máximo de níveis", J.estado_unidade("fazendeiro").motivo == "Já está no máximo" and not J.comprar_unidade("fazendeiro"))
+  for _, id in ipairs({ "fazendeiro", "fazendeiro_arvores", "fazendeiro_animais" }) do
+    ok("fazendeiro na Loja com imagem: " .. id, J.LOJA[id] and Mu.MODELOS[J.LOJA[id].modelo])
+  end
+  -- cada um fica só na sua fazenda
+  Mu.iniciar()
+  local peca0 = motor.peca
+  local function dentro_de(sala, f)
+    local x0, x1, z0, z1 = Lay.sala(sala)
+    return f.x >= x0 and f.x <= x1 and f.z >= z0 and f.z <= z1
+  end
+  local nos_lugares = { jardim = true, pomar = true, fazenda = true }
+  local vistos_a, vistos_f = {}, {}
+  for _ = 1, 500 do
+    Mu.atualizar(0.1); desenhar()
+    if not dentro_de("jardim", Mu.fazendeiro) then nos_lugares.jardim = false end
+    if not dentro_de("pomar", Mu.fazendeiro_arvores) then nos_lugares.pomar = false end
+    if not dentro_de("fazenda", Mu.fazendeiro_animais) then nos_lugares.fazenda = false end
+    vistos_a[Mu.fazendeiro_arvores.i] = true
+    vistos_f[Mu.fazendeiro_animais.i] = true
+  end
+  motor.peca = peca0
+  ok("plantações: não sai da fazenda de sementes", nos_lugares.jardim)
+  ok("árvores: não sai da fazenda de frutíferas", nos_lugares.pomar)
+  ok("animais: não sai da fazenda de animais", nos_lugares.fazenda)
+  ok("fazendeiro das árvores passa por várias árvores", vistos_a[2] and vistos_a[3])
+  ok("fazendeiro dos animais passa por vários lugares", vistos_f[1] and vistos_f[2] and vistos_f[3])
+  -- migração: níveis antigos viram unidades; save da versão 3 não refaz as contas antigas
+  novo()
+  J.salvar()
+  local dv = util.desserializar(motor.carregar())
+  dv.arvore_v = 3
+  dv.nos = { mesa = 1, garcom = 1, jardim = 1, canteiro = 1, fazendeiro = 5, cervejaria = 1, cozinha = 1 }
+  dv.compras = { mesa = 4, garcom = 2 }
+  motor.salvar(util.serializar(dv)); iniciar()
+  ok("níveis do fazendeiro viram unidades", J.nivel("fazendeiro") == 1 and J.compradas("fazendeiro") == 5 and J.ef("fazendeiro") == 5)
+  ok("mesas e garçons da versão 3 não dobram", J.compradas("mesa") == 4 and J.compradas("garcom") == 2)
+  ok("save migrado marca a versão", J.estado.arvore_v == J.VERSAO_ARVORE)
+  J.salvar(); iniciar()
+  ok("migrar duas vezes não soma", J.compradas("fazendeiro") == 5 and J.ef("fazendeiro") == 5)
   novo()
   -- jogo novo: bichos pedem lugar na Loja como os outros itens
   J.auto_colocar = false

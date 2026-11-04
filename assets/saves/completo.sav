@@ -1,13 +1,26 @@
 {
-["arvore_v"] = 3,
+["arvore_v"] = 4,
 ["brigas"] = 300,
+["carroca"] = {
+["presente"] = true,
+["resta"] = 90,
+["vendidos"] = {
+
+},
+["visitas"] = 1
+},
 ["ciclo"] = 0,
 ["colhido"] = 100000,
 ["compras"] = {
 ["arvore"] = 5,
 ["canteiro"] = 8,
+["fazendeiro"] = 3,
+["fazendeiro_animais"] = 2,
+["fazendeiro_arvores"] = 2,
+["galinha"] = 6,
 ["garcom"] = 4,
 ["mesa"] = 5,
+["porco"] = 4,
 ["quartos"] = 9,
 ["vaca"] = 7
 },
@@ -277,8 +290,17 @@
 ["tipo"] = "guerreiro"
 }
 },
+["divida"] = 0,
+["emprestimos"] = 1,
 ["espolios"] = 7000,
-["estoque"] = 500,
+["estoques"] = {
+["carne_porco"] = 300,
+["carne_vaca"] = 300,
+["frutas"] = 300,
+["lupulo"] = 300,
+["ovos"] = 300,
+["trigo"] = 300
+},
 ["fama"] = 8000,
 ["feitas"] = 8000,
 ["feitas_rank"] = {
@@ -294,6 +316,10 @@
 ["fim"] = false,
 ["invocados_feitos"] = 4,
 ["lucro_espolios"] = 0,
+["mantimentos"] = {
+["bebida"] = 500,
+["comida"] = 500
+},
 ["missoes"] = {
 
 },
@@ -320,7 +346,9 @@
 ["especiais"] = 8,
 ["fama_local"] = 6,
 ["fazenda"] = 1,
-["fazendeiro"] = 6,
+["fazendeiro"] = 1,
+["fazendeiro_animais"] = 1,
+["fazendeiro_arvores"] = 1,
 ["festa"] = 5,
 ["fornecedor"] = 1,
 ["garcom"] = 1,
@@ -454,7 +482,15 @@
 }
 },
 ["prox_id"] = 26,
+["raros"] = {
+["bebida"] = 0,
+["comida"] = 0
+},
 ["rps"] = 200000000,
+["sementes"] = {
+["fruta"] = 0,
+["lupulo"] = 0
+},
 ["servidos"] = 50000,
 ["tempo"] = 108000,
 ["total"] = 5000000000000000,

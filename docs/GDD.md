@@ -55,15 +55,15 @@ O ouro da taverna compra habilidades na árvore, que ampliam a taverna e liberam
 
 Você herda a taverna com 200 de ouro em dívidas e a despensa vazia. Bartolo, o agiota, empresta 40 (deve-se 50). Parte de tudo que entra paga a dívida, e o botão Pagar quita antes. Se faltar ouro e comida, o agiota socorre de novo, com os mesmos juros.
 
-Vender gasta mantimentos, comprados em lotes. O Fornecedor fixo passa a comprar sozinho.
+Vender gasta mantimentos, comprados em lotes na carroça do comerciante, que chega pela estrada a cada 5 minutos e fica 1,5 minuto. O Fornecedor fixo encomenda sozinho o que acabar, pelo dobro do preço. Quem fica sem nada recebe socorro de Bartolo.
 
 | Etapa | Efeito |
 | --- | --- |
 | Tudo comprado de fora | Comida custa 40% do pedido, bebida 30% |
 | Cozinha (pão) | Comida custa 25% |
 | Cervejaria | Bebida custa 20% |
-| Jardim (trigo e lúpulo) | Comida 10%, bebida 5% |
-| Jardim de frutas e fazenda | Pratos novos, pedidos rendem mais |
+| Fazenda de sementes (trigo e lúpulo) | Comida 10%, bebida 5% |
+| Fazenda de árvores frutíferas e Fazenda de animais | Frutas, carnes e ovos; pedidos rendem mais |
 
 ## Equipe do balcão
 
@@ -86,7 +86,7 @@ A aba Loja abre um painel lateral com o jogo rodando.
 | Missões | Quem contratou a missão paga; a taverna só recebe quando o aventureiro volta com ela concluída, não quando ele a pega | Prateleira de missões |
 | Espólios | A taverna compra os espólios dos aventureiros e eles são revendidos sozinhos, com pouco lucro no início | Mercadinho |
 | Venda | Poções, armaduras e armas vendidas no mercadinho aumentam muito o lucro | Aba de venda |
-| Produção própria | O jardim produz os alimentos, o cozinheiro prepara a comida na cozinha, o pomar aumenta as colheitas, a fazenda rende ouro por segundo e a taverna faz as próprias bebidas | Plantação |
+| Produção própria | Três fazendas enchem estoques por ingrediente: sementes (trigo e lúpulo), árvores (frutas) e animais (carne de vaca, carne de porco e ovos). A cozinha e a cervejaria servem esses estoques, e cada fazenda tem o próprio fazendeiro, comprado na Loja | Plantação |
 
 **Comemoração**: herói que volta de missão gasta mais que o normal na taverna, então cada missão cumprida gera um pico de renda.
 
@@ -116,7 +116,7 @@ Todas as melhorias ficam na árvore, que começa quase toda escondida: comprar u
 | Salão | Mesas, cadeiras e novas áreas da taverna |
 | Clientes | Frequência e quantidade de clientes |
 | Serviço | Garçons, cozinheiro, bardo e velocidade de atendimento |
-| Bebidas e comida | Rentabilidade, jardim, comida do cozinheiro e bebidas próprias |
+| Bebidas e comida | Rentabilidade, fazendas, comida do cozinheiro e bebidas próprias |
 | Guilda | Prateleira de missões, ranks e quantidade de aventureiros |
 | Mercadinho | Espólios e vendas |
 | Heróis | Recrutador, contratação, parties, propaganda e invocação |
@@ -131,7 +131,7 @@ O jogo começa simples e libera uma coisa de cada vez, para cada desbloqueio vir
 2. **Prateleira de missões**: começa no rank F, e os seguintes abrem pela árvore.
 3. **Mercadinho**: compra e revenda automática de espólios.
 4. **Aba de venda**: poções, armaduras e armas.
-5. **Produção própria**: jardim, cozinha (só depois dela vem o cozinheiro), bebidas da casa, jardim de frutas e fazenda com vacas.
+5. **Produção própria**: Fazenda de sementes, cozinha (só depois dela vem o cozinheiro), bebidas da casa, Fazenda de árvores frutíferas e Fazenda de animais, com vacas, porcos e galinhas.
 6. **Aventureiros contratados**: contratação e investimento em armadura, arma e magia.
 7. **Parties**: grupos de 4 aventureiros vão juntos nas missões.
 8. **Heróis e propaganda**: um contratado evolui até virar herói, o que abre a propaganda.
@@ -160,9 +160,9 @@ O ritmo exato (quanto ouro para cada etapa) fica para o balanceamento, já nos s
 **Eventos e personalidades**:
 
 - Menestrel: a cada 12 missões, ele entra na taverna, conta uma história em uma faixa na tela e as missões rendem mais por 1 minuto.
-- Fazendeiro: cuida só do jardim e aumenta as colheitas. Cervejeiro: aparece junto com a cervejaria.
+- Fazendeiros: três, um por fazenda, comprados na Loja; cada um só trabalha na sua e aumenta o que ela produz. Cervejeiro: aparece junto com a cervejaria.
 - Cozinheiro: trabalha dentro da cozinha, indo do fogão à mesa de preparo. Vacas: passeiam na fazenda, de 1 a 8 conforme o nível.
-- Salas: as internas (cozinha, cervejaria, invocação) ficam em fila à direita do salão, todas com paredes da mesma altura. As externas (jardim, pomar, fazenda) ficam na frente, cercadas.
+- Salas: as internas (cozinha, cervejaria, invocação) ficam em fila à direita do salão, todas com paredes da mesma altura. As externas (as três fazendas) ficam na frente, cercadas.
 - Personalidades: guerreiro e arqueiro na mesma mesa brigam; mago e clérigo geram bônus de consumo.
 - Tom: humor leve, para cada evento ser divertido de ler em poucos segundos.
 

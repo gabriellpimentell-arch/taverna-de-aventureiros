@@ -60,9 +60,11 @@ local n = {
   { id = "jardim", pai = "cervejaria", ramo = "bebidas", p = 4, l = -1, nome = "Fazenda de sementes", desc = "Vai para a Loja. Planta trigo e lúpulo, que viram comida e bebida da casa", custo = 5000, mult = 1, max = 1, ef = { a_jardim = 1, canteiros = 2 } },
   { id = "canteiro", pai = "jardim", ramo = "bebidas", p = 5, l = 0, nome = "Mais canteiros", desc = "A Loja passa a vender canteiros", custo = 1000, mult = 1, max = 1, ef = {} },
   { id = "adubo", pai = "canteiro", ramo = "bebidas", p = 6, l = 0, nome = "Adubo", desc = "Colheitas rendem +30%", custo = 5000, mult = 3.2, max = 8, ef = { x_colheita = 1.3 } },
-  { id = "fazendeiro", pai = "canteiro", ramo = "bebidas", p = 6, l = 1, nome = "Fazendeiro", desc = "Cuida da fazenda de sementes: colheitas rendem +25%", custo = 4000, mult = 3.2, max = 6, ef = { fazendeiro = 1, x_colheita = 1.25 } },
+  { id = "fazendeiro", pai = "canteiro", ramo = "bebidas", p = 6, l = 1, nome = "Fazendeiro das plantações", desc = "A Loja passa a vender quem cuida só da Fazenda de sementes", custo = 1000, mult = 1, max = 1, ef = {} },
   { id = "irrigacao", pai = "adubo", ramo = "bebidas", p = 7, l = 0, nome = "Irrigação", desc = "As plantas crescem 15% mais rápido", custo = 16000, mult = 3, max = 6, ef = { x_ciclo = 0.85 } },
   { id = "pomar", pai = "jardim", ramo = "bebidas", p = 5, l = -2, nome = "Fazenda de árvores frutíferas", desc = "Vai para a Loja, com mais árvores à venda. Frutas para tortas e sucos: pedidos +10%", custo = 30000, mult = 1, max = 1, ef = { a_pomar = 1, frutas = 1, x_pedido = 1.1 } },
+  { id = "fazendeiro_arvores", pai = "pomar", ramo = "bebidas", p = 6, l = -3, nome = "Fazendeiro das árvores", desc = "A Loja passa a vender quem cuida só da Fazenda de árvores frutíferas", custo = 6000, mult = 1, max = 1, ef = {} },
+  { id = "fazendeiro_animais", pai = "fazenda", ramo = "bebidas", p = 7, l = -2, nome = "Fazendeiro dos animais", desc = "A Loja passa a vender quem cuida só da Fazenda de animais", custo = 70000, mult = 1, max = 1, ef = {} },
   { id = "fazenda", pai = "pomar", ramo = "bebidas", p = 6, l = -2, nome = "Fazenda de animais", desc = "Vai para a Loja, com vacas, porcos e galinhas à venda. Carne e ovos: +60 ouro por segundo e pedidos +15%", custo = 350000, mult = 1, max = 1, ef = { a_fazenda = 1, vacas = 1, renda_fazenda = 60, x_pedido = 1.15 } },
 
   -- GUILDA -----------------------------------------------------------------------------------

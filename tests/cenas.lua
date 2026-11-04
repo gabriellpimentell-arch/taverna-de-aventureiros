@@ -25,7 +25,7 @@ local function tudo()
       end
     end
   end
-  for tipo, q in pairs({ mesa = 5, garcom = 4, quartos = 9, canteiro = 8, arvore = 5, vaca = 7, porco = 4, galinha = 6 }) do
+  for tipo, q in pairs({ mesa = 5, garcom = 4, quartos = 9, canteiro = 8, arvore = 5, vaca = 7, porco = 4, galinha = 6, fazendeiro = 2, fazendeiro_arvores = 2, fazendeiro_animais = 2 }) do
     for _ = 1, q do J.estado.ouro = 1e40; if not J.comprar_unidade(tipo) then break end end
   end
 end

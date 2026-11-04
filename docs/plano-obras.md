@@ -69,3 +69,10 @@ Pronto em `layout.lua` e `mundo.lua`; a Loja usa estas funções sem tocar em de
 - **Sementes**: guardadas, cada uma dobra um canteiro de lúpulo ou uma árvore em uma colheita. Sem semente a colheita segue normal: nada trava.
 - **Porco e galinha na Loja**: nó da Fazenda de animais libera; 500 mil e 150 mil, com renda e pedidos menores que a vaca. Em cena: 12 porcos e 16 galinhas, como os 20 de vaca; passou disso, rendem sem boneco.
 - **Painel à esquerda (carroça, despensa, dívida)**: só nas abas Taverna, Loja e Árvore, porque cobria o título das outras.
+
+## Parte 2: três fazendeiros e fim da parte (decisões sem o dono)
+- **Fazendeiros**: um nó libera cada um (das plantações, das árvores e dos animais) e a Loja vende. Um boneco por fazenda, que só anda nela. Do 2º ao 6º nível, a compra só treina o mesmo: +25% por nível, e só naquela fazenda.
+- **Migração**: níveis do Fazendeiro antigo viram unidades na Loja, com o mesmo efeito. Conferido com os três saves prontos da versão anterior: nenhum nó ou unidade perdidos, e o estoque somou igual (899 e 500).
+- **Saves prontos**: Metade e Completo agora nascem com a despensa e a carroça, como um jogo novo. Quem já tinha cópia antiga em uma vaga de teste segue migrando normalmente.
+- **Ritmo**: o robô de jogo novo termina em 14,7 h, contra 17,7 h antes da Parte 2. Porcos e galinhas somam pedidos e renda, e o prato da casa rende mais cedo. Ficou assim porque a Parte 3 rebalanceia a economia.
+- **Para o dono rever depois de jogar**: preços da carroça e das sementes; a carroça só anda com o jogo aberto; o desconto de filhotes em um por visita; a estrada encurta um pouco o zoom da taverna.

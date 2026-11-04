@@ -805,12 +805,13 @@ local function tela_producao()
   motor.texto("Próxima colheita em " .. duracao_texto(J.ciclo_jardim() - e.ciclo), px + 2, AREA.y + 62, 13, cor.texto_fraco)
   U.barra(px + 230, AREA.y + 66, 218, 8, e.ciclo / J.ciclo_jardim(), cor.verde)
   local yb, wb = AREA.y + 82, 448
+  local function quem(ef) local n = J.ef(ef); return n > 0 and ("  •  fazendeiro nível " .. n) or "" end
   bloco_fazenda("jardim", "Fazenda de sementes",
-    J.ef("canteiros") .. " canteiros  •  " .. fmt(e.sementes.lupulo) .. " sementes de lúpulo", px, yb, wb, true)
+    J.ef("canteiros") .. " canteiros  •  " .. fmt(e.sementes.lupulo) .. " sementes de lúpulo" .. quem("fazendeiro"), px, yb, wb, true)
   bloco_fazenda("pomar", "Fazenda de árvores frutíferas",
-    J.ef("a_pomar") > 0 and ((J.ef("frutas") + 2) .. " árvores  •  " .. fmt(e.sementes.fruta) .. " sementes de fruta") or "Libere na Árvore", px, yb + 104 + 3, wb, J.ef("a_pomar") > 0)
+    J.ef("a_pomar") > 0 and ((J.ef("frutas") + 2) .. " árvores  •  " .. fmt(e.sementes.fruta) .. " sementes de fruta" .. quem("fazendeiro_arvores")) or "Libere na Árvore", px, yb + 104 + 3, wb, J.ef("a_pomar") > 0)
   bloco_fazenda("fazenda", "Fazenda de animais",
-    J.ef("a_fazenda") > 0 and (J.ef("vacas") .. " vacas  •  " .. J.ef("porcos") .. " porcos  •  " .. J.ef("galinhas") .. " galinhas") or "Libere na Árvore", px, yb + 2 * 107, wb, J.ef("a_fazenda") > 0)
+    J.ef("a_fazenda") > 0 and (J.ef("vacas") .. " vacas  •  " .. J.ef("porcos") .. " porcos  •  " .. J.ef("galinhas") .. " galinhas" .. quem("fazendeiro_animais")) or "Libere na Árvore", px, yb + 2 * 107, wb, J.ef("a_fazenda") > 0)
 
   U.painel(AREA.x + 484, AREA.y + 56, 452, 340)
   local qx = AREA.x + 498
@@ -1207,7 +1208,7 @@ local TEMAS_NOTICIA = {
 local TEMA_POR_ID = {
   mesa = "obra", prateleira = "obra", ala_leste = "obra",
   garcom = "gente", bardo = "gente", recrutador = "gente",
-  jardim = "comida", fazendeiro = "comida", cozinheiro = "comida", cervejaria = "comida",
+  jardim = "comida", fazendeiro = "comida", fazendeiro_arvores = "comida", fazendeiro_animais = "comida", cozinheiro = "comida", cervejaria = "comida",
   mercadinho = "comercio", venda = "comercio",
   party = "fama", heroi = "fama", propaganda = "fama",
   invocacao = "magia",

@@ -67,6 +67,10 @@ C.loja = {
   { id = "canteiro", nome = "Canteiro", no = "canteiro", custo = 2500, mult = 2.6, ef = { canteiros = 1 }, modelo = "canteiro" },
   { id = "arvore", nome = "Árvore frutífera", no = "pomar", custo = 96000, mult = 2.6, ef = { frutas = 1, x_pedido = 1.1 }, lugar = true, modelo = "arvore" },
   { id = "vaca", nome = "Vaca", no = "fazenda", custo = 1190000, mult = 2.8, ef = { vacas = 1, renda_fazenda = 60, x_pedido = 1.15 }, lugar = true, modelo = "vaca" },
+  -- um fazendeiro por fazenda: o primeiro entra em cena; os outros níveis só treinam o mesmo, até `max`
+  { id = "fazendeiro", nome = "Fazendeiro das plantações", no = "fazendeiro", custo = 4000, mult = 3.2, max = 6, sala = "jardim", ef = { fazendeiro = 1, x_colheita = 1.25 }, modelo = "fazendeiro" },
+  { id = "fazendeiro_arvores", nome = "Fazendeiro das árvores", no = "fazendeiro_arvores", custo = 25000, mult = 3.2, max = 6, sala = "pomar", ef = { fazendeiro_arvores = 1, x_frutas = 1.25 }, modelo = "fazendeiro_arvores" },
+  { id = "fazendeiro_animais", nome = "Fazendeiro dos animais", no = "fazendeiro_animais", custo = 300000, mult = 3.2, max = 6, sala = "fazenda", ef = { fazendeiro_animais = 1, x_animais = 1.25 }, modelo = "fazendeiro_animais" },
   { id = "porco", nome = "Porco", no = "fazenda", custo = 500000, mult = 2.6, ef = { porcos = 1, renda_fazenda = 25, x_pedido = 1.03 }, lugar = true, modelo = "porco" },
   { id = "galinha", nome = "Galinha", no = "fazenda", custo = 150000, mult = 2.4, ef = { galinhas = 1, renda_fazenda = 8, x_pedido = 1.01 }, lugar = true, modelo = "galinha" },
 }
