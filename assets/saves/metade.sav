@@ -1,7 +1,8 @@
 {
-["brigas"] = 68,
-["ciclo"] = 5.5,
-["colhido"] = 309915.06659106544,
+["arvore_v"] = 2,
+["brigas"] = 53,
+["ciclo"] = 5,
+["colhido"] = 143123.30158813467,
 ["contratados"] = {
 [1] = {
 ["arma"] = 14,
@@ -10,7 +11,7 @@
 ["fama"] = 0,
 ["id"] = 1,
 ["magia"] = 13,
-["missoes"] = 160,
+["missoes"] = 110,
 ["nome"] = "Bruno",
 ["pele"] = "#f1c9a5",
 ["tipo"] = "guerreiro"
@@ -22,94 +23,77 @@
 ["fama"] = 0,
 ["id"] = 2,
 ["magia"] = 13,
-["missoes"] = 142,
+["missoes"] = 96,
 ["nome"] = "Lia",
 ["pele"] = "#e0ac7e",
 ["tipo"] = "mago"
-},
-[3] = {
-["arma"] = 14,
-["armadura"] = 15,
-["em_missao"] = true,
-["fama"] = 0,
-["id"] = 3,
-["magia"] = 13,
-["missoes"] = 37,
-["nome"] = "Tomás",
-["pele"] = "#c68a5a",
-["tipo"] = "arqueiro"
 }
 },
-["espolios"] = 621,
-["estoque"] = 897,
+["espolios"] = 502,
+["estoque"] = 896,
 ["fama"] = 0,
-["feitas"] = 1476,
+["feitas"] = 998,
 ["feitas_rank"] = {
-[1] = 18,
-[2] = 114,
-[3] = 201,
-[4] = 792,
-[5] = 351
+[1] = 10,
+[2] = 55,
+[3] = 165,
+[4] = 588,
+[5] = 180
 },
 ["fim"] = false,
 ["invocados_feitos"] = 0,
-["lucro_espolios"] = 408661.1609700027,
+["lucro_espolios"] = 295829.64300000126,
 ["missoes"] = {
 [1] = {
 ["rank"] = 5,
-["resta"] = 3.1080750000000066
+["resta"] = 2.5367500000000049
 },
 [2] = {
 ["contratado"] = 2,
 ["rank"] = 5,
-["resta"] = 9.3580750000000066
+["resta"] = 10.036750000000005
 },
 [3] = {
 ["rank"] = 5,
-["resta"] = 12.108075000000007
+["resta"] = 11.536750000000005
 },
 [4] = {
-["rank"] = 5,
-["resta"] = 21.108075000000007
-},
-[5] = {
 ["contratado"] = 1,
 ["rank"] = 5,
-["resta"] = 24.858075000000007
+["resta"] = 12.036750000000005
+},
+[5] = {
+["rank"] = 5,
+["resta"] = 20.536750000000005
 },
 [6] = {
 ["rank"] = 5,
-["resta"] = 30.108075000000007
+["resta"] = 29.536750000000005
 },
 [7] = {
 ["rank"] = 5,
-["resta"] = 39.108075000000007
-},
-[8] = {
-["contratado"] = 3,
-["rank"] = 5,
-["resta"] = 39.858075000000007
+["resta"] = 38.536750000000005
 }
 },
 ["nos"] = {
 ["adubo"] = 5,
 ["agilidade"] = 10,
 ["ala_leste"] = 1,
-["alojamento"] = 1,
 ["balcao"] = 1,
 ["bardo"] = 5,
 ["canteiro"] = 6,
 ["cardapio"] = 15,
-["cervejaria"] = 5,
+["cerveja_melhor"] = 4,
+["cervejaria"] = 1,
 ["comissao"] = 5,
 ["conforto"] = 6,
 ["cozinha"] = 1,
 ["cozinheiro"] = 4,
-["decoracao"] = 3,
+["decoracao"] = 5,
 ["fama_local"] = 6,
-["fazenda"] = 2,
+["fazenda"] = 1,
 ["fazendeiro"] = 5,
-["festa"] = 5,
+["festa"] = 4,
 ["fornecedor"] = 1,
 ["garcom"] = 4,
 ["irrigacao"] = 4,
@@ -120,21 +104,23 @@
 ["merc_e"] = 1,
 ["mercadinho"] = 1,
 ["mesa"] = 5,
+["mestre_obras"] = 1,
 ["moco"] = 1,
 ["negociar"] = 4,
 ["party"] = 1,
 ["placa"] = 10,
 ["pocoes"] = 2,
-["pomar"] = 4,
+["pomar"] = 3,
 ["prateleira"] = 1,
 ["quartos"] = 7,
 ["rank_b"] = 1,
 ["rank_c"] = 1,
 ["rank_d"] = 1,
 ["rank_e"] = 1,
-["rapidas"] = 6,
+["rapidas"] = 5,
 ["recrutador"] = 1,
 ["ricos"] = 5,
+["sala_guilda"] = 1,
 ["segundo_andar"] = 1,
 ["subsolo"] = 1,
 ["vagas"] = 10,
@@ -160,6 +146,7 @@
 ["rank_d"] = true,
 ["rank_e"] = true,
 ["recrutador"] = true,
+["sala_guilda"] = true,
 ["venda"] = true
 },
 ["obras"] = {
@@ -172,14 +159,14 @@
 ["musica"] = 0.40000000000000002,
 ["sombras"] = true
 },
-["ouro"] = 80860.82648595795,
+["ouro"] = 30990.047145989258,
 ["parties"] = {
 
 },
-["prox_id"] = 4,
-["rps"] = 26377.581831071046,
-["servidos"] = 6433,
-["tempo"] = 12954,
-["total"] = 65777684.82648614,
+["prox_id"] = 3,
+["rps"] = 18982.843650160321,
+["servidos"] = 5355,
+["tempo"] = 10587,
+["total"] = 45716196.047145747,
 ["versao"] = 2
 }

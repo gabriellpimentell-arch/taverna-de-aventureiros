@@ -67,9 +67,9 @@ ob("caminho", "Caminho de pedras", 76, -1.5, "Áreas", "@caminho")
 ob("barraca", "Mercadinho", 73, -2, "Áreas", "caminho")
 ob("estantes", "Estantes de venda", 73, -4.1, "Áreas", "caminho")
 ob("quadro", "Mural de missões", 79, -1.6, "Áreas", "caminho")
-ob("jardim", "Jardim", -3, 6.75, "Áreas", "@frente")
-ob("pomar", "Jardim de frutas", 4.25, 7.8, "Áreas", "@pomar")
-ob("fazenda", "Fazenda", 13, 7.8, "Áreas", "@fazenda")
+ob("jardim", "Fazenda de sementes", -3, 6.75, "Áreas", "@frente")
+ob("pomar", "Árvores frutíferas", 4.25, 7.8, "Áreas", "@pomar")
+ob("fazenda", "Fazenda de animais", 13, 7.8, "Áreas", "@fazenda")
 -- salas internas: as paredes ficam na fileira; "mover a sala" leva o que está dentro dela
 ob("cozinha", "Cozinha", 14.75, 0.1, "Áreas", "@cozinha")
 ob("cervejaria", "Cervejaria", 20.25, 0.1, "Áreas", "@cerv")
@@ -117,7 +117,7 @@ ob("pilar4", "Pilar 4", 27.61, -1.14, "Círculo", "circulo")
 ob("quartos_sala", "Quartos", 43.5, -1.5, "Áreas", "@quartos")
 for i = 1, 4 do ob("cama" .. i, "Cama " .. i, 41.5 + (i - 1) % 2 * 3.6, -3 + (i > 2 and 2.9 or 0), "Quartos", "quartos_sala") end
 ob("bau_quartos", "Baú", 43.3, 0.8, "Quartos", "quartos_sala")
-ob("sala_guilda", "Sala do chefe da guilda", 53, -1.5, "Áreas", "@guilda")
+ob("sala_guilda", "Sala da guilda", 53, -1.5, "Áreas", "@guilda")
 ob("mesa_guilda", "Mesa do chefe", 53, -1.9, "Guilda", "sala_guilda")
 ob("cadeira_guilda", "Cadeira do chefe", 53, -3, "Guilda", "sala_guilda")
 ob("estante_guilda", "Estante da guilda", 51.6, -4.15, "Guilda", "sala_guilda")
@@ -151,12 +151,12 @@ local INTERNAS = {
   { id = "cervejaria", ancora = "@cerv", x0 = 17.5, z0 = -4.5, l = 5.5, p = SALAO_P, k = "cerv", nome = "Cervejaria" },
   { id = "circulo", ancora = "@canto", x0 = 23, z0 = -4.5, l = 5.5, p = SALAO_P, k = "circ", nome = "Invocação" },
   { id = "quartos_sala", ancora = "@quartos", x0 = 40, z0 = -4.5, l = 7, p = 6, k = "quartos", nome = "Quartos", andar = 1, so_andar = 1 },
-  { id = "sala_guilda", ancora = "@guilda", x0 = 50, z0 = -4.5, l = 6, p = 6, k = "guilda", nome = "Sala do chefe", andar = 1, so_andar = 1 },
+  { id = "sala_guilda", ancora = "@guilda", x0 = 50, z0 = -4.5, l = 6, p = 6, k = "guilda", nome = "Sala da guilda", andar = 1, so_andar = 1 },
 }
 local EXTERNAS = {
-  { id = "jardim", ancora = "@frente", x0 = -6.5, l = 7, z0 = 4.8, p = 4, k = "jardim", nome = "Jardim" },
-  { id = "pomar", ancora = "@pomar", x0 = 0.5, l = 7.5, z0 = 4.8, p = 6, k = "pomar", nome = "Jardim de frutas" },
-  { id = "fazenda", ancora = "@fazenda", x0 = 8, l = 10, z0 = 4.8, p = 6, k = "faz", nome = "Fazenda" },
+  { id = "jardim", ancora = "@frente", x0 = -6.5, l = 7, z0 = 4.8, p = 4, k = "jardim", nome = "Fazenda de sementes" },
+  { id = "pomar", ancora = "@pomar", x0 = 0.5, l = 7.5, z0 = 4.8, p = 6, k = "pomar", nome = "Árvores frutíferas" },
+  { id = "fazenda", ancora = "@fazenda", x0 = 8, l = 10, z0 = 4.8, p = 6, k = "faz", nome = "Fazenda de animais" },
   -- sem k: o caminho tem tamanho fixo, não entra em L.tamanho nem tem alça
   { id = "caminho", ancora = "@caminho", x0 = 70, l = 12, z0 = -4.5, p = 6, nome = "Caminho de pedras" },
 }
@@ -182,7 +182,7 @@ local function ef(k)
 end
 
 local ABRE = { cervejaria = "a_cerveja", circulo = "a_circulo", jardim = "a_jardim", pomar = "a_pomar", fazenda = "a_fazenda",
-  quartos_sala = "a_segundo_andar", sala_guilda = "a_segundo_andar" }
+  quartos_sala = "a_quartos", sala_guilda = "a_guilda" }
 function L.aberta(id)
   -- comprada e ainda sem lugar escolhido na Loja: por enquanto não existe na cena
   local J = package.loaded.jogo
@@ -191,6 +191,8 @@ function L.aberta(id)
   if id == "cozinha" then return ef("a_cozinha") > 0 or ef("cozinheiro") > 0 end
   -- surge com o que vier primeiro: o mural ou o mercadinho
   if id == "caminho" then return ef("prateleira") > 0 or ef("mercadinho") > 0 end
+  -- as duas salas de cima só existem com o andar
+  if (id == "quartos_sala" or id == "sala_guilda") and ef("a_segundo_andar") <= 0 then return false end
   return ef(ABRE[id]) > 0
 end
 

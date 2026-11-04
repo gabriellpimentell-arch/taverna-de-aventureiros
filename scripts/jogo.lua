@@ -12,6 +12,8 @@ local Cam = require("caminhos")
 
 local J = {}
 
+J.VERSAO_ARVORE = 2      -- sobe quando a forma da árvore muda: o save antigo passa pela migração
+
 J.PORTA = { x = -6.4, z = 1.6 }
 J.RUA_Z = 1.6
 -- onde quem vem de fora para diante do mural e do mercadinho, na faixa de pedras
@@ -56,17 +58,18 @@ local FOFOCAS = {
 J.NOTICIAS = {
   { id = "mesa", titulo = "Mais espaço na taverna!", texto = "Agora você pode comprar uma Nova mesa. Mais lugares significam mais clientes ao mesmo tempo e mais ouro." },
   { id = "garcom", titulo = "Contrate um garçom!", texto = "Agora você pode contratar um Garçom. Ele serve os clientes sozinho e a taverna continua rendendo mesmo quando você não toca." },
-  { id = "prateleira", titulo = "A prateleira de missões!", texto = "Agora você pode construir a Prateleira de missões. Aventureiros vão pegar missões e pagar quando voltarem." },
+  { id = "prateleira", titulo = "O mural de missões!", texto = "Agora você pode construir o Mural de missões. Aventureiros vão pegar missões e pagar quando voltarem." },
   { id = "bardo", titulo = "Um bardo na taverna!", texto = "Agora você pode chamar um Bardo. A música faz cada pedido render mais." },
   { id = "mercadinho", titulo = "O mercadinho!", texto = "Agora você pode abrir o Mercadinho. Os aventureiros voltam com espólios, você compra e revende com lucro." },
-  { id = "jardim", titulo = "O jardim!", texto = "Agora você pode plantar o Jardim. Ele produz alimentos que abastecem a cozinha e a cervejaria." },
-  { id = "fazendeiro", titulo = "Um fazendeiro!", texto = "Agora você pode contratar um Fazendeiro. Ele só cuida do jardim e cada colheita rende mais." },
+  { id = "jardim", titulo = "A fazenda de sementes!", texto = "Agora você pode abrir a Fazenda de sementes. Ela produz alimentos que abastecem a cozinha e a cervejaria." },
+  { id = "fazendeiro", titulo = "Um fazendeiro!", texto = "Agora você pode contratar um Fazendeiro. Ele só cuida da fazenda de sementes e cada colheita rende mais." },
   { id = "cozinha", titulo = "A cozinha!", texto = "Agora você pode construir a Cozinha, uma sala só para preparar a comida. Ela abre espaço para o cozinheiro trabalhar." },
-  { id = "pomar", titulo = "O jardim de frutas!", texto = "Agora você pode plantar o Jardim de frutas. As colheitas e os pedidos passam a render mais." },
-  { id = "fazenda", titulo = "A fazenda!", texto = "Agora você pode abrir a Fazenda e criar as próprias vacas. Com alimentos da casa, os pedidos rendem mais e entra ouro todo segundo." },
+  { id = "pomar", titulo = "As árvores frutíferas!", texto = "Agora você pode plantar as Árvores frutíferas. As colheitas e os pedidos passam a render mais." },
+  { id = "fazenda", titulo = "A fazenda de animais!", texto = "Agora você pode abrir a Fazenda de animais e criar as próprias vacas. Com alimentos da casa, os pedidos rendem mais e entra ouro todo segundo." },
   { id = "cozinheiro", titulo = "Um cozinheiro!", texto = "Agora você pode contratar um Cozinheiro. Ele usa o que você colhe e a comida passa a render bem mais." },
   { id = "cervejaria", titulo = "A cervejaria!", texto = "Agora você pode abrir a Cervejaria, com um cervejeiro próprio. As bebidas da casa rendem bem mais." },
   { id = "ala_leste", titulo = "Uma ala nova!", texto = "Agora você pode construir a Ala leste. A taverna cresce e ganha mais duas mesas." },
+  { id = "sala_guilda", titulo = "A sala da guilda!", texto = "Agora você pode construir a Sala da guilda no segundo andar. O gerente sobe e passa a chefiar os aventureiros." },
   { id = "venda", titulo = "A aba de venda!", texto = "Agora você pode vender poções, armaduras e armas. O lucro do mercadinho também dobra." },
   { id = "recrutador", titulo = "O recrutador chegou!", texto = "Agora você pode trazer o Recrutador e contratar aventureiros próprios, que evoluem e trazem mais ouro." },
   { id = "party", titulo = "Parties!", texto = "Agora você pode juntar quatro aventureiros em uma party, um grupo mais forte que vai junto nas missões." },
@@ -146,6 +149,7 @@ end
 local function estado_inicial()
   return {
     versao = 2,
+    arvore_v = J.VERSAO_ARVORE,
     ouro = 0, total = 0, servidos = 0, rps = 0, tempo = 0,
     nos = {},
     missoes = {},           -- { rank, resta, contratado = id }
@@ -177,7 +181,7 @@ end
 
 -- sala -> nó da árvore que a compra
 local NO_DA_SALA = { cozinha = "cozinha", cervejaria = "cervejaria", circulo = "invocacao", jardim = "jardim", pomar = "pomar",
-  fazenda = "fazenda", quartos_sala = "segundo_andar", sala_guilda = "segundo_andar",
+  fazenda = "fazenda", quartos_sala = "quartos", sala_guilda = "sala_guilda",
   caminho = "prateleira", mercadinho = "mercadinho", mural = "prateleira" }
 local ORDEM_SALAS = { "cozinha", "cervejaria", "jardim", "pomar", "fazenda", "quartos_sala", "sala_guilda", "circulo" }
 
@@ -190,13 +194,16 @@ local function nivel_valendo(no, nv)
   if id == "cozinha" or id == "cervejaria" or id == "jardim" or id == "pomar" or id == "fazenda" then
     if not c.salas[id] then return 0 end
   end
+  if id == "cerveja_melhor" and not c.salas.cervejaria then return 0 end
   if id == "pomar" then return 1 + math.min(c.frutas, nv - 1) end
   if id == "fazenda" then return 1 + math.min(c.vacas, nv - 1) end
   if id == "canteiro" then return math.min(c.canteiros, nv) end
   return nv
 end
 
-local function recalcular()
+local recalcular
+function J.recalcular() recalcular() end
+function recalcular()
   ef = {}
   for _, no in ipairs(A.NOS) do
     local nv = nivel_valendo(no, J.estado.nos[no.id] or 0)
@@ -241,17 +248,51 @@ end
 function J.no_maximo(no) return J.nivel(no.id) >= no.max end
 
 function J.pode_comprar_no(no)
-  return J.no_liberado(no) and not J.no_maximo(no) and J.estado.ouro >= J.custo_no(no)
+  return not no.em_breve and J.no_liberado(no) and not J.no_maximo(no) and J.estado.ouro >= J.custo_no(no)
+end
+
+-- O que a árvore mostra de cada nó, sempre derivado das compras:
+-- "comprado"; "revelado" (todos os pré-requisitos comprados: nome, preço e efeito); "pista" (só um "?");
+-- "oculto" (não aparece; quando muito, um toco de linha no nó de onde ele sai).
+function J.estado_no(no)
+  if J.nivel(no.id) > 0 then return "comprado" end
+  if no.em_breve then return J.no_liberado(no) and "pista" or "oculto" end
+  if J.no_liberado(no) then return "revelado" end
+  local algum = false
+  for _, p in ipairs(no.pre) do
+    if J.nivel(p) > 0 then algum = true end
+  end
+  -- falta só outro pré-requisito: o jogador já sabe que existe algo aqui
+  if algum then return "pista" end
+  -- o nó disponível insinua um dos seus passos seguintes, nunca todos
+  local pai = no.pai and A.POR_ID[no.pai]
+  if pai and J.nivel(pai.id) == 0 and J.no_liberado(pai) then
+    for _, f in ipairs(pai.filhos) do
+      local filho = A.POR_ID[f]
+      if filho.pai == pai.id then return filho == no and "pista" or "oculto" end
+    end
+  end
+  return "oculto"
+end
+
+-- continuações do nó ainda totalmente escondidas: cada uma vira um toco de linha
+function J.continuacoes_ocultas(no)
+  local r = {}
+  for _, f in ipairs(no.filhos) do
+    local filho = A.POR_ID[f]
+    if filho.pai == no.id and J.estado_no(filho) == "oculto" then r[#r + 1] = filho end
+  end
+  return r
 end
 
 local AVISOS = {
   cozinha = "A cozinha está pronta!",
-  pomar = "O jardim de frutas foi plantado!",
-  fazenda = "A fazenda abriu as porteiras!",
-  prateleira = "A prateleira de missões abriu! Aba Missões liberada.",
+  pomar = "As árvores frutíferas foram plantadas!",
+  fazenda = "A fazenda de animais abriu as porteiras!",
+  prateleira = "O mural de missões abriu! Aba Missões liberada.",
   mercadinho = "O mercadinho abriu! Os aventureiros vão vender espólios.",
   venda = "Aba de venda liberada no Mercadinho!",
-  jardim = "O jardim abriu! Aba Produção liberada.",
+  jardim = "A fazenda de sementes abriu! Aba Produção liberada.",
   recrutador = "O recrutador chegou! Aba Aventureiros liberada.",
   propaganda = "Propaganda liberada: seus heróis podem ficar famosos!",
   invocacao = "O círculo de invocação foi construído!",
@@ -390,6 +431,9 @@ end
 -- O gerente: serve sozinho no começo; com garçom fica atrás do balcão; com a sala da guilda, sobe
 function J.gerente_na_guilda() return J.ef("prateleira") > 0 and L.aberta("sala_guilda") end
 
+-- a escada do térreo: sobe ao segundo andar; save antigo pode ter quartos de antes de ele existir
+function J.tem_escada() return L.andar_existe(1) or J.nivel("quartos") > 0 end
+
 -- Lugares ---------------------------------------------------------------------------
 
 function J.num_mesas() return math.min(1 + J.ef("mesas"), #POS_MESAS) end
@@ -491,7 +535,7 @@ function J.montar_mapa()
   end
   caixa("carga", 5.5, 4.1, 1.4, 0.8)
   if J.ef("bardo") > 0 then circulo("bardo", -5.1, -1.25, 0.32) end
-  if J.nivel("quartos") > 0 then caixa("quartos", -4.65, -3.9, 1.4, 0.8) end
+  if J.tem_escada() then caixa("quartos", -4.65, -3.9, 1.4, 0.8) end
   local sa, sb, sc, sd = L.salao()
   local xmax = sb - 0.2
   if J.ef("a_leste") > 0 then
@@ -679,7 +723,9 @@ function J.para_colocar()
   end
   for _, id in ipairs(ORDEM_SALAS) do
     if bruto(NO_DA_SALA[id]) > 0 and not c.salas[id] then
-      r[#r + 1] = { tipo = "sala", id = id, nome = nomes[id], n = 1 }
+      -- quartos e sala da guilda só cabem no segundo andar; save antigo pode ter os quartos antes dele
+      local b = id == "quartos_sala" or id == "sala_guilda"
+      r[#r + 1] = { tipo = "sala", id = id, nome = nomes[id], n = 1, requer = b and not L.andar_existe(1) and "Segundo andar" or nil }
     end
   end
   -- mercadinho e mural: o primeiro a ser posto escolhe o lugar do caminho; o segundo só entra ao lado
@@ -688,11 +734,11 @@ function J.para_colocar()
   local mesas = bruto("mesa") + bruto("ala_leste") * 2 - c.mesas
   if mesas > 0 then r[#r + 1] = { tipo = "mesa", nome = "Mesa", n = mesas } end
   local cant = bruto("canteiro") - c.canteiros
-  if cant > 0 then r[#r + 1] = { tipo = "canteiro", nome = "Canteiro", n = cant, requer = not c.salas.jardim and "Jardim" or nil } end
+  if cant > 0 then r[#r + 1] = { tipo = "canteiro", nome = "Canteiro", n = cant, requer = not c.salas.jardim and "Fazenda de sementes" or nil } end
   local arv = bruto("pomar") - 1 - c.frutas
-  if arv > 0 then r[#r + 1] = { tipo = "arvore", nome = "Árvore do pomar", n = arv, requer = not c.salas.pomar and "Jardim de frutas" or nil } end
+  if arv > 0 then r[#r + 1] = { tipo = "arvore", nome = "Árvore frutífera", n = arv, requer = not c.salas.pomar and "Árvores frutíferas" or nil } end
   local vac = bruto("fazenda") - 1 - c.vacas
-  if vac > 0 then r[#r + 1] = { tipo = "vaca", nome = "Vaca", n = vac, requer = not c.salas.fazenda and "Fazenda" or nil } end
+  if vac > 0 then r[#r + 1] = { tipo = "vaca", nome = "Vaca", n = vac, requer = not c.salas.fazenda and "Fazenda de animais" or nil } end
   return r
 end
 
@@ -753,14 +799,14 @@ function J.lugar_item(tipo, x, z, extra)
     if Cam.bloqueado(x, z) or Cam.bloqueado(x - 1.25, z) or Cam.bloqueado(x + 1.25, z) then return nao("Tem um móvel neste lugar") end
   elseif tipo == "arvore" then
     if L.andar_ativo ~= 0 then return nao("Árvores ficam no térreo") end
-    if not dentro("pomar", 0.6) then return nao("Precisa ficar dentro do pomar") end
+    if not dentro("pomar", 0.6) then return nao("Precisa ficar dentro das Árvores frutíferas") end
     for i = 1, J.ef("frutas") + 2 do
       local ax, az = L.t("arvore" .. i, L.POR_ID["arvore" .. i].x, L.POR_ID["arvore" .. i].z)
       if util.distancia(x, z, ax, az) < 1.2 then return nao("Muito perto de outra árvore") end
     end
   elseif tipo == "vaca" then
     if L.andar_ativo ~= 0 then return nao("Vacas ficam no térreo") end
-    if not dentro("fazenda", 1) then return nao("Precisa ficar dentro da fazenda") end
+    if not dentro("fazenda", 1) then return nao("Precisa ficar dentro da Fazenda de animais") end
   elseif tipo == "decor" then
     if L.andar_ativo ~= 0 then return nao("Decoração só fica no térreo") end
     local onde
@@ -961,6 +1007,9 @@ end
 
 -- Obras: mover é de graça; cada metro novo é pago e guardado por lado --------------------------------
 
+-- Antes do Mestre de Obras, o tamanho de tudo é fixo. Mover continua de graça.
+function J.obras_liberadas() return J.ef("a_obras") > 0 end
+
 -- Preço do próximo metro, cresce um pouco com tudo o que já foi aumentado. extra = metros ainda não aplicados.
 function J.preco_metro(extra)
   local total = extra or 0
@@ -974,6 +1023,7 @@ function J.orcar_obra(chave, delta)
   local r = { metros = 0, custo = 0, devolve = 0, falta = 0, limite = false }
   local atual = L.tamanho[chave]
   if not atual then return r end
+  if not J.obras_liberadas() then r.sem_mestre = true; return r end
   local lim_max = L.TAMANHO_MAX
   local lim_min = math.min(L.tamanho_minimo(chave), lim_max)
   local ouro = J.estado.ouro
@@ -1004,7 +1054,7 @@ end
 function J.obra(chave, delta)
   local e = J.estado
   local r = { metros = 0, custo = 0, devolve = 0, falta = 0 }
-  if not L.tamanho[chave] or delta == 0 then return false, r end
+  if not L.tamanho[chave] or delta == 0 or not J.obras_liberadas() then return false, r end
   local passo = delta > 0 and 1 or -1
   for _ = 1, math.abs(delta) do
     local orc = J.orcar_obra(chave, passo)
@@ -1942,10 +1992,11 @@ local OBJETIVOS = {
   { "servidos", "Toque nos balões para servir os clientes" },
   { "mesa", "Abra a Árvore e compre uma Nova mesa" },
   { "garcom", "Contrate um Garçom na Árvore" },
-  { "prateleira", "Construa a Prateleira de missões" },
-  { "mercadinho", "Abra o Mercadinho" },
-  { "jardim", "Plante o Jardim" },
   { "cozinha", "Construa a Cozinha" },
+  { "cervejaria", "Abra a Cervejaria" },
+  { "jardim", "Abra a Fazenda de sementes" },
+  { "prateleira", "Construa o Mural de missões" },
+  { "mercadinho", "Abra o Mercadinho" },
   { "cozinheiro", "Contrate o Cozinheiro" },
   { "venda", "Libere a Aba de venda" },
   { "recrutador", "Traga o Recrutador" },
@@ -2171,6 +2222,21 @@ end
 -- números inválidos em um save danificado não podem travar o jogo
 local limpar_contratados
 
+-- Save da árvore antiga: nada comprado se perde.
+-- A sala da guilda vinha com o segundo andar; a cervejaria tinha níveis que agora são um nó à parte.
+local function migrar_arvore(e, dados)
+  if tonumber(dados.arvore_v) == J.VERSAO_ARVORE then return end
+  local nos = e.nos
+  if (tonumber(nos.segundo_andar) or 0) > 0 then nos.sala_guilda = 1 end
+  local cerv = tonumber(nos.cervejaria) or 0
+  if cerv > 1 then
+    nos.cervejaria, nos.cerveja_melhor = 1, math.floor(cerv) - 1
+  end
+  -- quem já jogava podia fazer obras: continua podendo
+  if next(nos) ~= nil then nos.mestre_obras = 1 end
+  e.arvore_v = J.VERSAO_ARVORE
+end
+
 local function saneado(v, padrao)
   if type(v) ~= "number" or v ~= v or v == math.huge or v == -math.huge then return padrao end
   return v
@@ -2273,6 +2339,7 @@ function J.carregar()
   for r, n in pairs(e.feitas_rank) do
     if type(n) ~= "number" then e.feitas_rank[r] = nil end
   end
+  if type(e.nos) == "table" then migrar_arvore(e, dados) end
   -- quem já tinha cozinheiro antes de existir a cozinha ganha a sala
   if type(e.nos) == "table" and (tonumber(e.nos.cozinheiro) or 0) > 0 then e.nos.cozinha = 1 end
   -- ignora nós que não existem mais e níveis acima do máximo

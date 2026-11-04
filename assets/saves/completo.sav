@@ -1,4 +1,5 @@
 {
+["arvore_v"] = 2,
 ["brigas"] = 300,
 ["ciclo"] = 0,
 ["colhido"] = 100000,
@@ -301,7 +302,8 @@
 ["canteiro"] = 8,
 ["cardapio"] = 20,
 ["cartazes"] = 8,
-["cervejaria"] = 6,
+["cerveja_melhor"] = 5,
+["cervejaria"] = 1,
 ["comissao"] = 12,
 ["conforto"] = 6,
 ["cozinha"] = 1,
@@ -328,6 +330,7 @@
 ["merc_ss"] = 1,
 ["mercadinho"] = 1,
 ["mesa"] = 5,
+["mestre_obras"] = 1,
 ["moco"] = 1,
 ["negociar"] = 10,
 ["party"] = 1,
@@ -348,6 +351,7 @@
 ["recrutador"] = 1,
 ["ricos"] = 8,
 ["ritual"] = 6,
+["sala_guilda"] = 1,
 ["segundo_andar"] = 1,
 ["subsolo"] = 1,
 ["vagas"] = 14,
@@ -380,6 +384,7 @@
 ["rank_s"] = true,
 ["rank_ss"] = true,
 ["recrutador"] = true,
+["sala_guilda"] = true,
 ["venda"] = true
 },
 ["obras"] = {

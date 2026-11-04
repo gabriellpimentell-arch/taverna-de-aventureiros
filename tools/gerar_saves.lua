@@ -20,6 +20,7 @@ motor._raiz = raiz
 local function gravar(nome)
   local e = J.estado
   e.salvo_em = nil
+  e.layout = nil   -- a construção do robô não vai junto: save pronto nasce do padrão
   local f = assert(io.open(raiz .. "/assets/saves/" .. nome .. ".sav", "wb"))
   f:write(util.serializar(e))
   f:close()
@@ -46,7 +47,7 @@ iniciar()
 local e = J.estado
 for _ = 1, 3 do
   for _, no in ipairs(A.NOS) do
-    while not J.no_maximo(no) and J.no_liberado(no) do
+    while not no.em_breve and not J.no_maximo(no) and J.no_liberado(no) do
       e.ouro = J.custo_no(no)
       J.comprar_no(no.id)
     end

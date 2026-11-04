@@ -71,9 +71,19 @@ local function libera(...)
   for _, id in ipairs({ ... }) do
     local no = A.POR_ID[id]
     for _, p in ipairs(no.pre) do if J.nivel(p) < 1 then libera(p) end end
-    J.estado.ouro = J.custo_no(no) + 1
-    assert(J.comprar_no(id), "não comprou " .. id)
+    -- já veio como pré-requisito de outro: nada a fazer
+    if not J.no_maximo(no) then
+      J.estado.ouro = J.custo_no(no) + 1
+      assert(J.comprar_no(id), "não comprou " .. id)
+    end
   end
+end
+
+-- o que espera lugar na Loja, sem contar mesas (mesa é pré-requisito de muita coisa)
+local function pendentes_sem_mesa()
+  local n = 0
+  for _, i in ipairs(J.para_colocar()) do if i.tipo ~= "mesa" then n = n + i.n end end
+  return n
 end
 
 -- Formatação: 100 mi aparecia como "1 mi" e 120 mil como "12 mil"
@@ -114,9 +124,57 @@ do
       if J.nivel(no.id) == 0 and J.comprar_no(no.id) then progresso = true end
     end
   end
-  for _, no in ipairs(A.NOS) do ok("nó alcançável: " .. no.id, J.nivel(no.id) > 0) end
+  for _, no in ipairs(A.NOS) do ok("nó alcançável: " .. no.id, no.em_breve or J.nivel(no.id) > 0) end
   ok("lugares não passam das posições", J.num_mesas() <= #J.POS_MESAS)
   quadros(30)
+end
+
+-- Árvore que revela: tudo sai das compras --------------------------------------------
+do
+  novo()
+  local function est(id) return J.estado_no(A.POR_ID[id]) end
+  local vis = {}
+  for _, no in ipairs(A.NOS) do if est(no.id) == "revelado" then vis[#vis + 1] = no.id end end
+  table.sort(vis)
+  ok("começa com 3 raízes", table.concat(vis, ",") == "cardapio,mesa,placa", table.concat(vis, ","))
+  ok("escondido não é mostrado", est("cozinha") == "oculto" and est("invocacao") == "oculto")
+  ok("uma continuação vira ?", est("balcao") == "pista" and est("garcom") == "oculto")
+  ok("o resto vira toco", #J.continuacoes_ocultas(A.POR_ID.mesa) == 2)
+  libera("mesa")
+  ok("comprar revela 3 nós", est("garcom") == "revelado" and est("balcao") == "revelado" and est("mestre_obras") == "revelado")
+  for _, no in ipairs(A.NOS) do
+    local n = 0
+    for _, f in ipairs(no.filhos) do if A.POR_ID[f].pai == no.id then n = n + 1 end end
+    ok("no máximo 3 filhos: " .. no.id, n <= 3, n)
+    ok("raiz só onde deve", no.pai ~= nil or no.id == "cardapio" or no.id == "mesa" or no.id == "placa", no.id)
+  end
+  -- sequências obrigatórias
+  ok("sementes antes de frutíferas", A.POR_ID.pomar.pai == "jardim")
+  ok("frutíferas antes de animais", A.POR_ID.fazenda.pai == "pomar")
+  ok("guilda antes da avaliação", A.POR_ID.avaliacao.pai == "sala_guilda" and A.POR_ID.avaliacao.em_breve)
+  ok("festa exige o mural", A.POR_ID.festa.req == "prateleira")
+  libera("sala_guilda")
+  ok("segundo andar não dá a sala da guilda", J.nivel("sala_guilda") == 1 and J.nivel("segundo_andar") == 1)
+  ok("avaliação vira ? e não se compra", est("avaliacao") == "pista" and not J.comprar_no("avaliacao"))
+  -- pré-requisito parcial
+  novo()
+  J.estado.nos.fama_local = 1
+  ok("nó com dois pais: um comprado vira ?", est("festa") == "pista")
+  -- não há fronteira só com saltos enormes: toda fronteira tem algo a no máximo 50x do comprado
+  novo()
+  local cur = {}
+  for _, no in ipairs(A.NOS) do
+    if no.pai and not no.em_breve then
+      local maior = J.custo_no(A.POR_ID[no.pai])
+      local barato = math.huge
+      for _, f in ipairs(A.POR_ID[no.pai].filhos) do
+        local x = A.POR_ID[f]
+        if not x.em_breve and x.custo < barato then barato = x.custo end
+      end
+      if barato / maior > 50 then cur[#cur + 1] = no.pai end
+    end
+  end
+  ok("sem salto de preço", #cur == 0, table.concat(cur, ","))
 end
 
 -- Clientes ---------------------------------------------------------------------------
@@ -194,10 +252,7 @@ ok("nunca falha: feitas por rank batem", (J.estado.feitas_rank[1] or 0) == J.est
 -- rank sem reputação fica no A
 novo()
 J.estado.ouro = 1e40
-for _, id in ipairs({ "prateleira", "rank_e", "rank_d", "rank_c", "rank_b", "rank_a", "rank_s", "rank_ss" }) do
-  J.estado.ouro = 1e40
-  J.comprar_no(id)
-end
+libera("rank_ss")
 ok("sem reputação, comuns vão até o A", J.rank_aventureiro() == 6, J.rank_aventureiro())
 J.estado.fama = 1e9
 ok("com reputação, chegam ao SS", J.rank_aventureiro() == 8, J.rank_aventureiro())
@@ -1818,7 +1873,7 @@ do
     if nome == "metade" then ok("metade tem party aberta", J.ef("party") > 0 and J.ef("mercadinho") > 0) end
     if nome == "completo" then
       local tudo = true
-      for _, no in ipairs(A.NOS) do if not J.no_maximo(no) then tudo = false end end
+      for _, no in ipairs(A.NOS) do if not no.em_breve and not J.no_maximo(no) then tudo = false end end
       ok("completo tem a árvore toda", tudo)
       ok("completo pode enfrentar o final", J.pode_final() or J.estado.final_resta ~= nil)
       ok("completo tem 4 invocados", J.estado.invocados_feitos == 4)
@@ -1996,12 +2051,15 @@ do
     T.aba = "loja"
     Lj.iniciar()
     J.estado.ouro = 1e7
+    -- a maior parte destes testes é sobre obras: já vem com o Mestre de Obras
+    J.estado.nos.mestre_obras = 1
+    J.recalcular()
     quadros(1)
   end
   local function comprar(...)
     for _, id in ipairs({ ... }) do
+      libera(id)
       J.estado.ouro = 1e12
-      assert(J.comprar_no(id), "não comprou " .. id)
     end
   end
   local function fechou(t) return t end
@@ -2039,7 +2097,7 @@ do
   jogo_novo()
   comprar("garcom", "cozinha")
   ok("sala comprada não abre sozinha", not L.aberta("cozinha") and J.fracao_custo("comida") == C.fracao_comida.comprada)
-  ok("selo conta a sala", J.total_para_colocar() == 1)
+  ok("selo conta a sala", pendentes_sem_mesa() == 1)
   local xa, xb, za = L.salao()
   local bom, m2 = J.por_sala("cozinha", xb + 30, za, 0)
   ok("sala solta é recusada com motivo", not bom and type(m2) == "string" and not L.aberta("cozinha"))
@@ -2055,7 +2113,7 @@ do
   ok("não confirma em vermelho", not Lj.confirmar() and not L.aberta("cozinha"))
   Lj.colocando.x, Lj.colocando.z = L.vaga_sala("cozinha", 0)
   desenhar()
-  ok("confirma em verde", Lj.confirmar() and L.aberta("cozinha") and J.total_para_colocar() == 0)
+  ok("confirma em verde", Lj.confirmar() and L.aberta("cozinha") and pendentes_sem_mesa() == 0)
   ok("sala posta passa a valer nas regras", J.fracao_custo("comida") == C.fracao_comida.cozinha)
   local d = util.desserializar(motor.carregar())
   ok("sala posta fica no save", d.colocados and d.colocados.salas.cozinha == true)
@@ -2078,15 +2136,21 @@ do
   ok("põe fazenda", J.por_sala("fazenda", x0, z0, 0))
   ok("fazenda vem com 1 vaca", J.ef("vacas") == 1 and J.ef("renda_fazenda") == 60)
   ok("vaca extra conta e rende ao pôr", J.por_item("vaca") and J.ef("vacas") == 2 and J.ef("renda_fazenda") == 120)
-  ok("só faltam as salas compradas no caminho", J.total_para_colocar() == 2)
+  ok("só faltam as salas compradas no caminho", pendentes_sem_mesa() == 2)
   quadros(3)
 
   -- Segundo andar: o andar abre na hora, as salas esperam
   jogo_novo()
-  comprar("mesa", "balcao", "quartos", "segundo_andar")
+  comprar("quartos", "sala_guilda")
   J.por_item("mesa")
   ok("andar novo abre, salas dele não", L.andar_existe(1) and not L.aberta("quartos_sala") and not L.aberta("sala_guilda"))
-  ok("quartos e sala do chefe pendentes", J.total_para_colocar() == 2)
+  do
+    local q, g
+    for _, i in ipairs(J.para_colocar()) do
+      if i.id == "quartos_sala" then q = i elseif i.id == "sala_guilda" then g = i end
+    end
+    ok("quartos e sala da guilda pendentes", q and g)
+  end
   desenhar()
   ok("botão dos quartos leva ao andar deles", U.apertar("loja_item_quartos_sala") and L.andar_ativo == 1 and Lj.colocando ~= nil)
   ok("quartos entram no segundo andar", Lj.confirmar() and L.aberta("quartos_sala") and L.andar_de("quartos_sala") == 1)
@@ -2111,6 +2175,37 @@ do
   ok("cartão abre o fantasma sem cobrar", U.apertar("loja_decor_banco") and Lj.colocando and e.ouro == 1000)
   desenhar()
   ok("cancelar não cobra", U.apertar("loja_cancelar") and not Lj.colocando and e.ouro == 1000)
+
+  -- Antes do Mestre de Obras: paredes fixas, com explicação; mover continua grátis
+  do
+    jogo_novo()
+    J.estado.nos.mestre_obras = nil
+    J.recalcular()
+    local o = J.estado.ouro
+    local feito0 = J.obra("dir", 2)
+    ok("sem mestre não há obra", not feito0 and L.tamanho.dir == 0 and J.estado.ouro == o)
+    ok("orçamento diz o motivo", J.orcar_obra("dir", 2).sem_mestre == true)
+    Lj.aba = "comodos"; Lj.selecionar("taverna")
+    ok("sem alças", #Lj.alcas() == 0)
+    local vistos = {}
+    local t0 = motor.texto
+    motor.texto = function(tx, ...) vistos[#vistos + 1] = tx; return t0(tx, ...) end
+    quadros(1)
+    motor.texto = t0
+    ok("o painel explica", table.concat(vistos, " "):find("Mestre de Obras") ~= nil)
+    ok("mover continua grátis", J.mover_item("carga", L.POR_ID.carga.x - 1, L.POR_ID.carga.z) and J.estado.ouro == o)
+    libera("mestre_obras")
+    ok("mestre é barato", A.POR_ID.mestre_obras.custo <= 50)
+    quadros(1)
+    ok("com mestre aparecem as alças", #Lj.alcas() > 0)
+    Lj.iniciar()
+    J.estado.ouro = 1e7
+    local d = util.desserializar(util.serializar(J.estado))
+    d.nos = { mesa = 2 }; d.arvore_v = nil; d.layout = {}
+    motor._save = util.serializar(d)
+    iniciar()
+    ok("save antigo já tem obras", J.obras_liberadas())
+  end
 
   -- Obras: cobrar, devolver, sem ouro, sem lucro
   jogo_novo()
@@ -2522,7 +2617,7 @@ do
   -- andares
   zerar()
   ok("sem o nó, um andar só", #L.andares() == 1)
-  ok("nó do segundo andar é filho de quartos", A.POR_ID.segundo_andar.pai == "quartos")
+  ok("quartos ficam no segundo andar", A.POR_ID.quartos.pai == "segundo_andar")
   ok("nó do subsolo é filho do segundo", A.POR_ID.subsolo.pai == "segundo_andar")
   ok("andar trancado não abre", not L.mudar_andar(1))
   J.estado.ouro = 0
@@ -2726,7 +2821,7 @@ do
   J.comecar_endividado()
   J.noticia = nil
   local function comprar(...)
-    for _, id in ipairs({ ... }) do J.estado.ouro = 1e20; ok("comprou " .. id, J.comprar_no(id)) end
+    for _, id in ipairs({ ... }) do libera(id); J.estado.ouro = 1e20 end
   end
   local function item(id)
     for _, i in ipairs(J.para_colocar()) do if i.id == id then return i end end
@@ -2760,7 +2855,7 @@ do
   local p0x, p0z = L.pos_sala("caminho")
   ok("o segundo entra direto, sem escolher lugar", U.apertar("loja_item_mercadinho") and not Lj.colocando and J.mercadinho_aberto())
   ok("o caminho não mudou de lugar", L.pos_sala("caminho") == p0x and select(2, L.pos_sala("caminho")) == p0z)
-  ok("nada mais para colocar", J.total_para_colocar() == 0, J.total_para_colocar())
+  ok("nada mais para colocar", not item("mural") and not item("mercadinho"))
   -- o contrário: mercadinho primeiro
   novo()
   J.comecar_endividado()
@@ -2781,7 +2876,7 @@ do
   J.salvar()
   iniciar()
   J.noticia = nil
-  ok("save antigo manual mantém mural e mercadinho", J.manual() and J.prateleira_aberta() and J.mercadinho_aberto() and J.total_para_colocar() == 0, J.total_para_colocar())
+  ok("save antigo manual mantém mural e mercadinho", J.manual() and J.prateleira_aberta() and J.mercadinho_aberto() and not item("mural") and not item("mercadinho"))
   J.auto_colocar = true
   T.aba = "taverna"
   Lj.iniciar()

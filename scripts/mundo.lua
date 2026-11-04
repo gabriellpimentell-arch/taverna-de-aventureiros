@@ -516,7 +516,7 @@ local function salao()
 
   -- quartos: escada e porta no fundo
   grupo("quartos")
-  if J.nivel("quartos") > 0 then
+  if J.tem_escada() then
     for i = 0, 5 do caixa(-5.2 + i * 0.22, 0, -3.9, 0.3, 0.24 + i * 0.24, 0.8, "#6a4426") end
     caixa(-4.0, 1.5, -4.46, 1.0, 1.9, 0.08, "#3a2415")
   end

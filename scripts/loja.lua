@@ -144,7 +144,7 @@ function Lj.existe(id)
   if id == "tapete2" then return J.num_mesas() >= 5 end
   if id == "bardo" then return J.ef("bardo") > 0 end
   if id == "cozinheiro" then return J.ef("cozinheiro") > 0 end
-  if id == "quartos" then return J.nivel("quartos") > 0 end
+  if id == "quartos" then return J.tem_escada() end
   if id == "alcapao" then return L.andar_existe(-1) end
   if id == "barraca" then return J.mercadinho_aberto() end
   if id == "estantes" then return J.mercadinho_aberto() and J.venda_aberta() end
@@ -372,7 +372,7 @@ end
 function Lj.alcas()
   local pre = prefixo_alca()
   local r = {}
-  if not pre or Lj.colocando then return r end
+  if not pre or Lj.colocando or not J.obras_liberadas() then return r end
   local raio = raio_alca()
   for _, p in ipairs(L.paredes()) do
     if p.id:sub(1, #pre) == pre then
@@ -963,12 +963,18 @@ local function detalhe_comodos(base, y0)
     return
   end
   local _, b = nome_sala(id)
-  if not b or b.k then
+  if b and not b.k then
+    U.paragrafo("Arraste para mover, é de graça. O mercadinho e o mural vão junto.", base, y0 + 2, w, 14, cor.texto)
+  elseif J.obras_liberadas() then
     local preco = J.preco_metro()
     motor.texto("Metro novo:", base, y0, 14, cor.texto_fraco)
     U.preco(preco, base + motor.largura_texto("Metro novo:", 14) + 4, y0, 14, cor.ouro)
+    U.paragrafo("Arraste para mover, é de graça. Puxe as alças para mudar o tamanho.", base, y0 + 20, w, 14, cor.texto)
+  else
+    -- paredes fixas: o painel diz por quê e onde resolver
+    U.paragrafo("Paredes fixas.", base, y0, w, 14, "#ffb0a2", true)
+    U.paragrafo("Compre o Mestre de Obras na Árvore para aumentar e diminuir. Mover é sempre de graça.", base, y0 + 20, w, 14, cor.texto)
   end
-  U.paragrafo(b and not b.k and "Arraste para mover, é de graça. O mercadinho e o mural vão junto." or "Arraste para mover, é de graça. Puxe as alças para mudar o tamanho.", base, y0 + 20, w, 14, cor.texto)
   -- sala em outro andar: traz para o andar à vista com o fantasma
   if b and b.interna and not b.so_andar and L.andar_de(id) ~= L.andar_ativo then
     U.botao("loja_trazer", base, P.y + P.h - 8 - 44, w, 44, "Trazer para este andar", { tam = 14 }, function() Lj.colocar_sala(id, true) end)

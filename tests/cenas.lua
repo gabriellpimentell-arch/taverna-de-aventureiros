@@ -66,6 +66,11 @@ local passos = {
   { 3, function() end, "01_inicio" },
   { 1, function() T.aba = "arvore" end, "02_arvore_inicio" },
   { 1, function() T.arv.sel = "cardapio" end, "03_arvore_no" },
+  -- revelação: comprar a mesa faz os filhos surgirem; "?" e tocos; painel da pista sem custo
+  { 0.2, function() T.arv.sel = nil; J.estado.ouro = 400; J.comprar_no("mesa") end, "03b_arvore_nascendo" },
+  { 1, function() J.estado.ouro = 400; J.comprar_no("garcom"); J.comprar_no("cardapio") end, "03c_arvore_revelou" },
+  { 0.5, function() T.arv.sel = "cozinheiro"; comprar_tudo_ate({ "cozinha" }) end, "03d_arvore_pista" },
+  { 0.6, function() T.arv.sel = nil; comprar_tudo_ate({ "jardim", "prateleira" }); J.estado.ouro = 1500 end, "03e_arvore_media" },
   { 7, function() T.aba = "taverna"; comprar_tudo_ate({ "mesa", "balcao", "garcom", "prateleira", "placa" }); J.estado.ouro = 1200; J.estado.rps = 14; J.estado.servidos = 30 end, "04_meio" },
   { 0.1, function() J.relogio_aventureiro = 99 end, "04b_indo_quadro" },
   { 2.2, function() end, "04c_no_quadro" },
