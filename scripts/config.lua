@@ -134,6 +134,25 @@ C.estoques = {
   { id = "ovos", nome = "Ovos", usa = { comida = true }, fazenda = "fazenda", modelo = "item_ovos" },
 }
 C.estoque_maximo = 300
+-- Receitas: dois ingredientes (a, b, de C.estoques; podem ser iguais) viram um prato ou uma bebida.
+-- bonus: quanto o pedido rende a mais. no: nó da árvore que precisa estar comprado para descobrir.
+-- Para ampliar: é só acrescentar uma linha aqui. A tela e as regras leem esta tabela.
+C.receitas_vagas = 2           -- receitas no cardápio antes dos nós da cozinha
+C.receita_gasto = 1            -- unidades gastas de cada ingrediente por pedido
+C.receitas = {
+  { id = "pao", nome = "Pão caseiro", a = "trigo", b = "trigo", pedido = "comida", bonus = 1.3 },
+  { id = "cerveja_trigo", nome = "Cerveja de trigo", a = "trigo", b = "lupulo", pedido = "bebida", bonus = 1.5 },
+  { id = "suco", nome = "Suco de frutas", a = "frutas", b = "frutas", pedido = "bebida", bonus = 1.4 },
+  { id = "sidra", nome = "Sidra", a = "frutas", b = "lupulo", pedido = "bebida", bonus = 1.7 },
+  { id = "torta_frutas", nome = "Torta de frutas", a = "trigo", b = "frutas", pedido = "comida", bonus = 1.6 },
+  { id = "torta", nome = "Torta de ovos", a = "trigo", b = "ovos", pedido = "comida", bonus = 1.8 },
+  { id = "empadao", nome = "Empadão de carne", a = "trigo", b = "carne_vaca", pedido = "comida", bonus = 2.0, no = "receitas_nobres" },
+  { id = "ensopado", nome = "Ensopado na cerveja", a = "carne_vaca", b = "lupulo", pedido = "comida", bonus = 2.2, no = "receitas_nobres" },
+  { id = "bife_ovo", nome = "Bife com ovo", a = "carne_vaca", b = "ovos", pedido = "comida", bonus = 2.4, no = "receitas_nobres" },
+  { id = "linguica", nome = "Linguiça no pão", a = "carne_porco", b = "trigo", pedido = "comida", bonus = 2.2, no = "receitas_porco" },
+  { id = "ovos_toucinho", nome = "Ovos com toucinho", a = "carne_porco", b = "ovos", pedido = "comida", bonus = 2.4, no = "receitas_porco" },
+  { id = "pernil", nome = "Pernil com frutas", a = "carne_porco", b = "frutas", pedido = "comida", bonus = 2.6, no = "receitas_porco" },
+}
 C.bonus_cozinheiro = 1.6       -- comida feita com o que foi colhido rende mais
 C.bonus_cozinheiro_nivel = 0.25
 C.bonus_bebida_casa = 1.6

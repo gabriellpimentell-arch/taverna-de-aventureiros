@@ -44,6 +44,7 @@ function T.iniciar()
   T.arv = { x = 0, y = 0, zoom = 0.85, sel = nil, arvore = "principal", vistos = nil, anim = {}, novos = {}, cams = {} }
   T.rolagem = { aventureiros = 0 }
   T.confirmar = false
+  T.rec = {}
   Lj.iniciar()
   M.iniciar()
   T.aplicar_opcoes()
@@ -147,7 +148,7 @@ end
 local function hud()
   local e = J.estado
   -- as outras abas ocupam a tela toda: o painel só fica onde não cobre o conteúdo
-  if T.aba == "taverna" or T.aba == "loja" or T.aba == "arvore" then painel_divida() end
+  if T.aba == "taverna" or T.aba == "loja" or (T.aba == "arvore" and T.arv.arvore ~= "receitas") then painel_divida() end
   motor.retangulo(12, 10, 236, 44, "#21150ee8", 12)
   local p = T.pulso
   U.moeda(34, 32, 14 + p * 2)
@@ -445,12 +446,124 @@ local function faixa_ambientes()
     if J.arvore_aberta(am.id) then
       celula(am.id, am.nome, a.arvore == am.id, J.arvore_tem_compra(am.id), not J.estado.arvores_vistas[am.id],
         function(cx, cy) M.miniatura(am.modelo, cx - 15, cy - 15, 30, 30) end, am.cor)
+      -- a tela de receitas vem logo depois da árvore da cozinha
+      if am.id == "cozinha" then
+        celula("receitas", "Receitas", a.arvore == "receitas", J.receitas_tem_novidade(), false,
+          function(cx, cy) M.miniatura("receitas", cx - 15, cy - 15, 30, 30) end, am.cor)
+      end
     end
+  end
+end
+
+-- Tela de receitas: dois espaços, os ingredientes e o cardápio ------------------------------------
+
+local NOME_ING = {}
+for _, d in ipairs(C.estoques) do NOME_ING[d.id] = d end
+
+local function tela_receitas()
+  local e, rec = J.estado, T.rec
+  M.gravar_miniaturas()
+  motor.retangulo(0, 56, 960, 424, "#1a110bf4")
+  motor.texto("Receitas", 20, 62, 22, cor.texto, "esquerda", true)
+  motor.texto("Combine e monte o cardápio", 20, 90, 13, cor.texto_fraco)
+
+  -- ingredientes
+  U.painel(12, 112, 322, 362)
+  local ing_w, ing_h = 149, 54
+  for i, d in ipairs(C.estoques) do
+    local cx = 22 + ((i - 1) % 2) * (ing_w + 4)
+    local cy = 120 + math.floor((i - 1) / 2) * (ing_h + 4)
+    if J.ingrediente_conhecido(d.id) then
+      motor.retangulo(cx, cy, ing_w, ing_h, "#3d291b", 8)
+      M.miniatura(d.modelo, cx + 3, cy + 5, 44, 44)
+      motor.texto(d.nome, cx + 50, cy + 8, 13, cor.texto, "esquerda", true)
+      motor.texto(fmt(e.estoques[d.id] or 0), cx + 50, cy + 28, 14, cor.ouro, "esquerda", true)
+      U.zona("ing_" .. d.id, { x = cx, y = cy, w = ing_w, h = ing_h }, function()
+        rec.msg = nil
+        if not rec.a then rec.a = d.id
+        elseif not rec.b then rec.b = d.id
+        else rec.a, rec.b = d.id, nil end
+        motor.som("clique")
+      end)
+    else
+      motor.retangulo(cx, cy, ing_w, ing_h, "#241810", 8)
+      motor.texto("?", cx + ing_w / 2, cy + 14, 18, cor.texto_fraco, "centro", true)
+    end
+  end
+
+  -- os dois espaços
+  local sy = 300
+  local function espaco(id, campo, x)
+    motor.retangulo(x, sy, 64, 64, "#21150e", 10)
+    motor.contorno(x, sy, 64, 64, rec[campo] and cor.ouro or "#6e5a48", 2, 10)
+    local v = rec[campo]
+    if v then
+      M.miniatura(NOME_ING[v].modelo, x + 7, sy + 7, 50, 50)
+      U.zona(id, { x = x, y = sy, w = 64, h = 64 }, function() rec[campo] = nil; rec.msg = nil; motor.som("clique") end)
+    end
+  end
+  espaco("espaco_a", "a", 34)
+  motor.texto("+", 114, sy + 18, 24, cor.texto, "centro", true)
+  espaco("espaco_b", "b", 130)
+  local cheio = rec.a and rec.b
+  U.botao("combinar", 208, sy + 10, 116, 44, "Combinar", { ativo = cheio and true or false, som = "compra" }, function()
+    local r, como = J.combinar(rec.a, rec.b)
+    if como == "nova" then rec.msg, rec.boa = "Descobriu: " .. r.nome .. "!", true
+    elseif como == "conhecida" then rec.msg, rec.boa = "Você já sabe fazer: " .. r.nome, true
+    elseif como == "falta_no" then
+      rec.msg, rec.boa = "Parece promissor, mas falta aprender: " .. A.POR_ID[r.no].nome .. " (árvore da Cozinha)", false
+    else rec.msg, rec.boa = "Nada de bom sai disso.", false end
+    rec.a, rec.b = nil, nil
+  end)
+  local dica_txt = rec.msg
+  if not dica_txt then
+    if cheio and J.par_tentado(rec.a, rec.b) then dica_txt = "Você já tentou esta combinação."
+    elseif not rec.a then dica_txt = "Toque em dois ingredientes." end
+  end
+  if dica_txt then
+    U.paragrafo(dica_txt, 24, sy + 76, 298, 14, rec.msg and (rec.boa and cor.verde or "#ff9a8a") or cor.texto_fraco, rec.msg ~= nil)
+  end
+
+  -- cardápio
+  U.painel(346, 112, 602, 362)
+  motor.texto("Cardápio", 360, 118, 16, cor.texto, "esquerda", true)
+  local n_card, vagas = #e.receitas.cardapio, J.vagas_cardapio()
+  motor.texto(n_card .. " de " .. vagas .. " receitas", 442, 121, 14, n_card >= vagas and cor.ouro or cor.texto_fraco, "esquerda", true)
+  motor.texto("Cada pedido gasta os dois ingredientes e rende mais", 936, 121, 13, cor.texto_fraco, "direita")
+  local y = 144
+  local alguma = false
+  for _, r in ipairs(C.receitas) do
+    if e.receitas.descobertas[r.id] then
+      alguma = true
+      local no = J.no_cardapio(r.id)
+      motor.retangulo(354, y, 586, 25, no and "#4a3627" or "#2a2019", 6)
+      if r.pedido == "bebida" then U.caneca(368, y + 13, 0.5) else U.coxa(368, y + 13, 0.5) end
+      motor.texto(r.nome, 382, y + 4, 13, cor.texto, "esquerda", true)
+      motor.texto(NOME_ING[r.a].nome .. " + " .. NOME_ING[r.b].nome, 540, y + 5, 12, J.receita_pronta(r) and cor.texto_fraco or "#ff9a8a")
+      local pct = math.floor((J.bonus_receita(r) - 1) * 100 + 0.5)
+      motor.texto("+" .. pct .. "%", 790, y + 4, 13, cor.verde, "direita", true)
+      local pode = no or n_card < vagas
+      U.botao("cardapio_" .. r.id, 802, y + 1, 134, 23, no and "No cardápio" or (pode and "Colocar" or "Cardápio cheio"),
+        { ativo = pode and true or false, cor = no and cor.verde or nil, cor_texto = no and "#10210c" or nil, tam = 13, raio = 6 },
+        function() J.alternar_cardapio(r.id) end)
+      y = y + 27
+    end
+  end
+  if not alguma then
+    U.paragrafo("Ainda nenhuma receita. Toque em dois ingredientes e combine: uma descoberta entra sozinha no cardápio.", 360, 150, 570, 14, cor.texto_fraco)
   end
 end
 
 local function tela_arvore(entrando)
   local a = T.arv
+  if a.arvore == "receitas" then
+    if J.arvore_aberta("cozinha") then
+      tela_receitas()
+      faixa_ambientes()
+      return
+    end
+    a.arvore = "principal"
+  end
   -- a sala desta árvore não está mais de pé (save novo, por exemplo): volta à principal
   if not J.arvore_aberta(a.arvore) then a.arvore, a.sel = "principal", nil end
   if A.AMBIENTE[a.arvore] then J.estado.arvores_vistas[a.arvore] = true end
@@ -898,6 +1011,9 @@ local function tela_producao()
     local y = AREA.y + 156 + (i - 1) * 40
     motor.texto(l[1] .. " (nível " .. J.nivel(l[2]) .. ")", qx, y + 10, 14, cor.texto)
     atalho_no(l[2], qx + 288, y, 136)
+  end
+  if J.receitas_abertas() then
+    U.botao("ir_receitas", qx, AREA.y + 356, 424, 34, "Receitas e cardápio da cozinha", { tam = 13 }, function() T.aba = "arvore"; T.trocar_arvore("receitas") end)
   end
   U.botao("ir_loja_canteiro", qx + 180, AREA.y + 56, 244, 40, "Canteiros, árvores e animais: Loja", { tam = 13 }, function() T.aba = "loja" end)
 end

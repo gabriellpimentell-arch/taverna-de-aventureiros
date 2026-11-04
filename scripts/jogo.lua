@@ -164,6 +164,7 @@ local function estado_inicial()
     estoques = { trigo = 0, lupulo = 0, frutas = 0, carne_vaca = 0, carne_porco = 0, ovos = 0 },
     sementes = { lupulo = 0, fruta = 0 },
     ciclo = 0, ciclo_pomar = 0, ciclo_fazenda = 0, colhido = 0,
+    receitas = { descobertas = {}, cardapio = {}, tentadas = {}, feitas = {} },
     arvores_vistas = {},    -- árvores de ambiente que o jogador já abriu: as outras têm o selo "Novo"
     carroca = { presente = true, resta = C.carroca_fica, visitas = 1, vendidos = {} },
     raros = { comida = 0, bebida = 0 },   -- usos que sobram dos itens raros da carroça
@@ -577,11 +578,129 @@ function J.ingrediente_para(pedido)
   end
   return melhor
 end
-function J.tem_caseiro(pedido) return J.ingrediente_para(pedido) ~= nil end
+function J.tem_caseiro(pedido) return J.receita_para(pedido) ~= nil or J.ingrediente_para(pedido) ~= nil end
 function J.total_estoques()
   local t = 0
   for _, d in ipairs(C.estoques) do t = t + (J.estado.estoques[d.id] or 0) end
   return t
+end
+
+-- Receitas --------------------------------------------------------------------------------------
+-- Tudo sai de C.receitas: as regras e a tela não conhecem nenhuma receita pelo nome.
+
+J.RECEITA = {}
+for _, r in ipairs(C.receitas) do J.RECEITA[r.id] = r end
+
+local function chave_par(a, b) return a < b and (a .. "+" .. b) or (b .. "+" .. a) end
+local RECEITA_DO_PAR = {}
+for _, r in ipairs(C.receitas) do RECEITA_DO_PAR[chave_par(r.a, r.b)] = r end
+
+function J.receitas_abertas() return L.aberta("cozinha") end
+function J.vagas_cardapio() return C.receitas_vagas + J.ef("vagas_cardapio") end
+
+-- o jogador só combina o que a taverna já produz ou tem guardado
+function J.ingrediente_conhecido(id)
+  if (J.estado.estoques[id] or 0) > 0 then return true end
+  return (J.proxima_colheita()[id] or 0) > 0
+end
+
+function J.no_cardapio(id)
+  for i, r in ipairs(J.estado.receitas.cardapio) do
+    if r == id then return i end
+  end
+  return nil
+end
+
+-- Tenta a combinação. Devolve a receita (ou nil) e o que aconteceu:
+-- "nova", "conhecida", "nada" (não existe), "falta_no" (existe, falta o nó da árvore), "fechada" (sem cozinha ou ingrediente).
+function J.combinar(a, b)
+  local rec = J.estado.receitas
+  if not J.receitas_abertas() or not a or not b then return nil, "fechada" end
+  if not J.ingrediente_conhecido(a) or not J.ingrediente_conhecido(b) then return nil, "fechada" end
+  local chave = chave_par(a, b)
+  local r = RECEITA_DO_PAR[chave]
+  if not r then
+    rec.tentadas[chave] = true
+    return nil, "nada"
+  end
+  if rec.descobertas[r.id] then return r, "conhecida" end
+  if r.no and J.nivel(r.no) < 1 then return r, "falta_no" end
+  rec.tentadas[chave] = true
+  rec.descobertas[r.id] = true
+  -- recém-descoberta já entra no cardápio, se couber
+  if #rec.cardapio < J.vagas_cardapio() then rec.cardapio[#rec.cardapio + 1] = r.id end
+  J.som("missao")
+  J.salvar()
+  return r, "nova"
+end
+
+function J.par_tentado(a, b) return J.estado.receitas.tentadas[chave_par(a, b)] == true end
+
+-- Põe ou tira do cardápio. Devolve false se não houver vaga ou a receita for desconhecida.
+function J.alternar_cardapio(id)
+  local rec = J.estado.receitas
+  if not rec.descobertas[id] then return false end
+  local i = J.no_cardapio(id)
+  if i then
+    table.remove(rec.cardapio, i)
+    return true
+  end
+  if #rec.cardapio >= J.vagas_cardapio() then return false end
+  rec.cardapio[#rec.cardapio + 1] = id
+  return true
+end
+
+function J.bonus_receita(r)
+  local b = r.bonus * J.ef("x_receita")
+  if r.pedido == "bebida" then b = b * J.ef("x_receita_bebida") end
+  return b
+end
+
+function J.gasto_receita() return C.receita_gasto * J.ef("x_gasto_receita") end
+
+-- há ingrediente para fazer esta receita agora?
+function J.receita_pronta(r)
+  local est, g = J.estado.estoques, J.gasto_receita()
+  if r.a == r.b then return (est[r.a] or 0) >= 2 * g end
+  return (est[r.a] or 0) >= g and (est[r.b] or 0) >= g
+end
+
+-- A receita do cardápio que melhor atende o pedido; sem ingrediente, ela só não sai e entra o próximo.
+function J.receita_para(pedido)
+  if not J.receitas_abertas() then return nil end
+  local melhor, bm
+  for _, id in ipairs(J.estado.receitas.cardapio) do
+    local r = J.RECEITA[id]
+    if r and r.pedido == pedido and J.receita_pronta(r) then
+      local b = J.bonus_receita(r)
+      if not melhor or b > bm then melhor, bm = r, b end
+    end
+  end
+  return melhor
+end
+
+-- tem algo para fazer na tela de receitas? (selo na faixa da aba Árvore)
+function J.receitas_tem_novidade()
+  if not J.receitas_abertas() then return false end
+  local rec = J.estado.receitas
+  if #rec.cardapio < J.vagas_cardapio() then
+    for id in pairs(rec.descobertas) do
+      if not J.no_cardapio(id) then return true end
+    end
+  end
+  -- ainda há par de ingredientes conhecidos por tentar
+  for i, da in ipairs(C.estoques) do
+    if J.ingrediente_conhecido(da.id) then
+      for j = i, #C.estoques do
+        local db = C.estoques[j]
+        if J.ingrediente_conhecido(db.id) and not rec.tentadas[chave_par(da.id, db.id)] then
+          local r = RECEITA_DO_PAR[chave_par(da.id, db.id)]
+          if not (r and r.no and J.nivel(r.no) < 1) then return true end
+        end
+      end
+    end
+  end
+  return false
 end
 
 -- tem como atender este pedido agora?
@@ -595,6 +714,15 @@ end
 -- gasta o que serve o pedido e devolve quanto ele rende a mais por ser feito em casa
 local function gastar_mantimento(p)
   local e = J.estado
+  -- receita do cardápio primeiro: gasta os dois ingredientes e rende mais
+  local r = J.receita_para(p.pedido)
+  if r then
+    local g = J.gasto_receita()
+    e.estoques[r.a] = e.estoques[r.a] - g
+    e.estoques[r.b] = e.estoques[r.b] - g
+    e.receitas.feitas[r.id] = (e.receitas.feitas[r.id] or 0) + 1
+    return bonus_caseiro(p.pedido) * J.bonus_receita(r), r
+  end
   local id = J.ingrediente_para(p.pedido)
   if id then
     e.estoques[id] = e.estoques[id] - 1
@@ -1498,7 +1626,8 @@ function J.servir(p, por_garcom)
     J.flutuar(p.x, 2.7, p.z, p.pedido == "comida" and "Sem comida!" or "Sem bebida!", "#ff9a8a", 18)
     return false
   end
-  local rende_casa = gastar_mantimento(p)
+  local rende_casa, receita = gastar_mantimento(p)
+  if receita and not por_garcom then J.flutuar(p.x, 3.2, p.z, receita.nome, "#ffd98a", 16) end
   if not por_garcom then J.chamar_gerente(p) end
   local v = J.valor_pedido()
   if p.tipo.nome ~= "comum" then v = v * C.bonus_aventureiro end
@@ -2381,6 +2510,12 @@ function J.objetivo()
       return J.carroca_presente() and "Toque na carroça e compre comida e bebida" or "Espere a carroça ou peça socorro a Bartolo"
     end
   end
+  -- cozinha pronta, ingrediente à mão e cardápio vazio: a receita é a próxima coisa boa a fazer
+  if J.receitas_abertas() and #e.receitas.cardapio == 0 and e.servidos >= 5 then
+    for _, d in ipairs(C.estoques) do
+      if J.ingrediente_conhecido(d.id) then return "Árvore > Receitas: combine dois ingredientes" end
+    end
+  end
   for _, o in ipairs(OBJETIVOS) do
     if o[1] == "servidos" then
       if e.servidos < 5 then return o[2] end
@@ -2735,6 +2870,22 @@ function J.carregar()
         local v = saneado(pilha[i], nil)
         if not v or v < 0 then table.remove(pilha, i) end
       end
+    end
+  end
+  -- receitas: o que o save traz de estranho sai; o resto continua
+  do
+    local rec = e.receitas
+    for _, k in ipairs({ "descobertas", "cardapio", "tentadas", "feitas" }) do
+      if type(rec[k]) ~= "table" then rec[k] = {} end
+    end
+    for id, v in pairs(rec.descobertas) do
+      if not J.RECEITA[id] or v ~= true then rec.descobertas[id] = nil end
+    end
+    for i = #rec.cardapio, 1, -1 do
+      if not rec.descobertas[rec.cardapio[i]] then table.remove(rec.cardapio, i) end
+    end
+    for id, v in pairs(rec.feitas) do
+      if not J.RECEITA[id] or type(v) ~= "number" then rec.feitas[id] = nil end
     end
   end
   e.salvo_em = saneado(e.salvo_em, nil)

@@ -45,6 +45,42 @@ local function comprar_melhor()
   return false
 end
 
+-- Receitas, como uma pessoa: experimenta os pares ainda não tentados e monta o cardápio pelo que rende
+-- e tem produção, com pelo menos uma bebida e uma comida.
+local function jogar_receitas()
+  if not J.receitas_abertas() then return end
+  local rec = J.estado.receitas
+  for i, da in ipairs(C.estoques) do
+    for j = i, #C.estoques do
+      local db = C.estoques[j]
+      if J.ingrediente_conhecido(da.id) and J.ingrediente_conhecido(db.id) and not J.par_tentado(da.id, db.id) then
+        J.combinar(da.id, db.id)
+      end
+    end
+  end
+  local colheita = J.proxima_colheita()
+  local boas = {}
+  for id in pairs(rec.descobertas) do
+    local r = J.RECEITA[id]
+    if (colheita[r.a] or 0) > 0 and (colheita[r.b] or 0) > 0 then boas[#boas + 1] = r end
+  end
+  table.sort(boas, function(a, b)
+    local va, vb = J.bonus_receita(a), J.bonus_receita(b)
+    if va ~= vb then return va > vb end
+    return a.id < b.id
+  end)
+  local novo, vagas, tem = {}, J.vagas_cardapio(), {}
+  for _, r in ipairs(boas) do
+    if not tem[r.pedido] and #novo < vagas then novo[#novo + 1] = r.id; tem[r.pedido] = true end
+  end
+  for _, r in ipairs(boas) do
+    local esta = false
+    for _, id in ipairs(novo) do if id == r.id then esta = true end end
+    if not esta and #novo < vagas then novo[#novo + 1] = r.id end
+  end
+  if #novo > 0 then rec.cardapio = novo end
+end
+
 -- só gasta na árvore se o nó mais barato disponível já couber no bolso
 local function jogar_contratados()
   local e = J.estado
@@ -132,6 +168,7 @@ function R.jogar(limite_horas, passo, marcos, cada)
     if (t % 1) < passo then
       while comprar_melhor() do end
       jogar_contratados()
+      if (t % 30) < passo then jogar_receitas() end
     end
     if cada and cada(t) then break end
     if marcos then

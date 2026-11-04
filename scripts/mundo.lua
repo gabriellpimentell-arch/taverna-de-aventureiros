@@ -2091,6 +2091,12 @@ local MODELOS = {
     esfera(0, 0.36, 0, 0.72, "#c9a877", 0.76); cilindro(0, 0.68, 0, 0.26, 0.14, "#7b4a26")
     esfera(0, 0.42, 0.33, 0.24, "#c8382e", 0.26)
   end },
+  -- a panela da faixa de ícones, na aba Árvore
+  receitas = { d = 3.6, h = 0.45, fn = function()
+    cilindro(0, 0, 0, 1.0, 0.7, COBRE)
+    cilindro(0, 0.68, 0, 1.06, 0.08, FERRO)
+    esfera(-0.15, 0.82, 0.1, 0.34, "#e08a3c"); esfera(0.2, 0.8, -0.1, 0.3, "#7cc56a")
+  end },
   -- áreas: o móvel que diz o que é cada uma
   cozinha = { d = 7, h = 0.7, fn = function()
     caixa(0, 0, 0, 1.4, 0.85, 0.8, PEDRA_ESC)

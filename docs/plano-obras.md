@@ -85,3 +85,11 @@ Pronto em `layout.lua` e `mundo.lua`; a Loja usa estas funções sem tocar em de
 - **Animais**: a fazenda traz 1 vaca; Galinheiro, Chiqueiro e Curral liberam a venda, nesta ordem. Save com a fazenda já ganha os três.
 - **Relógios**: cada fazenda tem o próprio (`ciclo`, `ciclo_pomar`, `ciclo_fazenda`). Irrigação agora só acelera as plantas; quem já a tinha perde esse efeito nas outras duas fazendas.
 - **Frutíferas**: li "tempo de colheita" como colheita mais rápida, como o documento supõe.
+
+## Parte 3: receitas (decisões sem o dono)
+- **Lugar**: a tela fica na aba Árvore, em um ícone "Receitas" logo depois de Cozinha, para não criar outra aba na barra. A Produção tem um atalho.
+- **Regras**: 12 receitas em `C.receitas` (`config.lua`); para ampliar, basta uma linha. Combinar é grátis e não gasta nada. Só aparece o ingrediente que a taverna produz ou tem guardado. Descobrir já põe no cardápio, se houver vaga. O cardápio começa com 2 vagas; o nó Cardápio maior dá mais 3.
+- **No pedido**: sai a receita do cardápio de maior bônus que tenha ingrediente, e ela gasta 1 de cada um dos dois. Sem ingrediente, entra a próxima, depois o estoque simples, depois a despensa. O bônus multiplica o do cozinheiro e o da bebida da casa.
+- **Nós da cozinha**: Cortes nobres e Receitas de porco liberam 6 receitas; Temperos e Panela grande favorecem as outras. Combinação bloqueada diz o nó que falta, em vez de dizer que não existe.
+- **Sem total de receitas**: a lista mostra só o descoberto, como a árvore, sem "3 de 12".
+- **Bebida sem cervejaria**: receita de bebida vale só com a cozinha, para quem ordenar as salas de outro jeito.

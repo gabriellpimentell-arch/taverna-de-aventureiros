@@ -3816,6 +3816,97 @@ do
   novo()
 end
 
+-- Receitas -------------------------------------------------------------------------------------------
+do
+  novo()
+  local e = J.estado
+  e.mantimentos = { comida = 0, bebida = 0 }   -- com despensa, como um jogo novo
+  local ids, pares = {}, {}
+  local validos = {}
+  for _, d in ipairs(C.estoques) do validos[d.id] = true end
+  for _, r in ipairs(C.receitas) do
+    ok("receita sem id repetido: " .. r.id, not ids[r.id]); ids[r.id] = true
+    ok("ingredientes reais: " .. r.id, validos[r.a] and validos[r.b])
+    local k = r.a < r.b and r.a .. r.b or r.b .. r.a
+    ok("par sem repetição: " .. r.id, not pares[k]); pares[k] = true
+    ok("rende mais: " .. r.id, r.bonus > 1)
+    if r.no then ok("nó existe: " .. r.id, A.POR_ID[r.no] and A.POR_ID[r.no].arvore == "cozinha") end
+  end
+  ok("cerca de 10 receitas", #C.receitas >= 10 and #C.receitas <= 14)
+  ok("sem cozinha não combina", select(2, J.combinar("trigo", "ovos")) == "fechada")
+  libera_no("cozinha"); libera_no("jardim")
+  e.estoques.trigo, e.estoques.lupulo = 100, 100
+  ok("sem o ingrediente não combina", select(2, J.combinar("trigo", "ovos")) == "fechada")
+  ok("combinação vazia", select(2, J.combinar("lupulo", "lupulo")) == "nada" and J.par_tentado("lupulo", "lupulo"))
+  e.estoques.ovos = 100
+  local r, como = J.combinar("ovos", "trigo")
+  ok("trigo com ovo vira torta, em qualquer ordem", como == "nova" and r.id == "torta")
+  ok("nova entra no cardápio", J.no_cardapio("torta") == 1)
+  ok("descobrir de novo não repete", select(2, J.combinar("trigo", "ovos")) == "conhecida" and #e.receitas.cardapio == 1)
+  -- rende mais e gasta os dois
+  local function servir(pedido)
+    local p = { estado = "esperando", x = 0, z = 0, t = 99, tipo = J.TIPOS[1], pedido = pedido }
+    local o0 = e.total
+    ok("serve", J.servir(p, true))
+    return e.total - o0
+  end
+  local com = servir("comida")
+  ok("gasta os ingredientes", e.estoques.trigo == 99 and e.estoques.ovos == 99 and e.receitas.feitas.torta == 1)
+  J.alternar_cardapio("torta")
+  ok("tirar do cardápio", #e.receitas.cardapio == 0)
+  local t0 = e.estoques.trigo + e.estoques.ovos
+  local sem = servir("comida")
+  ok("receita aumenta o pedido", math.abs(com / sem - 1.8) < 0.001, com / sem)
+  ok("sem receita gasta um só", e.estoques.trigo + e.estoques.ovos == t0 - 1)
+  -- cardápio tem vagas; os nós ampliam e favorecem
+  e.estoques.frutas = 100
+  J.alternar_cardapio("torta")
+  J.combinar("trigo", "trigo"); ok("segunda receita entra", #e.receitas.cardapio == 2)
+  J.combinar("frutas", "frutas")
+  ok("cardápio cheio não entra", #e.receitas.cardapio == 2 and e.receitas.descobertas.suco and not J.alternar_cardapio("suco"))
+  libera_no("cardapio_maior")
+  ok("nó amplia o cardápio", J.vagas_cardapio() == 3 and J.alternar_cardapio("suco"))
+  ok("escolhe a mais rentável do pedido", J.receita_para("comida").id == "torta")
+  e.estoques.ovos = 0
+  ok("sem ingrediente entra a próxima", J.receita_para("comida").id == "pao")
+  e.estoques.ovos = 100
+  local b0 = J.bonus_receita(J.RECEITA.torta)
+  libera_no("temperos")
+  ok("temperos favorecem", J.bonus_receita(J.RECEITA.torta) > b0)
+  libera_no("panela")
+  ok("panela gasta menos", J.gasto_receita() == C.receita_gasto * 0.75)
+  e.estoques.carne_porco = 10
+  ok("nó libera a de porco", select(2, J.combinar("carne_porco", "frutas")) == "falta_no")
+  libera_no("receitas_porco")
+  ok("com o nó, descobre", select(2, J.combinar("carne_porco", "frutas")) == "nova")
+  -- tela
+  T.iniciar(); T.aba = "arvore"; desenhar()
+  ok("ícone de receitas", U.apertar("faixa_receitas") and T.arv.arvore == "receitas")
+  desenhar()
+  ok("toca nos ingredientes", U.apertar("ing_trigo") and U.apertar("ing_lupulo") and T.rec.a == "trigo" and T.rec.b == "lupulo")
+  desenhar()
+  ok("combina pela tela", U.apertar("combinar") and e.receitas.descobertas.cerveja_trigo and T.rec.msg and not T.rec.a)
+  desenhar()
+  J.alternar_cardapio("suco")
+  ok("escolhe no cardápio", (function() desenhar(); return U.apertar("cardapio_cerveja_trigo") end)() and J.no_cardapio("cerveja_trigo"))
+  T.aba = "producao"; desenhar()
+  ok("atalho na Produção", U.apertar("ir_receitas") and T.aba == "arvore" and T.arv.arvore == "receitas")
+  T.arv.arvore = "principal"
+  -- save: guarda, e o que não existe mais sai
+  J.salvar()
+  local s = util.desserializar(motor.carregar())
+  ok("receitas no save", s.receitas.descobertas.torta)
+  s.receitas.descobertas.falsa = true; s.receitas.cardapio[#s.receitas.cardapio + 1] = "falsa"; s.receitas.feitas = 3
+  motor._save = util.serializar(s)
+  iniciar()
+  ok("save limpo", J.estado.receitas.descobertas.falsa == nil and not J.no_cardapio("falsa") and J.estado.receitas.descobertas.torta)
+  motor._save = '{ ["versao"] = 2, ["receitas"] = "estragado" }'
+  iniciar()
+  ok("save estragado não trava", #J.estado.receitas.cardapio == 0)
+  motor._save = false
+  novo()
+end
+
 -- Jogo completo: robô chega ao final ---------------------------------------------------------------
 if arg[3] ~= "rapido" then
   novo()
