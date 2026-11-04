@@ -86,7 +86,7 @@ local passos = {
   -- blocos: as salas nos quatro lados da taverna. Conferir: nada escondido, nada sobreposto.
   { 1.2, function() local L = require("layout"); L.restaurar(); local _, xb, za, zb = L.salao(); local xa = select(1, L.salao())
       assert(L.mover_sala("circulo", xa - 5.5, za)); assert(L.mover_sala("cervejaria", xa, za - 9.2)); M.iniciar() end, "30_atras_e_esquerda" },
-  { 1.2, function() local L = require("layout"); local xa, _, za, zb = L.salao(); assert(L.mover_sala("caminho", xa - 24, za)); assert(L.mover_sala("jardim", xa - 8, zb + 0.5)); assert(L.mover_sala("fazenda", xa + 19, zb + 0.5)); assert(L.mover_sala("pomar", xa + 9, zb + 0.5)); assert(L.mover_sala("cozinha", xa + 3, zb)); M.iniciar() end, "31_frente" },
+  { 1.2, function() local L = require("layout"); local xa, _, za, zb = L.salao(); assert(L.mover_sala("caminho", xa - 12, zb + 6)); assert(L.mover_sala("jardim", xa - 8, zb + 0.5)); assert(L.mover_sala("fazenda", xa + 19, zb + 0.5)); assert(L.mover_sala("pomar", xa + 9, zb + 0.5)); assert(L.mover_sala("cozinha", xa + 3, zb)); M.iniciar() end, "31_frente" },
   { 1.2, function() local L = require("layout"); local ok, m = L.mover_porta("leste", 4); assert(ok, m); J.aplicar_obra(); M.iniciar() end, "32_porta_movida" },
   { 1.2, function() local L = require("layout"); local xa, xb, za, zb = L.salao(); assert(L.mover_sala("pomar", xb + 1, za - 7)); assert(L.mover_sala("jardim", xa - 13, za)); M.iniciar() end, "33_externas_em_volta" },
   { 1.2, function() local L = require("layout"); L.restaurar(); assert(L.mudar_andar(1)); M.iniciar() end, "34_segundo_andar" },

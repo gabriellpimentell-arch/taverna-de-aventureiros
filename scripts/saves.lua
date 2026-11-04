@@ -59,6 +59,12 @@ function S.abrir_pronto(p, recomecar)
   if recomecar or not S.resumo(p.arquivo) then
     local texto = motor.ler_asset(p.asset)
     if not texto then return false end
+    -- save pronto nasce da construção padrão, sem herdar nada do arquivo antigo
+    local d = util.desserializar(texto)
+    if type(d) == "table" and d.layout == nil then
+      d.layout = {}
+      texto = util.serializar(d)
+    end
     motor.gravar_save(p.arquivo, texto)
   end
   S.abrir(p.arquivo)

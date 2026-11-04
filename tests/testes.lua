@@ -58,8 +58,10 @@ local function ok(nome, cond, extra)
     print("FALHOU: " .. nome .. (extra and (" (" .. tostring(extra) .. ")") or ""))
   end
 end
+-- Jogo novo. Com um layout no arquivo antigo, faz de conta que é um save de antes da construção por save:
+-- é assim que aquele arquivo continua valendo, e os testes de layout continuam passando por ele.
 local function novo()
-  motor._save = false
+  motor._save = rawget(motor, "_layout") and '{ ["versao"] = 2 }' or false
   iniciar()
 end
 local function quadros(n, dt)
@@ -922,13 +924,13 @@ do
   -- salvar não congela as posições oficiais neste computador
   novo()
   L.salvar()
-  ok("salvar sem mudança não fixa o padrão", not tostring(motor._layout):find("balcao"), motor._layout)
+  ok("salvar sem mudança não fixa o padrão", util.desserializar(motor._save).layout.balcao == nil)
   Ed.mover_para("mesa2", 1.5, -0.5)
   L.salvar()
-  ok("mudança fica salva", tostring(motor._layout):find("mesa2") ~= nil)
+  ok("mudança fica salva", util.desserializar(motor._save).layout.mesa2 ~= nil)
   L.restaurar("mesa2")
   L.salvar()
-  ok("restaurar tira do arquivo", not tostring(motor._layout):find("mesa2"), motor._layout)
+  ok("restaurar tira do save", util.desserializar(motor._save).layout.mesa2 == nil)
   motor._layout = false
 
   -- layout salvo com números válidos porém absurdos: a porta longe deixava todos andando por minutos
@@ -1242,7 +1244,7 @@ do
   ok("layout antigo: prateleira e garrafas juntas", (L.desloc("prateleira")) == -1 and (L.desloc("garrafa3")) == -1)
   ok("layout antigo: lixo ignorado", L.dados.nao_existe == nil and L.dados.mesa1 == nil and L.dados.balcao.x == 1)
   L.salvar()
-  ok("layout novo não guarda nomes velhos", not motor._layout:find("barris_fundo", 1, true))
+  ok("layout novo não guarda nomes velhos", not motor._save:find("barris_fundo", 1, true))
   quadros(2)
   -- um barril editado à mão vale mais que o grupo antigo
   motor._layout = util.serializar({ barris_fundo = { x = 1, z = 0, y = 0, g = 0 }, barril2 = { x = -0.5, z = 0, y = 0, g = 0 } })
@@ -1434,7 +1436,11 @@ do
     iniciar()
     J.offline = nil
     local tudo_ok = pcall(function() for _ = 1, 60 do atualizar(0.1) end desenhar() end)
-    ok("layout com excluídos abre o save " .. caso[1], tudo_ok and L.oculto("barril1") and L.oculto("cocho") and L.POR_ID.extra_9 ~= nil and L.tamanho.dir == 2)
+    if caso[2] then
+      ok("layout com excluídos abre o save " .. caso[1], tudo_ok and L.oculto("barril1") and L.oculto("cocho") and L.POR_ID.extra_9 ~= nil and L.tamanho.dir == 2)
+    else
+      ok("jogo novo não herda o arquivo antigo", tudo_ok and not L.oculto("barril1") and L.POR_ID.extra_9 == nil and L.tamanho.dir == 0)
+    end
     ok("save " .. caso[1] .. " sem caminho perdido", (J.sem_caminho or 0) == 0, J.sem_caminho)
   end
   ok("save antigo com cozinheiro ganha a cozinha", (function()
@@ -1712,7 +1718,7 @@ do
   local mx = mundo("mesa3")
   L.mudar_tamanho("dir", -5)
   ok("empurrada", mundo("mesa3") < mx)
-  L.salvar(); L.carregar()
+  L.carregar(L.exportar())
   L.mudar_tamanho("dir", 5)
   ok("recarregar não esquece o lugar da mesa empurrada", mundo("mesa3") == mx, mundo("mesa3"))
   L.mudar_tamanho("dir", -5)
@@ -1916,8 +1922,7 @@ do
   J.aplicar_layout()
   ok("mapa monta no salão mínimo", pcall(J.montar_mapa))
   -- salvo guarda o negativo; ao carregar o mínimo continua valendo
-  L.salvar()
-  L.carregar()
+  L.carregar(L.exportar())
   ok("negativo sobrevive a recarregar", L.tamanho.dir + L.tamanho.oeste == -5, L.tamanho.dir)
   motor._layout = util.serializar({ _tamanho = { dir = -30, oeste = -30, jardim_l = -30 } })
   L.carregar()
@@ -2220,7 +2225,7 @@ do
   motor._baixo = false
   T.soltar(motor._mouse[1], motor._mouse[2])
   ok("mover é grátis", e.ouro <= ouro0 + 1e6 and e.ouro >= ouro0 and L.pos_sala("cozinha") ~= px0)
-  ok("mover grava o layout", motor._layout ~= nil and motor._layout:find("_salas") ~= nil)
+  ok("mover grava o layout", (motor.carregar() or ""):find("_salas", 1, true) ~= nil)
   ok("moveu sem expulsar ninguém", cliente.lugar == J.lugares[1] or cliente.lugar.dono == cliente)
   quadros(2)
   ok("cliente continua sentado depois da obra", #J.pessoas >= 1 and cliente.lugar ~= nil and cliente.lugar.dono == cliente)
@@ -2575,12 +2580,11 @@ do
   xa, xb, za, zb = L.salao()
   local jx2, jz2 = L.pos_sala("jardim")
   local px2, pz2 = L.pos_sala("cozinha")
-  L.salvar()
-  L.carregar()
+  L.carregar(L.exportar())
   ok("carrega posição", perto((L.pos_sala("jardim")), jx2) and perto(select(2, L.pos_sala("jardim")), jz2))
   ok("carrega taverna", perto((L.salao()), xa))
   ok("carrega porta", (L.pos_porta()) == "frente" and perto(select(2, L.pos_porta()), 11))
-  ok("o salvo guarda os blocos", tostring(motor._layout):find("_salas", 1, true) ~= nil and tostring(motor._layout):find("_porta", 1, true) ~= nil)
+  ok("o salvo guarda os blocos", L.exportar()._salas ~= nil and L.exportar()._porta ~= nil)
   ok("carrega sala interna", perto((L.pos_sala("cozinha")), px2) or perto(select(2, L.pos_sala("cozinha")), pz2))
   zerar()
 
@@ -2599,7 +2603,7 @@ do
   ok("antigo: conteúdo da cozinha deslocado", L.dados.cozinha.x == 1)
   ok("antigo: porta no mesmo lugar", perto(select(2, L.desloc("porta")), -1) and (L.pos_porta()) == "oeste")
   L.salvar()
-  local salvo = util.desserializar(motor._layout)
+  local salvo = util.desserializar(motor._save).layout
   ok("antigo vira novo ao salvar", type(salvo._salas) == "table" and salvo._salas.jardim ~= nil and salvo.jardim == nil)
 
   -- arquivo estragado não derruba
@@ -2918,10 +2922,7 @@ do
   T.soltar(sx, sy + 13)
   ok("mesa foi", math.abs(J.POS_MESAS[1].z - mz0) > 0.2, Lj.arrasto and Lj.arrasto.tipo or J.aviso and J.aviso.texto)
   ok("mover é de graça", J.estado.ouro >= 123, J.estado.ouro)
-  ok("salvou a posição", (function()
-    local d = util.desserializar(motor._layout)
-    return d and d.mesa1 ~= nil or (type(J.estado.layout) == "table" and J.estado.layout.mesa1 ~= nil)
-  end)())
+  ok("salvou a posição", util.desserializar(motor._save).layout.mesa1 ~= nil)
   ok("todo lugar segue com rota", J.lugares_sem_rota() == 0, J.lugares_sem_rota())
   -- quem está sentado vai junto com a mesa
   local c = J.novo_cliente()
@@ -3031,6 +3032,106 @@ do
   T.aba = "taverna"
   Lj.iniciar()
   motor._layout = false
+  novo()
+end
+
+-- Saves independentes: tamanhos, posições e decoração são de cada save --------------------------------
+do
+  local L, S, Lj = require("layout"), require("saves"), require("loja")
+  motor._saves, motor._atual, motor._save, motor._layout = {}, false, false, false
+  -- arquivo de layout antigo, de quando todos dividiam a mesma construção
+  local antigo = util.serializar({ _tamanho = { dir = 3 }, mesa1 = { x = 0.5, z = 0.5, y = 0, g = 0 }, barril1 = { x = 0, z = 0, y = 0, g = 0, oculto = true },
+    _extras = { { id = "extra_7", tipo = "planta", x = 2, z = 2 } } })
+  motor._layout = antigo
+  local function padrao()
+    return L.tamanho.dir == 0 and not L.dados.mesa1 and not L.oculto("barril1") and L.POR_ID.extra_7 == nil and L.lista_extras()[1] == nil
+  end
+  -- jogo novo nasce do padrão, mesmo com o arquivo antigo presente
+  S.novo("jogo2.sav")
+  J.noticia = nil
+  ok("jogo novo nasce do padrão", padrao())
+  -- a construção de um save não passa para o outro
+  L.mudar_tamanho("dir", 4)
+  L.mudar_tamanho("frente", 2)
+  Ed.mover_para("mesa2", 1, 1)
+  J.estado.ouro = 1000
+  local _, _, dec = J.comprar_decoracao("planta", 3, 3)
+  ok("comprou decoração no save 2", dec ~= nil)
+  ok("porta", L.mover_porta("frente", 6))
+  J.aplicar_obra()
+  J.salvar()
+  local mesa2x = (L.desloc("mesa2"))
+  S.novo("jogo3.sav")
+  J.noticia = nil
+  ok("outro jogo novo não herda nada", L.tamanho.dir == 0 and L.tamanho.frente == 0 and L.lista_extras()[1] == nil and L.pos_porta() == "oeste" and not L.dados.mesa2)
+  L.mudar_tamanho("oeste", 2)
+  J.salvar()
+  S.abrir("jogo2.sav")
+  ok("volta com a construção dele", L.tamanho.dir == 4 and L.tamanho.frente == 2 and L.tamanho.oeste == 0, L.tamanho.oeste)
+  ok("volta com a decoração dele", L.POR_ID[dec] ~= nil)
+  ok("volta com as posições dele", math.abs((L.desloc("mesa2")) - mesa2x) < 0.01 and L.pos_porta() == "frente")
+  S.abrir("jogo3.sav")
+  ok("e o outro com a dele", L.tamanho.oeste == 2 and L.tamanho.dir == 0 and L.POR_ID[dec] == nil and L.pos_porta() == "oeste")
+  -- save de antes: pega a construção do arquivo antigo e passa a ter a própria
+  motor._saves["progresso_v2.sav"] = util.serializar({ versao = 2, ouro = 50, nos = { mesa = 1 } })
+  S.abrir("progresso_v2.sav")
+  ok("save antigo herda o arquivo", L.tamanho.dir == 3 and L.dados.mesa1 and L.oculto("barril1") and L.POR_ID.extra_7 ~= nil)
+  J.salvar()
+  ok("agora ele guarda a própria", util.desserializar(motor._saves["progresso_v2.sav"]).layout._tamanho.dir == 3)
+  L.mudar_tamanho("dir", 1)
+  J.salvar()
+  local arquivo_antes = motor._layout
+  S.abrir("jogo3.sav")
+  S.abrir("progresso_v2.sav")
+  ok("depois de migrar não lê mais o arquivo", L.tamanho.dir == 4, L.tamanho.dir)
+  ok("o arquivo antigo não é reescrito", motor._layout == arquivo_antes and motor._layout == antigo)
+  -- mexer com o save não vaza para a tela inicial, que é sempre o padrão
+  J.em_menu = true
+  J.iniciar()
+  ok("tela inicial mostra o padrão", padrao())
+  J.em_menu = false
+  -- save pronto nasce do padrão; depois guarda a dele
+  ok("abre pronto", S.abrir_pronto(S.PRONTOS[2], true))
+  J.offline = nil
+  ok("save pronto nasce do padrão", L.tamanho.dir == 0 and not L.oculto("barril1") and L.POR_ID.extra_7 == nil)
+  L.mudar_tamanho("dir", 2)
+  J.salvar()
+  ok("reabrir pronto guarda a construção", S.abrir_pronto(S.PRONTOS[2]) and L.tamanho.dir == 2)
+  J.offline = nil
+  ok("recomeçar pronto volta ao padrão", S.abrir_pronto(S.PRONTOS[2], true) and L.tamanho.dir == 0)
+  J.offline = nil
+  -- apagar o progresso apaga a construção daquele save, e só dela
+  S.abrir("jogo2.sav")
+  J.apagar_progresso()
+  ok("apagar progresso volta ao padrão", padrao())
+  S.abrir("jogo3.sav")
+  ok("os outros saves ficam como estavam", L.tamanho.oeste == 2)
+  -- layout estragado dentro do save não derruba
+  for _, lixo in ipairs({ '"texto"', "12", "true", '{ ["_salas"] = "x", ["_tamanho"] = 3, ["mesa1"] = 5 }' }) do
+    motor._saves["jogo3.sav"] = '{ ["versao"] = 2, ["ouro"] = 1, ["layout"] = ' .. lixo .. ' }'
+    ok("layout estragado no save abre: " .. lixo, pcall(function() S.abrir("jogo3.sav"); quadros(2) end))
+    ok("layout estragado não lê o arquivo antigo: " .. lixo, L.POR_ID.extra_7 == nil)
+  end
+  -- colocação manual: mesas, salas e caminho postos ficam no save, e o save não perde onde estão
+  J.auto_colocar = false
+  S.novo("jogo2.sav")
+  J.noticia = nil
+  for _, id in ipairs(A.POR_ID.prateleira.pre) do J.estado.nos[id] = 1 end
+  J.estado.ouro = 1e9
+  J.comprar_no("prateleira")
+  local xa = L.salao()
+  local _, _, _, zb = L.salao()
+  ok("põe o mural", J.por_fora("mural", xa + 3, zb + 2))
+  local cx, cz = L.pos_sala("caminho")
+  J.salvar()
+  S.abrir("jogo2.sav")
+  ok("caminho fica onde foi posto", L.pos_sala("caminho") == cx and select(2, L.pos_sala("caminho")) == cz and L.aberta("caminho"))
+  S.novo("jogo3.sav")
+  ok("save novo sem caminho", not L.aberta("caminho"))
+  J.auto_colocar = true
+  motor._saves, motor._atual, motor._save, motor._layout = {}, false, false, false
+  T.iniciar()
+  J.em_menu = false
   novo()
 end
 

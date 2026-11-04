@@ -2005,9 +2005,12 @@ function J.iniciar()
   J.espera_porta = 0
   -- o que estava comprado no save anterior não pode abrir sala no layout deste
   recalcular()
-  L.carregar()
+  J.layout_do_save = {}    -- jogo novo e tela inicial: só o padrão
   if not J.em_menu then J.carregar() end
   recalcular()
+  L.carregar(J.layout_do_save)
+  J.layout_do_save = nil
+  J.gerente.x, J.gerente.z = L.t("balcao", 2.5, -3.25)
   J.reconstruir_lugares()
   J.ajustar_equipe()
   J.calcular_offline()
@@ -2153,6 +2156,8 @@ function J.salvar()
   if J.offline then J.coletar_offline() end
   local e = J.estado
   e.salvo_em = os.time()
+  -- cada save guarda a própria construção: tamanhos, posições e decoração
+  e.layout = L.exportar()
   motor.salvar(util.serializar(e))
 end
 
@@ -2213,6 +2218,10 @@ function J.carregar()
   if type(dados) ~= "table" or dados.versao ~= 2 then return end
   local e = estado_inicial()
   copiar_sobre(e, dados)
+  -- save de antes da construção própria: fica com a do arquivo antigo, que todos dividiam (nil lê o arquivo)
+  if dados.layout == nil then J.layout_do_save = nil
+  else J.layout_do_save = type(dados.layout) == "table" and dados.layout or {} end
+  e.layout = nil
   e.ouro = math.max(0, saneado(e.ouro, 0))
   e.total = math.max(0, saneado(e.total, 0))
   e.rps = math.max(0, saneado(e.rps, 0))

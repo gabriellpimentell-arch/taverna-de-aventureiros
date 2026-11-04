@@ -1273,19 +1273,22 @@ local function aplicar_tabela(t)
   for _, o in ipairs(L.OBJETOS) do L.limitar(o.id) end
 end
 
--- as posições oficiais vêm primeiro; as editadas neste computador têm prioridade
+-- as posições oficiais vêm primeiro; as deste save têm prioridade
 local function zerar_blocos()
   L.blocos, L.origem, L.porta_parede, L._ajuste, L._sig = {}, { x = 0, z = 0 }, nil, nil, nil
   L.andar_ativo = 0
 end
 
-function L.carregar()
+-- t: o que o save guarda ({} = jogo novo, só o padrão). Sem t, lê o arquivo de layout antigo, de quando
+-- todos os saves dividiam a mesma construção: ele só é lido, para migrar quem ainda não tem a própria.
+function L.carregar(t)
   L.limpar_extras()
   L.dados = {}
   L.tamanho = tamanho_zero()
   zerar_blocos()
   aplicar_tabela(require("layout_padrao"))
-  aplicar_tabela(util.desserializar(motor.layout_carregar()))
+  if t == nil then t = util.desserializar(motor.layout_carregar()) end
+  aplicar_tabela(t)
 end
 
 -- Decoração que o jogador compra na Loja: entra como objeto comum da lista
@@ -1418,8 +1421,8 @@ function L.lista_extras()
   return l
 end
 
--- só guarda o que difere das posições oficiais: senão salvar congelaria as de hoje para sempre
-function L.salvar()
+-- O que vai para o save: só o que difere das posições oficiais, senão elas ficariam congeladas para sempre
+function L.exportar()
   local padrao, editado = require("layout_padrao"), {}
   for id, d in pairs(L.dados) do
     local p = padrao[id] or {}
@@ -1428,7 +1431,13 @@ function L.salvar()
   editado._tamanho = L.tamanho
   editado._extras = L.lista_extras()
   L.gravar_blocos(editado)
-  motor.layout_salvar(util.serializar(editado))
+  return editado
+end
+
+-- A construção mora no save: gravar o jogo grava ela junto
+function L.salvar()
+  local J = package.loaded.jogo
+  if J then J.salvar() end
 end
 
 function L.de(id)
