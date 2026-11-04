@@ -1,6 +1,6 @@
 # Próximas mudanças da Taverna de Aventureiros
 
-Este documento descreve como o jogo deve ficar depois das próximas entregas. Nada disto foi produzido ainda, e a produção só começa com o aval do dono do jogo.
+Este documento descreve como o jogo deve ficar depois das próximas entregas. O dono autorizou a produção contínua, sem pedir aprovação entre as partes.
 
 ## A direção do jogo
 
@@ -144,7 +144,7 @@ Exemplos da sequência:
 - Dividir o trabalho para não repetir os mesmos jogos, por exemplo um focado nos jogos e outro em como a tela da árvore é apresentada.
 - Entregar recomendações práticas para a Taverna, incluindo a árvore principal e as árvores por ambiente.
 
-O formato final da árvore só é decidido depois dessa pesquisa, e o resultado é mostrado ao dono antes de construir.
+O formato final da árvore só é decidido depois dessa pesquisa, que é feita antes da Parte 1, porque a árvore muda já nela. O dono dispensou a aprovação do resultado.
 
 ### Uma árvore para cada ambiente
 
