@@ -13,6 +13,7 @@ local RAIO = 0.3            -- metade da largura de um boneco
 Cam.DISTANCIA = 0.62        -- distância mínima entre os centros de dois bonecos
 
 local bloq = {}
+Cam.buscas = 0              -- quantas buscas de verdade já rodaram: o jogo espalha as rotas por este número
 
 local function idx(ix, iz) return iz * NX + ix + 1 end
 local function celula(x, z) return math.floor((x - X0) / S), math.floor((z - Z0) / S) end
@@ -124,6 +125,7 @@ local VIZ = { { 1, 0, 1 }, { -1, 0, 1 }, { 0, 1, 1 }, { 0, -1, 1 },
 -- devolve a lista de pontos até o destino, ou nil se não houver como chegar
 function Cam.rota(sx, sz, gx, gz)
   if linha_livre(sx, sz, gx, gz, sx, sz, gx, gz) then return { { x = gx, z = gz } } end
+  Cam.buscas = Cam.buscas + 1
   local si, sk = celula(sx, sz)
   local gi, gk = celula(gx, gz)
   si, sk = math.max(0, math.min(NX - 1, si)), math.max(0, math.min(NZ - 1, sk))

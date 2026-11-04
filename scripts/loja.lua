@@ -112,6 +112,19 @@ function Lj.colocar_sala(id, mover)
   M.quadro_extra = { x0 = x, x1 = x + w, z0 = z, z1 = z + d, andar = andar }
 end
 
+-- mercadinho ou mural: o primeiro escolhe onde fica o caminho; o segundo entra direto, ao lado
+function Lj.colocar_fora(i)
+  if J.sala_posta("caminho") then
+    local ok, motivo = J.por_fora(i.id)
+    if ok then J.avisar(i.nome .. " foi para o caminho de pedras")
+    elseif motivo then J.avisar(motivo) end
+    return
+  end
+  Lj.colocar_sala("caminho")
+  Lj.colocando.nome = i.nome .. " e o caminho de pedras"
+  Lj.colocando.fora = i.id
+end
+
 function Lj.colocar_item(i)
   if i.tipo == "canteiro" then
     -- canteiro não tem lugar livre: entra na próxima vaga da fileira do jardim
@@ -155,6 +168,7 @@ function Lj.confirmar()
   local ok, motivo
   if c.mover then ok, motivo = L.mover_sala(c.id, c.fx, c.fz, L.andar_ativo)
     if ok then L.salvar() end
+  elseif c.fora then ok, motivo = J.por_fora(c.fora, c.fx, c.fz)
   elseif c.tipo == "sala" then ok, motivo = J.por_sala(c.id, c.fx, c.fz, L.andar_ativo)
   elseif c.tipo == "decor" then ok, motivo = J.comprar_decoracao(c.extra, c.fx, c.fz)
   else ok, motivo = J.por_item(c.tipo, c.fx, c.fz) end
@@ -562,7 +576,9 @@ local function lista_itens(base, topo, fim)
       local c = cor.verde
       if i.requer then sub, c = "antes: " .. i.requer, "#ffb0a2" end
       linha("loja_item_" .. (i.id or i.tipo), y, base, topo, fim, i.nome, sub, c, { ativo = not i.requer }, function()
-        if i.tipo == "sala" then Lj.colocar_sala(i.id) else Lj.colocar_item(i) end
+        if i.tipo == "sala" then Lj.colocar_sala(i.id)
+        elseif i.tipo == "fora" then Lj.colocar_fora(i)
+        else Lj.colocar_item(i) end
       end)
       y = y + a
     end
@@ -620,11 +636,13 @@ local function detalhe_comodos(base, y0)
     U.paragrafo("Arraste até outra parede livre: é de graça.", base, y0 + 2, w, 14, cor.texto)
     return
   end
-  local preco = J.preco_metro()
-  motor.texto("Metro novo:", base, y0, 14, cor.texto_fraco)
-  U.preco(preco, base + motor.largura_texto("Metro novo:", 14) + 4, y0, 14, cor.ouro)
-  U.paragrafo("Arraste para mover, é de graça. Puxe as alças para mudar o tamanho.", base, y0 + 20, w, 14, cor.texto)
   local _, b = nome_sala(id)
+  if not b or b.k then
+    local preco = J.preco_metro()
+    motor.texto("Metro novo:", base, y0, 14, cor.texto_fraco)
+    U.preco(preco, base + motor.largura_texto("Metro novo:", 14) + 4, y0, 14, cor.ouro)
+  end
+  U.paragrafo(b and not b.k and "Arraste para mover, é de graça. O mercadinho e o mural vão junto." or "Arraste para mover, é de graça. Puxe as alças para mudar o tamanho.", base, y0 + 20, w, 14, cor.texto)
   -- sala em outro andar: traz para o andar à vista com o fantasma
   if b and b.interna and not b.so_andar and L.andar_de(id) ~= L.andar_ativo then
     U.botao("loja_trazer", base, P.y + P.h - 8 - 44, w, 44, "Trazer para este andar", { tam = 14 }, function() Lj.colocar_sala(id, true) end)

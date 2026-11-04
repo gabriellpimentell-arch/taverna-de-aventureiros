@@ -71,7 +71,7 @@ local n = {
   { id = "rank_ss", pai = "rank_s", ramo = "guilda", p = 8, l = 1, nome = "Missões rank SS", desc = "Abre o rank SS", custo = 1000000000, mult = 1, max = 1, ef = { rank_max = 1 } },
 
   -- MERCADINHO ----------------------------------------------------------------------------------
-  { id = "mercadinho", pai = "@prateleira", ramo = "mercado", p = 1, l = 0, nome = "Mercadinho", desc = "Abre a área e compra espólios do rank F", custo = 3000, mult = 1, max = 1, ef = { a_leste = 1, mercadinho = 1 } },
+  { id = "mercadinho", pai = "@prateleira", ramo = "mercado", p = 1, l = 0, nome = "Mercadinho", desc = "Abre a área e compra espólios do rank F", custo = 3000, mult = 1, max = 1, ef = { mercadinho = 1 } },
   { id = "merc_e", pai = "mercadinho", ramo = "mercado", p = 2, l = 1, nome = "Mercadinho rank E", desc = "Compra espólios até o rank E", custo = 6000, mult = 1, max = 1, ef = { mercadinho = 1 } },
   { id = "merc_d", pai = "merc_e", ramo = "mercado", p = 3, l = 1, nome = "Mercadinho rank D", desc = "Compra espólios até o rank D", custo = 50000, mult = 1, max = 1, ef = { mercadinho = 1 } },
   { id = "merc_c", pai = "merc_d", ramo = "mercado", p = 4, l = 1, nome = "Mercadinho rank C", desc = "Compra espólios até o rank C", custo = 400000, mult = 1, max = 1, ef = { mercadinho = 1 } },

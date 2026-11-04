@@ -19,7 +19,7 @@ local function ob(id, nome, x, z, cat, pai)
   L.POR_ID[id] = o
 end
 
-local MESAS = { { -3.6, 0.2 }, { 0.3, 0.2 }, { 4.2, 0.2 }, { -3.6, 3.4 }, { 0.3, 3.4 }, { 4.2, 3.4 }, { 7.5, 3.4 }, { 10.7, 3.4 } } -- mesas 7 e 8 afastadas: bancos a menos de um corpo de distância travavam quem chegava
+local MESAS = { { -3.6, 0.2 }, { 0.3, 0.2 }, { 4.2, 0.2 }, { -3.6, 3.4 }, { 0.3, 3.4 }, { 4.2, 3.4 }, { 9.25, -1.4 }, { 9.25, 2.4 } } -- mesas 7 e 8: a ala leste é delas, uma atrás da outra
 for i, m in ipairs(MESAS) do
   ob("mesa" .. i, "Mesa " .. i, m[1], m[2], "Móveis", i >= 7 and "@leste" or nil)
 end
@@ -33,7 +33,7 @@ ob("barril3", "Barril 3", 5.75, -2.9, "Móveis")
 ob("barril4", "Barril 4", -5.6, 3.9, "Móveis")
 ob("barril5", "Barril 5", -4.8, 4.1, "Móveis")
 ob("carga", "Caixote e saco", 5.5, 4.1, "Móveis")
-ob("carga_leste", "Caixote da ala leste", 11.2, -0.4, "Móveis", "@leste")
+ob("carga_leste", "Caixote da ala leste", 11.2, -3.6, "Móveis", "@leste")
 
 ob("balcao", "Balcão e bancos", 3.05, -2.2, "Balcão")
 ob("barrilete", "Barrilete com torneira", 4.95, -2.3, "Balcão", "balcao")
@@ -50,7 +50,6 @@ ob("janela1", "Janela 1", -6.46, -1.27, "Paredes", "@oeste")
 ob("janela2", "Janela 2", -6.46, 3.7, "Paredes", "@oeste")
 ob("lareira", "Lareira", -6.1, -3.2, "Paredes", "@oeste")
 ob("lenha", "Lenha", -6.05, -1.95, "Paredes", "@oeste")
-ob("quadro", "Quadro de missões", -2.6, -4.4, "Paredes", "@fundo")
 ob("lampiao1", "Lampião 1", -4.5, -4.3, "Paredes", "@fundo")
 ob("lampiao2", "Lampião 2", -0.6, -4.3, "Paredes", "@fundo")
 ob("quartos", "Escada dos quartos", -4.6, -3.9, "Paredes", "@fundo")
@@ -64,8 +63,11 @@ ob("vassoura", "Vassoura", -6.25, 2.75, "Decoração", "@oeste")
 ob("bardo", "Bardo", -5.1, -1.25, "Decoração")
 ob("alcapao", "Escada do subsolo", -0.2, -3.85, "Paredes", "@fundo")
 
-ob("barraca", "Mercadinho", 9.3, -2.2, "Áreas", "@leste")
-ob("estantes", "Estantes de venda", 9.3, -4.3, "Áreas", "@leste")
+-- Caminho de pedras, do lado de fora: o mercadinho e o mural de missões vivem nele e andam com ele
+ob("caminho", "Caminho de pedras", 76, -1.5, "Áreas", "@caminho")
+ob("barraca", "Mercadinho", 73, -2, "Áreas", "caminho")
+ob("estantes", "Estantes de venda", 73, -4.1, "Áreas", "caminho")
+ob("quadro", "Mural de missões", 79, -1.6, "Áreas", "caminho")
 ob("jardim", "Jardim", -3, 6.75, "Áreas", "@frente")
 ob("pomar", "Jardim de frutas", 4.25, 7.8, "Áreas", "@pomar")
 ob("fazenda", "Fazenda", 13, 7.8, "Áreas", "@fazenda")
@@ -156,6 +158,8 @@ local EXTERNAS = {
   { id = "jardim", ancora = "@frente", x0 = -6.5, l = 7, z0 = 4.8, p = 4, k = "jardim", nome = "Jardim" },
   { id = "pomar", ancora = "@pomar", x0 = 0.5, l = 7.5, z0 = 4.8, p = 6, k = "pomar", nome = "Jardim de frutas" },
   { id = "fazenda", ancora = "@fazenda", x0 = 8, l = 10, z0 = 4.8, p = 6, k = "faz", nome = "Fazenda" },
+  -- sem k: o caminho tem tamanho fixo, não entra em L.tamanho nem tem alça
+  { id = "caminho", ancora = "@caminho", x0 = 70, l = 12, z0 = -4.5, p = 6, nome = "Caminho de pedras" },
 }
 local SALA_DE, POR_ANCORA = {}, {}
 for _, lista in ipairs({ INTERNAS, EXTERNAS }) do
@@ -186,13 +190,12 @@ function L.aberta(id)
   if J and J.sala_posta and not J.sala_posta(id) then return false end
   -- save antigo pode ter o cozinheiro de antes de a cozinha existir: ele precisa de onde ficar
   if id == "cozinha" then return ef("a_cozinha") > 0 or ef("cozinheiro") > 0 end
+  -- surge com o que vier primeiro: o mural ou o mercadinho
+  if id == "caminho" then return ef("prateleira") > 0 or ef("mercadinho") > 0 end
   return ef(ABRE[id]) > 0
 end
 
-function L.leste_aberta()
-  local J = package.loaded.jogo
-  return ef("a_leste") > 0 or (J ~= nil and J.mercadinho_aberto ~= nil and J.mercadinho_aberto())
-end
+function L.leste_aberta() return ef("a_leste") > 0 end
 
 -- andar ainda não comprado não existe; o térreo sempre existe
 function L.andar_existe(n)
@@ -214,10 +217,12 @@ end
 local SOBRE = nil
 local function largura(b)
   if SOBRE and SOBRE.id == b.id and SOBRE.l then return math.max(SALA_MIN, SOBRE.l) end
+  if not b.k then return b.l end
   return math.max(SALA_MIN, b.l + L.tamanho[b.k .. "_l"])
 end
 local function fundura(b)
   if SOBRE and SOBRE.id == b.id and SOBRE.p then return math.max(SALA_MIN, SOBRE.p) end
+  if not b.k then return b.p end
   return math.max(SALA_MIN, b.p + L.tamanho[b.k .. "_p"])
 end
 
@@ -327,7 +332,6 @@ end
 -- { folga em x, folga do fundo, folga da frente, fim = quanto pode entrar na ala leste }
 local DENTRO = {
   balcao = { 2.8, 1.6, 1.6, fim = 0.5 }, palco = { 0.6, 0.6, 0.6 }, bardo = { 0.4, 0.4, 0.4 },
-  quadro = { 1, 0.1, 1.1 }, barraca = { 2.4, 2.3, 2.5, fim = 5.6 },
 }
 local function folga_dentro(id, d)
   local m = DENTRO[id]
@@ -535,7 +539,7 @@ local LADOS_PORTA = { "oeste", "fundo", "leste", "frente" }
 local GIRO_PORTA = { oeste = 0, fundo = -math.pi / 2, leste = math.pi, frente = math.pi / 2 }
 local MEIA_PORTA = 0.95
 -- móveis grandes de parede que a porta não pode atravessar: meia medida em x e z
-local MOVEIS_PAREDE = { lareira = { 0.65, 1.3 }, lenha = { 0.35, 0.5 }, prateleira = { 2.7, 0.25 }, quadro = { 1.3, 0.2 } }
+local MOVEIS_PAREDE = { lareira = { 0.65, 1.3 }, lenha = { 0.35, 0.5 }, prateleira = { 2.7, 0.25 } }
 
 local function comprimento_parede(lado)
   local x0, x1, z0, z1 = L.sala_mundo("taverna")
@@ -1156,7 +1160,7 @@ function L.paredes()
   end
   for _, lista in ipairs({ INTERNAS, EXTERNAS }) do
     for _, b in ipairs(lista) do
-      if L.aberta(b.id) and L.blocos[b.id].andar == L.andar_ativo then
+      if b.k and L.aberta(b.id) and L.blocos[b.id].andar == L.andar_ativo then
         local x0, x1, z0, z1 = L.sala_mundo(b.id)
         -- a alça fica no lado livre: sala à esquerda da taverna cresce para a esquerda
         local ret = { x0 = x0, x1 = x1, z0 = z0, z1 = z1 }
@@ -1240,6 +1244,8 @@ local function aplicar_tabela(t)
     L.porta_parede = { lado = t._porta.lado, t = numero(t._porta.t) }
   end
   migrar(t)
+  -- layout de antes do caminho de pedras: mural e mercadinho estavam dentro, e aquele lugar não vale mais
+  local antes_do_caminho = t._caminho == nil
   if type(t._extras) == "table" then
     local n = 0
     for _, x in ipairs(t._extras) do
@@ -1250,7 +1256,7 @@ local function aplicar_tabela(t)
     end
   end
   for id, d in pairs(t) do
-    if L.POR_ID[id] and type(d) == "table" then
+    if L.POR_ID[id] and type(d) == "table" and not (antes_do_caminho and (id == "quadro" or id == "barraca" or id == "estantes")) then
       L.dados[id] = { x = numero(d.x), z = numero(d.z), y = numero(d.y), g = numero(d.g), oculto = d.oculto == true and L.removivel(id) or nil }
       -- empurrado por um salão menor: continua sabendo para onde voltar quando ele crescer
       if type(d.orig) == "table" then L.dados[id].orig = { x = numero(d.orig.x), z = numero(d.orig.z) } end
@@ -1401,6 +1407,7 @@ function L.gravar_blocos(t)
     if not p.prov then s[id] = { x = p.x, z = p.z, andar = p.andar } end
   end
   t._salas = s
+  t._caminho = 1
   if L.origem.x ~= 0 or L.origem.z ~= 0 then t._taverna = { x = L.origem.x, z = L.origem.z } end
   if L.porta_parede then t._porta = { lado = L.porta_parede.lado, t = L.porta_parede.t } end
 end

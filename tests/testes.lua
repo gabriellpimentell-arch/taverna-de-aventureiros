@@ -617,15 +617,15 @@ do
   ok("mesmo visual a cada quadro", igual)
 end
 
--- mercadinho nunca fica fora da ala, nem em save antigo
+-- mercadinho fica no caminho de pedras, mesmo em save antigo
 novo()
 libera("prateleira", "mercadinho")
 do
   local mundo = require("mundo")
-  ok("mercadinho abre a ala", mundo.alvos().leste == 1)
+  ok("mercadinho abre o caminho, não a ala", mundo.alvos().caminho == 1 and J.ef("a_leste") == 0 and mundo.alvos().leste == 0)
   motor._save = '{ ["versao"] = 2, ["nos"] = { ["merc_e"] = 1 } }'
   iniciar()
-  ok("save sem a ala ainda mostra a barraca", J.mercadinho_aberto() and mundo.alvos().leste == 1)
+  ok("save sem a ala ainda mostra a barraca", J.mercadinho_aberto() and mundo.alvos().caminho == 1)
 end
 
 -- tempo fora: missões não ficam negativas, ganho não vira renda e sair sem coletar não perde
@@ -716,7 +716,8 @@ do
   ok("bonecos quase nunca se sobrepõem", encostos <= passos * 0.02, encostos .. " em " .. passos)
   ok("todos acham caminho", (J.sem_caminho or 0) == 0, J.sem_caminho)
   ok("pouquíssimos pedidos de socorro", (J.socorros or 0) <= 30, J.socorros)
-  ok("taverna continua servindo", J.estado.servidos > 50, J.estado.servidos)
+  -- só quem vem comer e beber entra agora: as missões passam do lado de fora
+  ok("taverna continua servindo", J.estado.servidos > 35, J.estado.servidos)
   ok("missões continuam concluindo", J.estado.feitas > 10, J.estado.feitas)
 
   -- pegar missão: vai ao quadro, pega o papel e sai com ele
@@ -726,7 +727,7 @@ do
   local viu_ida, viu_pegando, viu_papel, perto = false, false, false, false
   for _ = 1, 400 do
     J.atualizar(0.1)
-    for _, p in ipairs(J.pessoas) do
+    for _, p in ipairs(J.visitantes) do
       if p.estado == "indo_quadro" then viu_ida = true end
       if p.estado == "pegando" then
         viu_pegando = true
@@ -1009,11 +1010,11 @@ do
   novo()
   J.estado.ouro = 1e60
   for _ = 1, 40 do for _, no in ipairs(A.NOS) do J.estado.ouro = 1e60; J.comprar_no(no.id) end end
-  J.pessoas = {}
+  J.pessoas, J.visitantes = {}, {}
   J.contratar()
   J.mandar_contratados()
   local viu = nil
-  for _, q in ipairs(J.pessoas) do if q.contratado then viu = q end end
+  for _, q in ipairs(J.visitantes) do if q.contratado then viu = q end end
   ok("contratado leva rank da missão", viu and type(viu.rank_missao) == "string", viu and viu.rank_missao)
   for _ = 1, 150 do
     J.atualizar(0.1)
@@ -1453,31 +1454,25 @@ do
   limpa_layout()
 end
 
--- Achados pelos robôs das duas metades: toda a frente da barraca é alcançável,
--- e quem for empurrado para dentro de um móvel consegue sair
+-- Achados pelos robôs das duas metades: quem for empurrado para dentro de um móvel consegue sair
 do
   motor._layout = false
   novo()
   libera("prateleira", "mercadinho", "mesa", "mesa", "mesa", "mesa", "mesa")
-  for x = -1.25, 1.25, 0.25 do
-    local p = { x = J.PORTA.x, z = J.PORTA.z }
-    J.caminho(p, J.BARRACA.x + x, J.BARRACA.z)
-    ok("frente da barraca alcançável em " .. x, not p.sem_rota)
-    local q = { x = J.BARRACA.x + x, z = J.BARRACA.z }
-    J.caminho(q, J.PORTA.x, J.PORTA.z)
-    ok("sai da frente da barraca em " .. x, not q.sem_rota)
-  end
   local m = J.POS_MESAS[1]
+  local palco_x, palco_z = require("layout").t("palco", -1.65, 0.2)
+  -- o destino é o outro lado da mesa, no salão: o mural e a barraca agora ficam lá fora
+  local alvo_x, alvo_z = 3, 2
   for _, d in ipairs({ { 0.7, -0.2 }, { -0.7, 0.2 }, { 0, 0.75 } }) do
     local p = { x = m.x + d[1], z = m.z + d[2] }
-    J.caminho(p, J.QUADRO.x, J.QUADRO.z)
+    J.caminho(p, alvo_x, alvo_z)
     ok("quem está dentro da mesa consegue sair", not p.sem_rota)
   end
   -- achado pelo robô: fundo na mesa, ao lado do banco, nenhum ponto a até 0,6 m estava livre
   for _, d in ipairs({ { 0.66, -0.18 }, { 0.63, 0.04 }, { -0.45, 0.35 }, { 0, 0 } }) do
     local p = { x = m.x + d[1], z = m.z + d[2] }
     J.sem_caminho = 0
-    J.caminho(p, J.QUADRO.x, J.QUADRO.z)
+    J.caminho(p, alvo_x, alvo_z)
     ok("quem está bem no fundo da mesa consegue sair", J.sem_caminho == 0 and #p.rota > 1, d[1] .. "," .. d[2])
   end
   -- sem saída de verdade (destino cercado) não repete a busca cara a cada ponto livre em volta
@@ -1486,7 +1481,7 @@ do
     rota = Cam.rota
     Cam.rota = function() buscas = buscas + 1 end
     local p = { x = 0, z = 1.8 }
-    J.caminho(p, J.QUADRO.x, J.QUADRO.z)
+    J.caminho(p, alvo_x, alvo_z)
     Cam.rota = rota
     ok("sem saída faz poucas buscas", p.sem_rota and buscas <= 5, buscas)
   end
@@ -2002,7 +1997,7 @@ do
   -- quem recebe gente não sai pela parede
   local xa, xb2, za, zb = L.salao()
   for _, alvo in ipairs({ { -100, 100 }, { 100, -100 } }) do
-    for _, id in ipairs({ "mesa1", "balcao", "palco", "bardo", "barraca", "quadro" }) do
+    for _, id in ipairs({ "mesa1", "balcao", "palco", "bardo" }) do
       Ed.mover_para(id, alvo[1], alvo[2])
       local x, z = mundo(id)
       ok("dentro da parede: " .. id, x > xa and x < xb2 + 5.6 and z > za and z < zb, x .. "," .. z)
@@ -2830,8 +2825,8 @@ do
   xa, xb, za, zb = L.salao()
   local pl, pt = L.pos_porta()
   ok("porta começa na parede de sempre", pl == "oeste" and perto(pt, 6.1), pt)
-  local ao, am = L.mover_porta("fundo", 3.5)
-  ok("porta recusa quadro de missões", not ao and am and am:find("Quadro", 1, true), am)
+  local ao, am = L.mover_porta("fundo", 9.5)
+  ok("porta recusa as prateleiras", not ao and am and am:find("Prateleiras", 1, true), am)
   ao, am = L.mover_porta("oeste", 0.2)
   ok("porta recusa canto", not ao)
   L.de("prateleira").oculto = true
@@ -2866,7 +2861,6 @@ do
   ok("taverna move sem nada aberto", L.mover_sala("taverna", xa + 3, za + 2))
   J.aplicar_layout()
   ok("mesa foi junto", perto(J.POS_MESAS[1].x, mesa_x + 3), J.POS_MESAS[1].x)
-  ok("quadro foi junto", perto(J.QUADRO.x, -2.6 + 3), J.QUADRO.x)
   ok("porta foi junto", perto(J.PORTA.x, -6.4 + 3), J.PORTA.x)
   ok("garçom em casa junto", #J.garcons == 0 or perto(J.garcons[1].casa, -0.35 + 3))
   ok("rotas seguem com a taverna movida", J.lugares_sem_rota() == 0, J.lugares_sem_rota())
@@ -3043,6 +3037,175 @@ do
   ok("porta continua", (L.pos_porta()) == dl)
   Ed.fechar()
   zerar()
+end
+
+-- Caminho de pedras: mural e mercadinho do lado de fora, sem ninguém entrar por causa deles -------
+do
+  local L, Mu, Lj, S = require("layout"), require("mundo"), require("loja"), require("saves")
+  motor._layout = false
+  novo()
+  ok("sem mural nem mercadinho não há caminho", not L.aberta("caminho"))
+  libera("prateleira")
+  ok("o mural abre o caminho", L.aberta("caminho") and J.prateleira_aberta())
+  ok("caminho não fica dentro da taverna", (function()
+    local x0, x1, z0, z1 = L.sala_mundo("caminho")
+    local a, b, c, d = L.sala_mundo("taverna")
+    return x0 >= b or x1 <= a or z0 >= d or z1 <= c
+  end)())
+  ok("caminho sem alça de tamanho", (function()
+    for _, a in ipairs(L.paredes()) do if a.id:find("caminho") then return false end end
+    return L.tamanho.caminho_l == nil
+  end)())
+  libera("mercadinho")
+  -- ninguém que vem pela missão ou pelo espólio entra na taverna
+  J.relogio_aventureiro = 99
+  J.relogio_chegada = -1e9
+  local n_dentro, viu_fora, vendeu = 0, false, false
+  local espolios = J.estado.espolios
+  local x0, x1, z0, z1 = L.sala_mundo("caminho")
+  local fora_da_faixa = 0
+  for i = 1, 600 do
+    if i % 40 == 1 then J.estado.missoes[#J.estado.missoes + 1] = { rank = 1, resta = 0.01 } end
+    J.relogio_chegada = -1e9
+    atualizar(0.1)
+    for _, q in ipairs(J.pessoas) do if not q.menestrel then n_dentro = n_dentro + 1 end end
+    for _, p in ipairs(J.visitantes) do
+      viu_fora = true
+      if p.z < z0 or p.z > z1 or p.x < x0 - 1 or p.x > x1 + 1 then fora_da_faixa = fora_da_faixa + 1 end
+      if p.estado == "vendendo" then vendeu = true end
+    end
+    if i % 50 == 0 then desenhar() end
+  end
+  ok("quem vem de missão fica lá fora", viu_fora)
+  ok("missão não põe ninguém no salão", n_dentro == 0, n_dentro)
+  ok("visitantes não saem do caminho", fora_da_faixa == 0, fora_da_faixa)
+  ok("espólio é vendido na barraca", vendeu and J.estado.espolios > espolios)
+  ok("sem rota nenhuma lá fora", (J.sem_caminho or 0) == 0)
+  ok("visitantes não vão para o save", (function()
+    J.salvar()
+    return not motor._save:find("visitantes", 1, true)
+  end)())
+  -- a comemoração passa para o próximo cliente que entra
+  J.festas = 1
+  J.relogio_chegada = 0
+  local c = J.novo_cliente()
+  ok("próximo cliente comemora a missão", c and c.festa == true and J.festas == 0)
+  -- visitantes têm teto: passou dele, só o ouro entra
+  J.visitantes = {}
+  for _ = 1, J.MAX_VISITANTES + 5 do J.estado.missoes[#J.estado.missoes + 1] = { rank = 1, resta = 0.001 } end
+  local o0 = J.estado.total
+  J.atualizar(0.01)
+  ok("teto de gente lá fora", #J.visitantes <= J.MAX_VISITANTES, #J.visitantes)
+  ok("mesmo acima do teto o ouro entra", J.estado.total > o0)
+
+  -- mover o caminho leva o mural, a barraca e quem está lá
+  J.visitantes = {}
+  J.iniciar_missao_comum(1)
+  local v = J.visitantes[1]
+  atualizar(0.1)
+  local qx, bx = J.QUADRO.x, J.BARRACA.x
+  local vx = v.x
+  local cx, cz = L.pos_sala("caminho")
+  local _, _, _, zb = L.salao()
+  assert(L.mover_sala("caminho", cx + 2, zb + 4))
+  J.atualizar(0.001)
+  ok("mural anda com o caminho", math.abs(J.QUADRO.x - qx - 2) < 0.001, J.QUADRO.x)
+  ok("mercadinho anda com o caminho", math.abs(J.BARRACA.x - bx - 2) < 0.001, J.BARRACA.x)
+  ok("quem está lá anda junto", math.abs(v.x - vx - 2) < 0.1, v.x)
+  ok("os dois ficam lado a lado", math.abs(J.QUADRO.x - J.BARRACA.x - 6) < 0.001 and math.abs(J.QUADRO.z - J.BARRACA.z) < 0.001)
+  ok("caminho não vai para cima da taverna", not L.mover_sala("caminho", -6, -4))
+  ok("caminho é ao ar livre", not L.encaixe_valido("caminho", 0, 30, 1))
+  local xa0, _, za0 = L.salao()
+  ok("caminho não vira parede coberta: taverna continua com porta", (L.porta_livre(L.pos_porta())))
+  -- ala leste só com o nó dela, e as duas mesas continuam com rota
+  ok("barraca não abre mais a ala", not L.leste_aberta())
+  libera("ala_leste")
+  ok("ala abre com o nó", L.leste_aberta())
+  J.montar_mapa()
+  ok("mesas da ala têm rota", J.lugares_sem_rota() == 0, J.lugares_sem_rota())
+  ok("mesas da ala dentro da ala", (function()
+    local a, b, c2, d = L.sala_mundo("taverna")
+    for i = 7, 8 do
+      local m = J.POS_MESAS[i]
+      if m.x - 1.6 < select(2, L.salao()) or m.x + 1.6 > b or m.z - 0.9 < c2 or m.z + 0.9 > d then return false end
+    end
+    return true
+  end)())
+
+  -- Loja: o primeiro escolhe o lugar, o segundo entra ao lado
+  J.auto_colocar = false
+  motor._saves, motor._atual = {}, false
+  motor._layout = false
+  novo()
+  J.comecar_endividado()
+  J.noticia = nil
+  local function comprar(...)
+    for _, id in ipairs({ ... }) do J.estado.ouro = 1e20; ok("comprou " .. id, J.comprar_no(id)) end
+  end
+  local function item(id)
+    for _, i in ipairs(J.para_colocar()) do if i.id == id then return i end end
+  end
+  J.estado.ouro = 1e20
+  for _, id in ipairs(A.POR_ID.prateleira.pre) do J.estado.ouro = 1e20; J.estado.nos[id] = 1 end
+  comprar("prateleira")
+  ok("mural comprado espera lugar", item("mural") and not J.prateleira_aberta() and not L.aberta("caminho"))
+  ok("sem mural não sai missão", (function() J.relogio_aventureiro = 99; J.atualizar(0.1); return #J.visitantes == 0 and #J.estado.missoes == 0 end)())
+  T.iniciar(); T.aba = "loja"; quadros(1)
+  Lj.iniciar()
+  ok("botão do mural na lista", U.apertar("loja_item_mural") and Lj.colocando and Lj.colocando.id == "caminho" and Lj.colocando.fora == "mural")
+  local c0 = Lj.colocando
+  ok("caminho nasce em lugar livre", c0.ok, c0.motivo)
+  c0.x, c0.z = 0, 0
+  quadros(1)
+  ok("fantasma vermelho em cima da taverna", not c0.ok and not Lj.confirmar() and not J.sala_posta("caminho"))
+  local _, _, _, zb2 = L.salao()
+  local xa2 = L.salao()
+  c0.x, c0.z = xa2 + 2, zb2 + 3
+  quadros(1)
+  ok("colocar o mural", Lj.confirmar() and J.prateleira_aberta() and L.aberta("caminho"))
+  local px, pz = L.pos_sala("caminho")
+  ok("colocado onde foi escolhido", math.abs(px - (xa2 + 2)) < 0.6 and math.abs(pz - (zb2 + 3)) < 0.6, px)
+  ok("não sobra nada do mural", not item("mural"))
+  ok("mural funciona", (function() J.relogio_aventureiro = 99; J.atualizar(0.1); return #J.visitantes >= 1 end)())
+  J.estado.nos.merc_x = nil
+  comprar("mercadinho")
+  ok("mercadinho espera na Loja", item("mercadinho") and not J.mercadinho_aberto())
+  quadros(1)
+  local p0x, p0z = L.pos_sala("caminho")
+  ok("o segundo entra direto, sem escolher lugar", U.apertar("loja_item_mercadinho") and not Lj.colocando and J.mercadinho_aberto())
+  ok("o caminho não mudou de lugar", L.pos_sala("caminho") == p0x and select(2, L.pos_sala("caminho")) == p0z)
+  ok("nada mais para colocar", J.total_para_colocar() == 0, J.total_para_colocar())
+  -- o contrário: mercadinho primeiro
+  novo()
+  J.comecar_endividado()
+  J.noticia = nil
+  for _, id in ipairs(A.POR_ID.prateleira.pre) do J.estado.nos[id] = 1 end
+  comprar("prateleira", "mercadinho")
+  ok("os dois na lista antes do caminho", item("mural") and item("mercadinho"))
+  local ok1, m1 = J.por_fora("mercadinho")
+  ok("mercadinho primeiro abre o caminho", ok1 and J.mercadinho_aberto() and L.aberta("caminho") and not J.prateleira_aberta(), m1)
+  ok("mural depois", J.por_fora("mural") and J.prateleira_aberta())
+  ok("não coloca duas vezes", not J.por_fora("mural"))
+  ok("cena desenha", pcall(function() quadros(1) end))
+  -- save antigo manual, com mural e mercadinho já funcionando: nada volta para a Loja
+  J.estado.colocados.salas.caminho = nil
+  J.estado.colocados.salas.mural = nil
+  J.estado.colocados.salas.mercadinho = nil
+  J.estado.colocados.com_caminho = nil
+  J.salvar()
+  iniciar()
+  J.noticia = nil
+  ok("save antigo manual mantém mural e mercadinho", J.manual() and J.prateleira_aberta() and J.mercadinho_aberto() and J.total_para_colocar() == 0, J.total_para_colocar())
+  J.auto_colocar = true
+  T.aba = "taverna"
+  Lj.iniciar()
+  -- layout antigo: o lugar de dentro do mural e da barraca não vale mais
+  motor._layout = util.serializar({ quadro = { x = 5, z = 1, y = 0, g = 0 }, barraca = { x = -3, z = 2, y = 0, g = 0 }, estantes = { x = 1, z = 1, y = 0, g = 0 }, mesa1 = { x = 1, z = 0, y = 0, g = 0 } })
+  L.carregar()
+  ok("layout antigo larga o lugar antigo do mural", L.dados.quadro == nil and L.dados.barraca == nil and L.dados.estantes == nil)
+  ok("layout antigo guarda o resto", L.dados.mesa1 and L.dados.mesa1.x == 1)
+  motor._layout = false
+  novo()
 end
 
 -- Jogo completo: robô chega ao final ---------------------------------------------------------------

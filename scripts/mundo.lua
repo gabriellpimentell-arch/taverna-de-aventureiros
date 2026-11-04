@@ -68,7 +68,7 @@ function M.iniciar()
   M.fazendeiro = { x = -5.7, z = 6.35, giro = 0, fase = 0, t = 0, i = 1 }
   M.cozinheiro = nil
   M.vacas = {}
-  M.anim = { leste = 0, jardim = 0, cerveja = 0, circulo = 0, cozinha = 0, pomar = 0, fazenda = 0, quartos = 0, guilda = 0 }
+  M.anim = { leste = 0, jardim = 0, cerveja = 0, circulo = 0, cozinha = 0, pomar = 0, fazenda = 0, quartos = 0, guilda = 0, caminho = 0 }
   local a = M.alvos()
   for k, v in pairs(a) do M.anim[k] = v end
   M.quadro = M.calcular_enquadramento(M.anim)
@@ -86,12 +86,13 @@ function M.alvos()
     fazenda = aberta("fazenda"),
     quartos = aberta("quartos_sala"),
     guilda = aberta("sala_guilda"),
+    caminho = aberta("caminho"),
   }
 end
 
 -- sala -> chave em M.anim
 local ANIM_DE = { jardim = "jardim", pomar = "pomar", fazenda = "fazenda", cozinha = "cozinha", cervejaria = "cerveja",
-  circulo = "circulo", quartos_sala = "quartos", sala_guilda = "guilda" }
+  circulo = "circulo", quartos_sala = "quartos", sala_guilda = "guilda", caminho = "caminho" }
 
 -- a câmera recua conforme as áreas abrem, para sempre caber tudo
 function M.calcular_enquadramento(a)
@@ -475,32 +476,6 @@ local function salao()
   grupo("tapete2")
   if J.num_mesas() >= 5 then tapete(0.3, 3.4, 4.4, 1.9) end
 
-  -- quadro de missões: cada papel some quando alguém o pega
-  grupo("quadro")
-  local qx = -2.6
-  -- parede baixa atrás: o quadro fica sobre dois pés
-  if parede_sumiu("taverna", "fundo", "quadro", 1.3) then
-    caixa(qx - 1.2, 0, -4.42, 0.12, 3.15, 0.12, MAD_ESC)
-    caixa(qx + 1.2, 0, -4.42, 0.12, 3.15, 0.12, MAD_ESC)
-  end
-  caixa(qx, 1.45, -4.42, 2.6, 1.7, 0.1, MAD_ESC)
-  caixa(qx, 1.55, -4.36, 2.3, 1.5, 0.05, "#a87e4f")
-  caixa(qx, 3.15, -4.3, 2.9, 0.12, 0.34, MAD_ESC)
-  if J.prateleira_aberta() then
-    local indo = 0
-    for _, p in ipairs(J.pessoas) do
-      if p.estado == "indo_quadro" or (p.estado == "pegando" and not p.com_papel) then indo = indo + 1 end
-    end
-    local n = util.limitar(J.vagas_missao() - J.missoes_comuns_ativas() + indo, 2, 8)
-    local tortos = { 0.07, -0.05, 0.09, -0.07, -0.06, 0.05, -0.09, 0.06 }
-    for i = 1, n do
-      local coluna, linha = (i - 1) % 4, math.floor((i - 1) / 4)
-      local x, y = qx - 0.84 + coluna * 0.56, 2.53 - linha * 0.68 + (i % 2) * 0.04
-      peca("caixa", x, y, -4.32, 0.44, 0.56, 0.02, 0, PERGAMINHO, 0, tortos[i])
-      peca("caixa", x, y + 0.2, -4.305, 0.44, 0.1, 0.02, 0, RANKS[(i - 1) % #RANKS + 1], 0, tortos[i])
-    end
-  end
-
   -- balcão, prateleira e fogão do cozinheiro
   grupo("balcao")
   local bx, bz = 3.05, -2.2
@@ -605,9 +580,49 @@ local function ala_leste(e)
   caixa(xb + 2.75, -0.95, (za + zb) / 2, 5.7, 0.65, zb - za + 0.7, "#2a1b12")
   parede("taverna", "fundo", xb, xb + 5.5, za, o, { parede = PAREDE, viga = VIGA, rodape = "#2f1e13", folha = MAD_MED, acento = OURO }, false, { ini = 1, passo = 3 })
 
+  grupo("carga_leste")
+  if e > 0.9 then carga(11.5, -3.6) end
+
+  for i = 7, math.min(J.num_mesas(), 8) do
+    local m = J.POS_MESAS[i]
+    grupo(m.id)
+    mesa(m.bx, m.bz)
+    banquinho(m.bx - 1.25, m.bz)
+    banquinho(m.bx + 1.25, m.bz)
+    grupo("vela" .. i)
+    vela(m.bx, 0.82, m.bz + 0.001)
+  end
+  grupo(nil)
+end
+
+-- Caminho de pedras: faixa por onde passa quem não entra na taverna. Só o que foi comprado aparece.
+local function caminho_de_pedras(e)
+  if e <= 0 then return end
+  local o = e + math.sin(e * math.pi) * 0.12
+  local function c2(x, y, z, ex, ey, ez, c) caixa(x, y * o, z, ex, ey * o, ez, c) end
+  grupo("caminho")
+  -- chão batido, para o lugar ter contorno mesmo sobre a grama
+  caixa(76, 0, -1.5, 12, 0.03, 6, "#5f4a33")
+  caixa(76, -0.65 * o, -1.5, 12.1, 0.65 * o, 6.1, "#2a1b12")
+  -- pedras da faixa, sempre nas mesmas posições
+  local tons = { "#6e6a64", "#a8a294", "#8a857c" }
+  for i = 0, 15 do
+    local x = 70.45 + i * 0.74
+    for k = 0, 2 do
+      local sx = 0.5 + ((i * 7 + k * 5) % 5) * 0.05
+      local sz = 0.42 + ((i * 3 + k * 11) % 5) * 0.04
+      caixa(x + ((i + k) % 3) * 0.05, 0.02, -0.5 + k * 0.6, sx, 0.05, sz, tons[(i + k) % 3 + 1])
+    end
+  end
+  -- marcos de pedra nas duas pontas
+  for _, x in ipairs({ 70.35, 81.65 }) do
+    c2(x, 0, -1.05, 0.34, 0.75, 0.34, "#4e4a48")
+    c2(x, 0.75, -1.05, 0.44, 0.1, 0.44, "#6e6a64")
+  end
+
   if J.mercadinho_aberto() then
     grupo("barraca")
-    local mx, mz = 9.3, -2.2
+    local mx, mz = 73, -2
     for _, d in ipairs({ { -2.1, -0.65, 2.7 }, { 2.1, -0.65, 2.7 }, { -2.1, 0.7, 2.3 }, { 2.1, 0.7, 2.3 } }) do
       c2(mx + d[1], 0, mz + d[2], 0.18, d[3], 0.18, MAD_ESC)
     end
@@ -631,27 +646,37 @@ local function ala_leste(e)
     -- estantes da aba de venda
     grupo("estantes")
     if J.venda_aberta() then
-      c2(mx, 0, -4.3, 4.6, 2.2, 0.5, "#5b3a22")
+      c2(mx, 0, -4.1, 4.6, 2.2, 0.5, "#5b3a22")
       local lista = { J.ef("pocoes") > 0 and "#5abf7c", J.ef("armaduras") > 0 and "#a8b4bf", J.ef("armas") > 0 and "#c7d0d8" }
       for i = 1, 3 do
         if lista[i] then
-          for k = 0, 4 do caixa(mx - 1.9 + k * 0.9, 0.5 + (i - 1) * 0.55, -4.0, 0.28, 0.34, 0.1, lista[i]) end
+          for k = 0, 4 do caixa(mx - 1.9 + k * 0.9, 0.5 + (i - 1) * 0.55, -3.8, 0.28, 0.34, 0.1, lista[i]) end
         end
       end
     end
   end
 
-  grupo("carga_leste")
-  if e > 0.9 then carga(11.5, -0.4) end
-
-  for i = 7, math.min(J.num_mesas(), 8) do
-    local m = J.POS_MESAS[i]
-    grupo(m.id)
-    mesa(m.bx, m.bz)
-    banquinho(m.bx - 1.25, m.bz)
-    banquinho(m.bx + 1.25, m.bz)
-    grupo("vela" .. i)
-    vela(m.bx, 0.82, m.bz + 0.001)
+  -- mural de missões, de pé sobre dois postes: cada papel some quando alguém o pega
+  if J.prateleira_aberta() then
+    grupo("quadro")
+    local qx, qz = 79, -1.6
+    c2(qx - 1.3, 0, qz, 0.16, 3.1, 0.16, MAD_ESC)
+    c2(qx + 1.3, 0, qz, 0.16, 3.1, 0.16, MAD_ESC)
+    c2(qx, 1.05, qz, 2.6, 1.8, 0.1, MAD_ESC)
+    c2(qx, 1.15, qz + 0.05, 2.3, 1.6, 0.05, "#a87e4f")
+    c2(qx, 3.1, qz + 0.02, 3.1, 0.12, 0.6, MAD_ESC)
+    local indo = 0
+    for _, p in ipairs(J.visitantes) do
+      if p.estado == "indo_quadro" or (p.estado == "pegando" and not p.com_papel) then indo = indo + 1 end
+    end
+    local n = util.limitar(J.vagas_missao() - J.missoes_comuns_ativas() + indo, 2, 8)
+    local tortos = { 0.07, -0.05, 0.09, -0.07, -0.06, 0.05, -0.09, 0.06 }
+    for i = 1, n do
+      local coluna, linha = (i - 1) % 4, math.floor((i - 1) / 4)
+      local x, y = qx - 0.84 + coluna * 0.56, 2.25 - linha * 0.68 + (i % 2) * 0.04
+      peca("caixa", x, y, qz + 0.09, 0.44, 0.56, 0.02, 0, PERGAMINHO, 0, tortos[i])
+      peca("caixa", x, y + 0.2, qz + 0.105, 0.44, 0.1, 0.02, 0, RANKS[(i - 1) % #RANKS + 1], 0, tortos[i])
+    end
   end
   grupo(nil)
 end
@@ -905,6 +930,14 @@ local function vaca_circulos(x, z, g)
   return r
 end
 
+-- os círculos de uma vaca só mudam quando ela anda: guardados, escolher destino custa bem menos
+local function circulos_de(u)
+  if u.cc_x ~= u.x or u.cc_z ~= u.z or u.cc_g ~= u.g then
+    u.cc, u.cc_x, u.cc_z, u.cc_g = vaca_circulos(u.x, u.z, u.g), u.x, u.z, u.g
+  end
+  return u.cc
+end
+
 -- folga da vaca nessa pose até a cerca, os obstáculos e as outras; negativo = encostou
 local function vaca_folga(v, x, z, g, limites)
   local cs = vaca_circulos(x, z, g)
@@ -927,7 +960,7 @@ local function vaca_folga(v, x, z, g, limites)
   for _, u in pairs(M.vacas) do
     if u ~= v then
       for _, q in ipairs(cs) do
-        for _, e in ipairs(vaca_circulos(u.x, u.z, u.g)) do
+        for _, e in ipairs(circulos_de(u)) do
           local dx, dz = q[1] - e[1], q[2] - e[2]
           folga = math.min(folga, math.sqrt(dx * dx + dz * dz) - 2 * RAIO_VACA - 0.06)
         end
@@ -990,10 +1023,13 @@ local function vaca_acha_lugar(v, limites)
   v.x, v.z, v.g = mx, mz, mg
 end
 
+local TENTATIVAS_POR_QUADRO = 4  -- a fazenda cheia fazia o jogo engasgar quando as vacas escolhiam para onde ir
+
 local function vaca_escolhe_destino(v, limites)
   -- com a fazenda cheia virar é difícil: tenta seguir quase reto, dar uns passos de ré,
   -- virar só um pouco no lugar e, por último, ir para qualquer lado
-  for tentativa = 1, 20 do
+  local de = v.tentativa or 1
+  for tentativa = de, math.min(20, de + TENTATIVAS_POR_QUADRO - 1) do
     local g, x, z = v.g, v.x, v.z
     if tentativa <= 6 then
       g = v.g + (sorte(v) - 0.5) * 1.2
@@ -1010,11 +1046,16 @@ local function vaca_escolhe_destino(v, limites)
       x, z = v.x + math.cos(g) * d, v.z - math.sin(g) * d
     end
     if vaca_trajeto_livre(v, x, z, g, limites) then
-      v.est, v.ax, v.az, v.ag = "anda", x, z, g
+      v.est, v.ax, v.az, v.ag, v.tentativa = "anda", x, z, g, nil
       return
     end
   end
-  vaca_descansa(v, true)
+  -- continua no próximo quadro de onde parou
+  v.tentativa = de + TENTATIVAS_POR_QUADRO
+  if v.tentativa > 20 then
+    v.tentativa = nil
+    vaca_descansa(v, true)
+  end
 end
 
 function M.mover_vacas(dt)
@@ -1022,6 +1063,7 @@ function M.mover_vacas(dt)
   local x0, x1, z0, z1 = L.sala("fazenda")
   local limites = { x0, x1, z0, z1 }
   local fixas = editando()
+  local pensou = false   -- só uma vaca por quadro faz as contas caras
   for i = 1, #L.VACAS do
     if i > math.min(J.ef("vacas"), #L.VACAS) or L.oculto("vaca" .. i) then
       M.vacas[i] = nil
@@ -1040,8 +1082,8 @@ function M.mover_vacas(dt)
         if nova then v.t = v.t * 0.4 + i * 0.5 end
       end
       if not fixas then
-        if v.acomodar then
-          v.acomodar = false
+        if v.acomodar and not pensou then
+          v.acomodar, pensou = false, true
           vaca_acha_lugar(v, limites)
         end
         v.pasta = util.limitar(v.pasta + (v.est == "pasta" and dt or -dt) / 0.8, 0, 1)
@@ -1076,8 +1118,9 @@ function M.mover_vacas(dt)
           end
         else
           v.t = v.t - dt
-          if v.t <= 0 then
-            if v.est == "pasta" or sorte(v) < 0.6 then vaca_escolhe_destino(v, limites)
+          if v.t <= 0 and not pensou then
+            pensou = true
+            if v.tentativa or v.est == "pasta" or sorte(v) < 0.6 then vaca_escolhe_destino(v, limites)
             else vaca_descansa(v, true) end
           end
         end
@@ -1785,9 +1828,9 @@ function M.desenhar_cena()
     local cirx, cirz = L.t("circulo", CIRC_X, CIRC_Z)
     motor.cena_luz(4, cirx, 1.2, cirz, 0.9 * c, 0.6 * c, 1.5 * c, 6)
   elseif ativo == 0 then
-    local l = a.leste
-    local brx, brz = L.t("barraca", 9.3, -1.4)
-    motor.cena_luz(4, brx, 2.2, brz, 0.95 * l, 0.66 * l, 0.36 * l, 6.5)
+    local l = a.caminho
+    local brx, brz = L.t("caminho", 76, -0.5)
+    motor.cena_luz(4, brx, 2.6, brz, 0.95 * l, 0.66 * l, 0.36 * l, 8.5)
   else
     local sala = ativo == 1 and "quartos_sala" or nil
     if sala then
@@ -1802,6 +1845,7 @@ function M.desenhar_cena()
     salao()
     extras()
     ala_leste(a.leste)
+    caminho_de_pedras(a.caminho)
     grupo("jardim")
     jardim(a.jardim)
     grupo("pomar")
@@ -1828,6 +1872,9 @@ function M.desenhar_cena()
       if not J.fora_da_porta(p) then M.boneco(p) end
       if p.estado == "brigando" then poeira_briga(p) end
     end
+  end
+  if ativo == 0 then
+    for _, p in ipairs(J.visitantes) do M.boneco(p) end
   end
   for _, g in ipairs(J.garcons) do
     if (g.andar or 0) == ativo then garcom(g) end
@@ -1871,18 +1918,6 @@ function M.desenhar_baloes()
         motor.linha(x - 1, y - 9, x + 7, y - 5, 2.5, "#fff6e6")
       end
     end
-    if p.estado == "indo_quadro" then
-      -- mostra que está indo atrás de uma missão
-      local x, y = M.posicao_balao(p)
-      if x then
-        y = y + math.sin(M.tempo * 4 + p.fase) * 2
-        local q = 15 * e
-        motor.retangulo(x - q, y - q, q * 2, q * 2, "#fff6e6", 7 * e)
-        motor.triangulo(x - 5 * e, y + q - 1, x + 5 * e, y + q - 1, x, y + q + 5 * e, "#fff6e6")
-        motor.retangulo(x - 7 * e, y - 9 * e, 14 * e, 18 * e, "#e6d3a8", 2)
-        motor.retangulo(x - 7 * e, y - 9 * e, 14 * e, 4 * e, cor.vermelho, 2)
-      end
-    end
     if p.estado == "esperando" or p.estado == "brigando" then
       local x, y = M.posicao_balao(p)
       if x then
@@ -1905,6 +1940,22 @@ function M.desenhar_baloes()
       end
     end
     ::proxima::
+  end
+  -- quem está lá fora atrás de uma missão mostra o papel que quer
+  if ativo == 0 then
+    for _, p in ipairs(J.visitantes) do
+      if p.estado == "indo_quadro" then
+        local x, y = M.posicao_balao(p)
+        if x then
+          y = y + math.sin(M.tempo * 4 + p.fase) * 2
+          local q = 15 * e
+          motor.retangulo(x - q, y - q, q * 2, q * 2, "#fff6e6", 7 * e)
+          motor.triangulo(x - 5 * e, y + q - 1, x + 5 * e, y + q - 1, x, y + q + 5 * e, "#fff6e6")
+          motor.retangulo(x - 7 * e, y - 9 * e, 14 * e, 18 * e, "#e6d3a8", 2)
+          motor.retangulo(x - 7 * e, y - 9 * e, 14 * e, 4 * e, cor.vermelho, 2)
+        end
+      end
+    end
   end
   for _, f in ipairs(J.efeitos) do
     local x, y = motor.projetar(f.x, f.y, f.z)

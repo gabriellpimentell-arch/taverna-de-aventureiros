@@ -14,8 +14,9 @@ local J = {}
 
 J.PORTA = { x = -6.4, z = 1.6 }
 J.RUA_Z = 1.6
-J.QUADRO = { x = -2.6, z = -3.7 }
-J.BARRACA = { x = 9.3, z = -1.0 }
+-- onde quem vem de fora para diante do mural e do mercadinho, na faixa de pedras
+J.QUADRO = { x = 79, z = 0.1 }
+J.BARRACA = { x = 73, z = 0.1 }
 
 local POS_MESAS = {}
 for i = 1, 8 do
@@ -176,7 +177,8 @@ end
 
 -- sala -> nó da árvore que a compra
 local NO_DA_SALA = { cozinha = "cozinha", cervejaria = "cervejaria", circulo = "invocacao", jardim = "jardim", pomar = "pomar",
-  fazenda = "fazenda", quartos_sala = "segundo_andar", sala_guilda = "segundo_andar" }
+  fazenda = "fazenda", quartos_sala = "segundo_andar", sala_guilda = "segundo_andar",
+  caminho = "prateleira", mercadinho = "mercadinho", mural = "prateleira" }
 local ORDEM_SALAS = { "cozinha", "cervejaria", "jardim", "pomar", "fazenda", "quartos_sala", "sala_guilda", "circulo" }
 
 -- Quantos níveis do nó já valem: o que precisa de lugar só conta depois de posto.
@@ -209,6 +211,9 @@ local function recalcular()
     local c = J.estado.colocados
     ef.mesas = math.min(ef.mesas or 0, c.mesas)
     if not c.salas.circulo then ef.a_circulo = nil end
+    -- comprado na árvore e ainda sem lugar no caminho de pedras: não funciona
+    if not c.salas.mercadinho then ef.mercadinho = nil end
+    if not c.salas.mural then ef.prateleira = nil end
   end
 end
 
@@ -305,7 +310,7 @@ function J.comecar_endividado()
   e.mantimentos = { comida = 0, bebida = 0 }
   e.divida, e.emprestimos = C.divida_inicial, 0
   if not J.auto_colocar then
-    e.colocados = { mesas = 0, canteiros = 0, frutas = 0, vacas = 0, salas = {} }
+    e.colocados = { mesas = 0, canteiros = 0, frutas = 0, vacas = 0, salas = {}, com_caminho = true }
     recalcular()
   end
   J.noticia = { id = "historia", titulo = "A taverna do seu tio",
@@ -498,8 +503,7 @@ function J.montar_mapa()
   local xmax = sb - 0.2
   if J.ef("a_leste") > 0 then
     xmax = sb + 5.6   -- o banco direito da mesa 8 fica perto do fim da ala: precisa dar para chegar nele
-    caixa("carga_leste", 11.2, -0.4, 1.4, 0.8)
-    if J.mercadinho_aberto() then caixa("barraca", 9.3, -2.15, 4.5, 1.7) end
+    caixa("carga_leste", 11.2, -3.6, 1.4, 0.8)
   end
   Cam.montar({ sa + 0.2, xmax, sc + 0.25, sd - 0.2 }, obs)
 end
@@ -544,8 +548,23 @@ function J.fora_da_porta(p)
   return (L.base("porta", p.x, p.z)) < -6.85
 end
 
+-- Cálculo de rotas espalhado: cada quadro faz só algumas buscas; quem passa disso espera o próximo.
+-- Fora de J.atualizar (J.limite_buscas nil) não há limite: a rota sai na hora.
+local BUSCAS_POR_SEGUNDO = 180   -- 3 por quadro a 60 quadros por segundo
+
+local function sem_folga_de_rotas()
+  return J.limite_buscas ~= nil and Cam.buscas >= J.limite_buscas
+end
+
 -- Monta os caminhos desviando dos objetos; se não houver saída, a pessoa atravessa
 function J.caminho(p, x, z)
+  if sem_folga_de_rotas() then
+    p.rota_pendente = { x = x, z = z }
+    p.rota, p.andando, p.destino_x, p.destino_z = {}, true, x, z
+    p.origem_x, p.origem_z = p.x, p.z
+    return
+  end
+  p.rota_pendente = nil
   -- quem ainda vem pelo vão está fora do mapa: a rota começa no fim do vão
   local vao, fx, fz = p.vao, p.x, p.z
   if vao then p.x, p.z = vao[#vao].x, vao[#vao].z end
@@ -591,8 +610,9 @@ end
 function J.aplicar_layout()
   for _, m in ipairs(POS_MESAS) do m.x, m.z = L.t(m.id, m.bx, m.bz) end
   J.PORTA.x, J.PORTA.z = L.t("porta", -6.4, 1.6)
-  J.QUADRO.x, J.QUADRO.z = L.t("quadro", -2.6, -3.7)
-  J.BARRACA.x, J.BARRACA.z = L.t("barraca", 9.3, -1.0)
+  J.QUADRO.x, J.QUADRO.z = L.t("quadro", 79, 0.1)
+  J.BARRACA.x, J.BARRACA.z = L.t("barraca", 73, 0.1)
+  J.visitantes = {}
   for _, l in ipairs(J.lugares or {}) do l.dono = nil end
   -- o menestrel que ainda não tinha cantado não leva a história embora
   for _, p in ipairs(J.pessoas) do
@@ -619,6 +639,7 @@ function J.aplicar_obra()
   local function leva(p)
     p.x, p.z = p.x + dx, p.z + dz
     if p.destino_x then p.destino_x, p.destino_z = p.destino_x + dx, p.destino_z + dz end
+    if p.rota_pendente then p.rota_pendente.x, p.rota_pendente.z = p.rota_pendente.x + dx, p.rota_pendente.z + dz end
     for _, r in ipairs(p.rota or {}) do r.x, r.z = r.x + dx, r.z + dz end
     for _, r in ipairs(p.vao or {}) do r.x, r.z = r.x + dx, r.z + dz end
   end
@@ -630,8 +651,15 @@ function J.aplicar_obra()
   end
   for _, m in ipairs(POS_MESAS) do m.x, m.z = L.t(m.id, m.bx, m.bz) end
   J.PORTA.x, J.PORTA.z = L.t("porta", -6.4, 1.6)
-  J.QUADRO.x, J.QUADRO.z = L.t("quadro", -2.6, -3.7)
-  J.BARRACA.x, J.BARRACA.z = L.t("barraca", 9.3, -1.0)
+  -- quem está lá fora anda junto com o caminho de pedras
+  local qx, qz = L.t("quadro", 79, 0.1)
+  local fx, fz = qx - J.QUADRO.x, qz - J.QUADRO.z
+  for _, p in ipairs(J.visitantes or {}) do
+    p.x, p.z = p.x + fx, p.z + fz
+    for _, r in ipairs(p.rota) do r.x, r.z = r.x + fx, r.z + fz end
+  end
+  J.QUADRO.x, J.QUADRO.z = qx, qz
+  J.BARRACA.x, J.BARRACA.z = L.t("barraca", 73, 0.1)
   J.reconstruir_lugares()
   J.montar_mapa()
 end
@@ -661,6 +689,9 @@ function J.para_colocar()
       r[#r + 1] = { tipo = "sala", id = id, nome = nomes[id], n = 1 }
     end
   end
+  -- mercadinho e mural: o primeiro a ser posto escolhe o lugar do caminho; o segundo só entra ao lado
+  if bruto("mercadinho") > 0 and not c.salas.mercadinho then r[#r + 1] = { tipo = "fora", id = "mercadinho", nome = "Mercadinho", n = 1 } end
+  if bruto("prateleira") > 0 and not c.salas.mural then r[#r + 1] = { tipo = "fora", id = "mural", nome = "Mural de missões", n = 1 } end
   local mesas = bruto("mesa") + bruto("ala_leste") * 2 - c.mesas
   if mesas > 0 then r[#r + 1] = { tipo = "mesa", nome = "Mesa", n = mesas } end
   local cant = bruto("canteiro") - c.canteiros
@@ -805,6 +836,34 @@ function J.por_sala(id, x, z, andar)
     return false, motivo
   end
   J.ajustar_equipe()
+  depois_de_colocar()
+  return true
+end
+
+-- Mercadinho ou mural. Sem o caminho, x e z dizem onde ele fica; com o caminho, o item só entra no lugar dele.
+function J.por_fora(id, x, z)
+  if not pendente("fora", id) then return false, "Nada deste tipo para colocar" end
+  local c = J.estado.colocados
+  if c.salas.caminho then
+    c.salas[id] = true
+    recalcular()
+    J.ajustar_equipe()
+    depois_de_colocar()
+    return true
+  end
+  if not x then x, z = L.vaga_sala("caminho", 0) end
+  local ok, motivo = L.encaixe_valido("caminho", x, z, 0)
+  if not ok then return false, motivo end
+  c.salas.caminho, c.salas[id] = true, true
+  recalcular()
+  ok, motivo = L.mover_sala("caminho", x, z, 0)
+  if not ok then
+    c.salas.caminho, c.salas[id] = nil, nil
+    recalcular()
+    return false, motivo
+  end
+  J.ajustar_equipe()
+  J.aplicar_obra()
   depois_de_colocar()
   return true
 end
@@ -963,6 +1022,11 @@ function J.novo_cliente()
   local aventura = J.ef("prateleira") > 0 and 0.6 or 0.3
   local nome = math.random() < aventura and util.escolher({ "guerreiro", "mago", "arqueiro", "clerigo" }) or "comum"
   local p = nova_pessoa(tipo_de(nome))
+  -- a missão acabou lá fora: a comemoração é de quem entra para comer e beber
+  if (J.festas or 0) > 0 then
+    J.festas = J.festas - 1
+    p.festa = true
+  end
   sentar_cliente(p, lugar)
   J.pessoas[#J.pessoas + 1] = p
   return p
@@ -1083,25 +1147,21 @@ local function refazer_se_for_bater(p, alvo, vel, dt)
 end
 
 local function seguir_rota(p, dt, vel)
+  -- a rota dele ficou para este quadro: sem folga de novo, espera parado
+  if p.rota_pendente then
+    if sem_folga_de_rotas() then return false end
+    J.caminho(p, p.rota_pendente.x, p.rota_pendente.z)
+  end
   local alvo = p.rota[1]
   if not alvo then return true end
   alvo = refazer_se_for_bater(p, alvo, vel, dt)
+  if not alvo then return false end
   -- empurrado por outros, ninguém acerta um ponto exato: chegar perto já basta
   local dx, dz = alvo.x - p.x, alvo.z - p.z
   local tol = #p.rota > 1 and 0.3 or 0.15
   if p.estado == "saindo" and #p.rota == 1 then tol = 0.8 end
   if dx * dx + dz * dz < tol * tol or andar(p, alvo.x, alvo.z, vel, dt) then table.remove(p.rota, 1) end
   return #p.rota == 0
-end
-
-local function iniciar_missao_visual(p, dados)
-  p.estado = "indo_quadro"
-  p.dados_missao = dados
-  -- cada um vai a um ponto do quadro e pega o papel com a mão
-  local ox = util.escolher({ -0.9, -0.3, 0.3, 0.9 })
-  local x, z = L.t("quadro", -2.6 + ox, -3.7)
-  p.papel_x = ox
-  rota_ate(p, x, z)
 end
 
 -- Reta pelo vão, sem colisões: as paredes do mapa bloqueiam tudo o que fica fora do salão
@@ -1164,11 +1224,59 @@ local function atualizar_pessoa(p, dt)
   elseif p.estado == "menestrel_canta" then
     p.fase = p.fase + dt
     if p.t > C.menestrel_canta then rota_saida(p) end
-  elseif p.estado == "indo_quadro" then
+  elseif p.estado == "saindo" then
     if seguir_rota(p, dt, C.velocidade_pessoa) then
-      p.estado, p.t, p.andando = "pegando", 0, false
-      p.fantasma = nil
-      p.giro = math.pi + L.giro("quadro")
+      -- volta ao centro da soleira e cruza a porta em linha reta
+      local sx, sz = soleira_da_porta(0)
+      local fx, fz = L.t("porta", -7.7, 1.6)
+      p.vao, p.fantasma = { { x = sx, z = sz }, { x = fx, z = fz } }, true
+    end
+  end
+end
+
+-- Lado de fora --------------------------------------------------------------------------
+-- Quem vem pegar missão ou vender espólio anda só pela faixa de pedras e nem entra na taverna.
+-- Não usa rotas nem colisão: o caminho é uma reta, então esse povo não pesa no jogo.
+
+local MEIA_FAIXA = 0.32
+J.MAX_VISITANTES = 40
+
+-- começo e fim da faixa de pedras, no mundo, um pouco além das pontas
+local function pontas_da_faixa()
+  local x0, x1 = L.sala_mundo("caminho")
+  return x0 - 0.8, x1 + 0.8
+end
+
+local function novo_visitante(tipo, estado, parada_x, parada_z)
+  if not L.aberta("caminho") or #J.visitantes >= J.MAX_VISITANTES then return nil end
+  local ini = pontas_da_faixa()
+  local dz = (math.random() - 0.5) * 2 * MEIA_FAIXA
+  local p = { x = ini, y = 0, z = parada_z + dz, giro = math.pi / 2, fase = math.random() * 6, t = 0,
+    tipo = tipo, pele = util.escolher(PELES), chapeu = tipo.nome == "comum" and util.escolher(CHAPEUS) or nil,
+    pedido = "bebida", andando = true, estado = estado, rota = { { x = parada_x, z = parada_z + dz } } }
+  J.visitantes[#J.visitantes + 1] = p
+  return p
+end
+
+local function ir_embora(p)
+  local _, fim = pontas_da_faixa()
+  p.estado, p.andando, p.rota = "saindo", true, { { x = fim, z = p.z } }
+end
+
+local function atualizar_visitante(p, dt)
+  p.t = p.t + dt
+  if p.andando then
+    local a = p.rota[1]
+    if a and not andar(p, a.x, a.z, C.velocidade_pessoa, dt) then return end
+    p.rota = {}
+    p.andando = false
+    if p.estado == "indo_quadro" then
+      p.estado, p.t, p.giro = "pegando", 0, math.pi
+    elseif p.estado == "indo_barraca" then
+      J.vender_espolio(p)
+      p.estado, p.t, p.giro = "vendendo", 0, math.pi
+    else
+      p.removido = true
     end
   elseif p.estado == "pegando" then
     -- estica o braço, arranca o papel e sai com ele na mão
@@ -1177,26 +1285,9 @@ local function atualizar_pessoa(p, dt)
       J.flutuar(p.x, 2.5, p.z, "Missão " .. (p.rank_missao or "") .. "!", util.cores.ouro, 18)
       J.som("clique")
     end
-    if p.t > 1.3 then rota_saida(p) end
-  elseif p.estado == "indo_barraca" then
-    if seguir_rota(p, dt, C.velocidade_pessoa) then
-      J.vender_espolio(p)
-      p.estado, p.t, p.andando = "vendendo", 0, false
-      p.fantasma = nil
-      p.giro = math.pi + L.giro("barraca")
-    end
+    if p.t > 1.3 then ir_embora(p) end
   elseif p.estado == "vendendo" then
-    if p.t > 1.0 then
-      local lugar = lugar_livre()
-      if lugar and p.festa then sentar_cliente(p, lugar) else rota_saida(p) end
-    end
-  elseif p.estado == "saindo" then
-    if seguir_rota(p, dt, C.velocidade_pessoa) then
-      -- volta ao centro da soleira e cruza a porta em linha reta
-      local sx, sz = soleira_da_porta(0)
-      local fx, fz = L.t("porta", -7.7, 1.6)
-      p.vao, p.fantasma = { { x = sx, z = sz }, { x = fx, z = fz } }, true
-    end
+    if p.t > 1.0 then ir_embora(p) end
   end
 end
 
@@ -1233,7 +1324,8 @@ local function atualizar_garcom(g, dt)
       -- a casa do garçom é ao lado do balcão: pega o prato ali mesmo
       g.andando = false
       g.pega = g.pega - dt
-      if g.pega <= 0 then
+      -- achar onde parar custa várias buscas: sem folga neste quadro, o prato espera mais um pouco
+      if g.pega <= 0 and not sem_folga_de_rotas() then
         local p = g.alvo
         if p and p.estado == "esperando" then
           g.estado, g.levando = "indo", true
@@ -1419,38 +1511,32 @@ local function concluir_missao(m)
     v = J.pagamento_rank(r)
   end
 
-  -- a pessoa volta pela porta e paga; se a taverna estiver lotada de gente, só o ouro entra
-  if #J.pessoas < J.MAX_PESSOAS then
-    local tipo = c and J.TIPOS_POR_NOME(c.tipo) or tipo_de(util.escolher({ "guerreiro", "mago", "arqueiro", "clerigo" }))
-    local p = nova_pessoa(tipo)
+  -- volta pelo caminho de pedras e paga; quem tem espólio vende e vai embora, sem entrar na taverna.
+  -- A comemoração fica para o próximo cliente: é ele quem se senta. Com o caminho lotado, só o ouro entra.
+  local vende = J.mercadinho_aberto() and r <= J.ef("mercadinho")
+  local tipo = c and J.TIPOS_POR_NOME(c.tipo) or tipo_de(util.escolher({ "guerreiro", "mago", "arqueiro", "clerigo" }))
+  local p
+  if vende then p = novo_visitante(tipo, "indo_barraca", J.BARRACA.x + (math.random() - 0.5) * 3.2, J.BARRACA.z)
+  else p = novo_visitante(tipo, "saindo", select(2, pontas_da_faixa()), J.QUADRO.z) end
+  if p then
     p.contratado = c
     if c then p.pele = c.pele end
-    p.rank_volta = r
-    p.festa = true
-    J.pessoas[#J.pessoas + 1] = p
-    J.ganhar(v, J.PORTA.x + 0.8, 2.3, J.PORTA.z)
-    if J.mercadinho_aberto() and r <= J.ef("mercadinho") then
-      p.estado = "indo_barraca"
-      rota_ate(p, J.BARRACA.x + (math.random() - 0.5) * 2.5, J.BARRACA.z)
-      p.leva_espolio = r
-    else
-      local lugar = lugar_livre()
-      if lugar then sentar_cliente(p, lugar) else rota_saida(p) end
-    end
+    p.leva_espolio = vende and r or nil
+    J.ganhar(v, J.QUADRO.x, 2.3, J.QUADRO.z)
   else
     J.ganhar(v)
-    if J.mercadinho_aberto() and r <= J.ef("mercadinho") then J.vender_espolio({ leva_espolio = r }) end
+    if vende then J.vender_espolio({ leva_espolio = r }) end
   end
+  if lugar_livre() then J.festas = math.min((J.festas or 0) + 1, 20) end
   J.som("missao")
 end
 
 local function partir_visual(tipo, c, rank)
-  if #J.pessoas >= J.MAX_PESSOAS then return end
-  local p = nova_pessoa(tipo)
+  -- cada um vai a um ponto do mural e pega o papel com a mão
+  local p = novo_visitante(tipo, "indo_quadro", J.QUADRO.x + util.escolher({ -0.9, -0.3, 0.3, 0.9 }), J.QUADRO.z)
+  if not p then return end
   p.rank_missao = rank
   if c then p.pele = c.pele; p.contratado = c end
-  iniciar_missao_visual(p, true)
-  J.pessoas[#J.pessoas + 1] = p
 end
 
 function J.iniciar_missao_comum(r)
@@ -1826,6 +1912,8 @@ function J.iniciar()
   J.pronto = false
   J.estado = estado_inicial()
   J.pessoas = {}
+  J.visitantes = {}
+  J.festas = 0
   J.garcons = {}
   local gx, gz = L.t("balcao", 2.5, -3.25)
   J.gerente = { x = gx, z = gz, giro = 0, fase = 0, estado = "balcao", t = 2, rota = {} }
@@ -1907,22 +1995,30 @@ function J.atualizar(dt)
   e.tempo = e.tempo + dt
 
   if not e.fim then
-    J.relogio_chegada = math.min(J.relogio_chegada + dt, J.intervalo_chegada())
-    if J.relogio_chegada >= J.intervalo_chegada() then
+    -- missão concluída lá fora traz gente querendo comemorar: a próxima pessoa chega mais cedo
+    local intervalo = J.intervalo_chegada() * ((J.festas or 0) > 0 and 0.5 or 1)
+    J.relogio_chegada = math.min(J.relogio_chegada + dt, intervalo)
+    if J.relogio_chegada >= intervalo then
       -- a porta pode segurar a chegada por alguns segundos, nunca para sempre
       if J.novo_cliente() then J.relogio_chegada, J.espera_porta = 0, 0
       elseif J.porta_lotada() then J.espera_porta = (J.espera_porta or 0) + dt end
     end
   end
 
+  J.limite_buscas = Cam.buscas + math.ceil(BUSCAS_POR_SEGUNDO * dt)
   for _, p in ipairs(J.pessoas) do atualizar_pessoa(p, dt) end
   for i = #J.pessoas, 1, -1 do
     if J.pessoas[i].removido then table.remove(J.pessoas, i) end
+  end
+  for _, p in ipairs(J.visitantes) do atualizar_visitante(p, dt) end
+  for i = #J.visitantes, 1, -1 do
+    if J.visitantes[i].removido then table.remove(J.visitantes, i) end
   end
   for _, g in ipairs(J.garcons) do atualizar_garcom(g, dt) end
   if J.gerente then atualizar_gerente(J.gerente, dt) end
   if J.moco then atualizar_moco(J.moco, dt) end
   atualizar_colisoes(dt)
+  J.limite_buscas = nil
   J.relogio_noticia = (J.relogio_noticia or 0) + dt
   if J.relogio_noticia >= 0.5 then
     J.relogio_noticia = 0
@@ -2068,6 +2164,13 @@ function J.carregar()
     if type(c.salas) ~= "table" then c.salas = {} end
     for id, v in pairs(c.salas) do
       if not NO_DA_SALA[id] or v ~= true then c.salas[id] = nil end
+    end
+    -- save de antes do caminho de pedras: o que já funcionava continua funcionando, no lugar padrão
+    if c.com_caminho ~= true then
+      c.com_caminho = true
+      local nos = type(e.nos) == "table" and e.nos or {}
+      if (tonumber(nos.prateleira) or 0) > 0 then c.salas.mural, c.salas.caminho = true, true end
+      if (tonumber(nos.mercadinho) or 0) > 0 then c.salas.mercadinho, c.salas.caminho = true, true end
     end
   else
     e.colocados = nil
