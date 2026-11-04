@@ -10,9 +10,9 @@ local CHAVE = { "fornecedor", "mesa", "garcom", "cozinha", "cervejaria", "pratel
 
 local sem_lugar = {}
 local function comprar_melhor()
-  -- como uma pessoa: sem despensa e sem fornecedor, guarda o ouro para ela
+  -- como uma pessoa: despensa vazia e carroça na estrada, guarda o ouro para ela
   local em = J.estado.mantimentos
-  if em and J.ef("fornecedor") < 1 and (em.comida < 3 or em.bebida < 3) then return false end
+  if em and J.ef("fornecedor") < 1 and J.carroca_presente() and (em.comida < 3 or em.bebida < 3) then return false end
   local rps = math.max(J.estado.rps, 1)
   -- na reta final, guarda ouro para invocar os heróis
   if J.invocacao_aberta() and J.estado.invocados_feitos < 4 then return false end
@@ -97,9 +97,19 @@ function R.jogar(limite_horas, passo, marcos, cada)
     local ee = J.estado
     if ee.mantimentos then
       if J.pode_emprestimo() then J.pegar_emprestimo() end
-      if J.ef("fornecedor") < 1 then
+      -- compra na carroça enquanto ela está na estrada: o bastante para a volta dela,
+      -- medido pelo que a taverna vem servindo, sem passar da metade do ouro depois do começo
+      if J.carroca_presente() then
+        local ritmo = ee.servidos / math.max(60, ee.tempo)
+        local alvo = math.min(600, math.max(30, ritmo * C.carroca_intervalo))
         for _, tipo in ipairs({ "comida", "bebida" }) do
-          if ee.mantimentos[tipo] < 3 then J.comprar_mantimentos(tipo) end
+          local id = tipo == "comida" and "carne" or "bebida"
+          local d = J.CARROCA[id]
+          while ee.mantimentos[tipo] < alvo do
+            local p = J.preco_carroca(id)
+            if ee.ouro < p or (ee.mantimentos[tipo] >= 30 and p > ee.ouro * 0.5) then break end
+            if not J.comprar_carroca(id) then break end
+          end
         end
       end
     end

@@ -2577,6 +2577,135 @@ do
 end
 novo()
 ok("save antigo não tem mantimentos: serve como antes", J.estado.mantimentos == nil)
+-- Carroça do comerciante ---------------------------------------------------------------------------
+do
+  local Mu = require("mundo")
+  local function fim_visita() local c = J.estado.carroca; c.resta = 0.01; J.atualizar(0.05) end
+  novo()
+  J.comecar_endividado(); J.noticia = nil
+  local e = J.estado
+  ok("carroça já está na estrada ao começar", J.carroca_presente() and J.carroca_resta() == C.carroca_fica)
+  ok("carroça fica 1,5 min e volta a cada 5", C.carroca_fica == 90 and C.carroca_intervalo == 300)
+  do
+    local c = e.carroca
+    fim_visita()
+    ok("carroça vai embora", not c.presente and math.abs(c.resta - 210) < 1)
+    fim_visita()
+    ok("carroça volta e conta a visita", c.presente and c.visitas == 2)
+  end
+  ok("HUD não vende mais comida e bebida", (function()
+    T.iniciar(); T.tela = nil; T.aba = "taverna"; quadros(2)
+    return not U.apertar("comprar_comida") and not U.apertar("comprar_bebida")
+  end)())
+  -- toque abre a lista, com imagem, nome e preço, e o toque compra
+  e.ouro = 1000
+  quadros(1)
+  ok("botão da HUD abre a lista", U.apertar("carroca_abrir") and T.modal == "carroca")
+  quadros(1)
+  local comida0 = e.mantimentos.comida
+  ok("lista compra carne (comida)", U.apertar("carroca_carne") and e.mantimentos.comida == comida0 + 10)
+  quadros(1)
+  ok("lista compra bebida em lote grande", U.apertar("carroca_bebida_2") and e.mantimentos.bebida == 50)
+  for _, d in ipairs(C.carroca) do
+    ok("item da carroça tem imagem: " .. d.id, Mu.MODELOS[d.modelo] ~= nil)
+    ok("item da carroça tem nome: " .. d.id, type(d.nome) == "string")
+  end
+  fim_visita(); quadros(1)
+  ok("lista fecha quando a carroça parte", T.modal == nil)
+  ok("sem carroça, não compra", not J.comprar_mantimentos("comida") and not J.comprar_carroca("carne"))
+  ok("HUD sem botão enquanto ela está longe", not U.apertar("carroca_abrir"))
+  -- toque no modelo
+  fim_visita(); quadros(1)
+  Mu.iniciar(); Mu.atualizar(0.1)
+  local sx, sy = Mu.posicao_carroca()
+  for _, p in ipairs(J.pessoas) do p.estado = "comendo" end
+  ok("toque na carroça abre a lista", sx and Mu.tocar(sx, sy + 20) and T.modal == "carroca")
+  T.modal = nil
+  -- animação: entra e sai andando, e fora da viagem não aparece
+  fim_visita()
+  e.carroca.resta = C.carroca_intervalo - C.carroca_fica - 3
+  local px1 = Mu.carroca_pos(); Mu.atualizar(0.1)
+  e.carroca.resta = e.carroca.resta - 1
+  local px2 = Mu.carroca_pos(); Mu.atualizar(0.1)
+  ok("carroça sai andando", px1 and px2 and px2 > px1 and Mu.carroca_movendo)
+  e.carroca.resta = 100
+  ok("carroça some da estrada", Mu.carroca_pos() == nil)
+  e.carroca.resta = 3
+  local px3 = Mu.carroca_pos()
+  e.carroca.resta = 1
+  ok("carroça chega andando", px3 < Mu.carroca_pos())
+  do
+    local _, _, _, zb = require("layout").salao()
+    ok("estrada fica fora da taverna", Mu.estrada_alvo() > zb + 1)
+  end
+  -- Bartolo não deixa travar
+  novo()
+  J.comecar_endividado(); J.noticia = nil
+  e = J.estado
+  J.pegar_emprestimo()
+  e.mantimentos.comida, e.mantimentos.bebida = 0, 0
+  e.ouro = 500
+  ok("com ouro e carroça aqui, sem socorro", not J.pode_emprestimo())
+  fim_visita()
+  ok("sem nada e carroça longe: Bartolo socorre mesmo com ouro", J.pode_emprestimo())
+  local d0 = e.divida
+  ok("socorro traz cesta e cobra", J.pegar_emprestimo() and e.mantimentos.comida == C.socorro_cesta and e.mantimentos.bebida == C.socorro_cesta and e.divida > d0)
+  ok("com a cesta, sem outro socorro", not J.pode_emprestimo())
+  -- Fornecedor: encomenda automática, mais cara e sem carroça
+  novo()
+  J.comecar_endividado(); J.noticia = nil
+  e = J.estado
+  e.nos.fornecedor = 1; J.recalcular()
+  e.mantimentos.comida, e.mantimentos.bebida = 0, 0
+  e.ouro = 1000
+  fim_visita()
+  local q = J.novo_cliente(); q.estado, q.pedido = "esperando", "comida"
+  local o0, t0, p0 = e.ouro, e.total, J.preco_mantimento("comida")
+  ok("fornecedor atende sem carroça", J.tem_mantimento(q) and J.servir(q, true))
+  ok("fornecedor custa o dobro", math.abs(o0 + (e.total - t0) - e.ouro - p0 * C.fornecedor_mult) < 0.001, e.ouro)
+  e.ouro = J.preco_mantimento("comida") * 1.5
+  local q2 = J.novo_cliente(); q2.estado, q2.pedido = "esperando", "comida"
+  ok("fornecedor sem dinheiro para o dobro não atende", not J.tem_mantimento(q2))
+  -- filhotes, raros e desconto tardio
+  novo()
+  e = J.estado
+  ok("save sem despensa: nem mostra bebidas", J.estado_carroca("bebida").sumir and J.estado_carroca("carne").sumir)
+  ok("filhote só com a fazenda", J.estado_carroca("filhote_vaca").motivo ~= nil and not J.comprar_carroca("filhote_vaca"))
+  libera("fazenda")
+  local cheio = J.preco_unidade("vaca")
+  local cedo = J.preco_carroca("filhote_vaca")
+  ok("filhote sai mais barato que na Loja", cedo < cheio)
+  ok("raros só no fim", J.estado_carroca("raro_especiaria").sumir)
+  libera(C.carroca_tardio)
+  ok("desconto maior no fim do jogo", J.preco_carroca("filhote_vaca") < cedo)
+  ok("raros aparecem no fim", not J.estado_carroca("raro_especiaria").sumir)
+  e.ouro = 1e12
+  local vacas0, ouro0 = J.ef("vacas"), e.ouro
+  local preco = J.preco_carroca("filhote_vaca")
+  ok("filhote entra na fazenda pagando o desconto", J.comprar_carroca("filhote_vaca") and J.ef("vacas") == vacas0 + 1 and math.abs(ouro0 - e.ouro - preco) < 1)
+  ok("um filhote de cada por visita", not J.comprar_carroca("filhote_vaca"))
+  ok("raro compra", J.comprar_carroca("raro_especiaria") and e.raros.comida == C.raro_usos)
+  ok("raro só um por visita", not J.comprar_carroca("raro_especiaria"))
+  fim_visita(); fim_visita()
+  ok("nova visita traz mais", not J.estado_carroca("filhote_vaca").motivo)
+  local r = J.novo_cliente(); r.estado, r.pedido = "esperando", "comida"
+  local v1 = J.valor_pedido()
+  local t1 = e.total
+  r.tipo = J.TIPOS[1]; J.servir(r, true)
+  ok("raro faz o pedido render o dobro e gasta um uso", e.raros.comida == C.raro_usos - 1 and e.total - t1 >= v1 * C.raro_bonus * 0.99)
+  -- save: guarda a carroça; save antigo chega com ela na estrada; lixo não trava
+  e.carroca.presente, e.carroca.resta = false, 123
+  J.salvar(); iniciar()
+  ok("save guarda a carroça", not J.carroca_presente() and J.carroca_resta() == 123)
+  local d = util.desserializar(motor.carregar())
+  d.carroca, d.raros = nil, nil
+  motor.salvar(util.serializar(d)); iniciar()
+  ok("save antigo: carroça na estrada", J.carroca_presente() and J.carroca_resta() == C.carroca_fica)
+  d.carroca = { presente = "x", resta = 0 / 0, visitas = "y", vendidos = 3 }
+  motor.salvar(util.serializar(d)); iniciar()
+  ok("save estragado não trava a carroça", type(J.carroca_presente()) == "boolean" and J.carroca_resta() >= 0 and type(J.estado.carroca.vendidos) == "table")
+  novo()
+end
 ok("gerente existe", J.gerente ~= nil)
 -- Salas em blocos: posição, encaixe, portas, paredes e andares ------------------------------------
 do

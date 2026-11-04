@@ -24,6 +24,27 @@ C.parcela_divida = 0.15        -- parte de cada ganho que vai direto para o agio
 C.lote_mantimentos = 10
 C.fracao_comida = { comprada = 0.4, cozinha = 0.25, jardim = 0.1 }
 C.fracao_bebida = { comprada = 0.3, cervejaria = 0.2, jardim = 0.05 }
+C.fornecedor_mult = 2          -- encomenda automática (nó Fornecedor fixo): dobro do preço da carroça
+C.socorro_cesta = 5            -- comida e bebida que Bartolo traz quando a carroça está longe
+
+-- Carroça do comerciante: chega a cada `intervalo` segundos e fica `fica` segundos.
+-- O jogo começa com ela já parada na estrada. `lote`: quanto cada botão leva; `lote2`: compra grande.
+-- filhote: `unidade` é o item da Loja que ele vira. raro: só no fim do jogo, um pacote por visita.
+C.carroca_intervalo = 300
+C.carroca_fica = 90
+C.carroca_desconto = 0.8       -- filhote custa esta parte do preço da Loja
+C.carroca_desconto_tardio = 0.5
+C.carroca_tardio = "rank_b"    -- nó a partir do qual vêm os raros e o desconto maior
+C.raro_usos = 20               -- quantos pedidos cada pacote raro melhora
+C.raro_bonus = 2               -- quanto rende o pedido feito com item raro
+C.raro_preco = 0.5             -- preço de cada uso, em valor de pedido
+C.carroca = {
+  { id = "bebida", nome = "Bebidas", desc = "Abastece a despensa", tipo = "mantimento", mantimento = "bebida", lote = 10, lote2 = 50, modelo = "item_bebida" },
+  { id = "carne", nome = "Carne", desc = "Abastece a despensa", tipo = "mantimento", mantimento = "comida", lote = 10, lote2 = 50, modelo = "item_carne" },
+  { id = "filhote_vaca", nome = "Filhote de vaca", desc = "Vai para a Fazenda de animais", tipo = "filhote", unidade = "vaca", modelo = "vaca" },
+  { id = "raro_especiaria", nome = "Especiarias raras", desc = "Os próximos pratos rendem o dobro", tipo = "raro", raro = "comida", modelo = "item_especiaria" },
+  { id = "raro_hidromel", nome = "Hidromel raro", desc = "As próximas bebidas rendem o dobro", tipo = "raro", raro = "bebida", modelo = "item_hidromel" },
+}
 
 -- Loja e obras: preço do metro = base * (1 + cresce * metros já aumentados na construção toda)
 C.obra_metro_base = 40

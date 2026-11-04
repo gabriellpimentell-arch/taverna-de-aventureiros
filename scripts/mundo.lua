@@ -68,6 +68,7 @@ function M.iniciar()
   M.fazendeiro = { x = -5.7, z = 6.35, giro = 0, fase = 0, t = 0, i = 1 }
   M.cozinheiro = nil
   M.vacas = {}
+  M.estrada_z = nil
   M.anim = { leste = 0, jardim = 0, cerveja = 0, circulo = 0, cozinha = 0, pomar = 0, fazenda = 0, quartos = 0, guilda = 0, caminho = 0 }
   local a = M.alvos()
   for k, v in pairs(a) do M.anim[k] = v end
@@ -94,6 +95,20 @@ end
 local ANIM_DE = { jardim = "jardim", pomar = "pomar", fazenda = "fazenda", cozinha = "cozinha", cervejaria = "cerveja",
   circulo = "circulo", quartos_sala = "quartos", sala_guilda = "guilda", caminho = "caminho" }
 
+-- A estrada corre em x, à frente da construção mais avançada: fora do mapa, nada se coloca nela.
+local ESTRADA_MEIA, ESTRADA_FOLGA = 1.2, 2.0
+function M.estrada_alvo()
+  local _, _, _, zb = L.salao()
+  local zmax = zb
+  for id, chave in pairs(ANIM_DE) do
+    if L.andar_de(id) == 0 and M.anim and (M.anim[chave] or 0) > 0 then
+      local _, _, _, sz = L.sala_mundo(id)
+      zmax = math.max(zmax, sz)
+    end
+  end
+  return zmax + ESTRADA_FOLGA + ESTRADA_MEIA
+end
+
 -- a câmera recua conforme as áreas abrem, para sempre caber tudo
 function M.calcular_enquadramento(a)
   local xa, xb, za, zb = L.salao()
@@ -118,6 +133,8 @@ function M.calcular_enquadramento(a)
     xmin, xmax = math.min(xmin, f.x0 - 0.4), math.max(xmax, f.x1 + 0.2)
     zmin, zmax = math.min(zmin, f.z0 - 0.4), math.max(zmax, f.z1 + 0.6)
   end
+  -- a estrada passa diante de tudo, no térreo: precisa caber no quadro
+  if ativo == 0 then zmax = math.max(zmax, M.estrada_alvo() + ESTRADA_MEIA + 0.8) end
   local cx, cz = (xmin + xmax) / 2, (zmin + zmax) / 2
   -- a fileira de salas é larga e rasa: aproveita melhor a tela do que o salão sozinho
   local w = xmax - xmin
@@ -147,6 +164,34 @@ function M.atualizar(dt)
   M.aplicar_camera()
   M.mover_cozinheiro(dt)
   M.mover_vacas(dt)
+  M.estrada_z = util.lerp(M.estrada_z or M.estrada_alvo(), M.estrada_alvo(), math.min(1, dt * 2.5))
+  local px = M.carroca_pos()
+  local anda = px and M.carroca_px and px - M.carroca_px or 0
+  M.carroca_roda = (M.carroca_roda or 0) - anda / 0.55
+  M.carroca_movendo = math.abs(anda) > 0.0005
+  M.carroca_px = px
+end
+
+-- Onde a carroça está agora. Só aparência: as regras só sabem se ela está ou não na estrada.
+local CARROCA_VIAGEM, CARROCA_LONGE = 7, 60
+function M.carroca_pos()
+  local xa = L.salao()
+  local cam = M.quadro and M.quadro.largura or 14
+  local parada = xa + 3.4
+  local c = J.estado.carroca
+  local z = M.estrada_z or M.estrada_alvo()
+  if c.presente then return parada, z, true end
+  local longe = C.carroca_intervalo - C.carroca_fica
+  local saiu = longe - c.resta
+  if saiu < CARROCA_VIAGEM then
+    local k = saiu / CARROCA_VIAGEM
+    return parada + (CARROCA_LONGE + cam) * k * k, z, false
+  end
+  if c.resta < CARROCA_VIAGEM then
+    local k = c.resta / CARROCA_VIAGEM
+    return parada - (CARROCA_LONGE + cam) * k * k, z, false
+  end
+  return nil, z, false
 end
 
 function M.aplicar_camera()
@@ -1112,6 +1157,99 @@ function M.mover_vacas(dt)
   end
 end
 
+-- Estrada e carroça -------------------------------------------------------------------------
+
+local function estrada(z)
+  local cx = M.quadro.x
+  local mz = ESTRADA_MEIA
+  local larg = 140
+  -- base de terra, igual às outras áreas: um pedaço do mundo sobre o escuro
+  caixa(cx, -0.65, z, larg, 0.65, mz * 2 + 1.1, "#2a1b12")
+  caixa(cx, 0, z, larg, 0.03, mz * 2 + 1.1, "#5b8f44")
+  caixa(cx, 0.03, z, larg, 0.03, mz * 2, "#8a6f4a")
+  caixa(cx, 0.06, z - 0.45, larg, 0.02, 0.32, "#6f5838")
+  caixa(cx, 0.06, z + 0.45, larg, 0.02, 0.32, "#6f5838")
+  -- pedrinhas e tufos sempre nos mesmos lugares, acompanhando só o trecho que aparece
+  local x0 = math.floor((cx - 34) / 2.4)
+  for k = x0, x0 + 28 do
+    local h = (k * 37) % 97
+    local x = k * 2.4 + (h % 7) * 0.2
+    if h % 3 == 0 then peca("esfera", x, 0.07, z + ((h % 5) - 2) * 0.32, 0.2, 0.12, 0.18, 0, h % 2 == 0 and "#a8a294" or "#6e6a64") end
+    cone(x + 0.6, 0.02, z - mz - 0.3, 0.2, 0.26, "#86b552")
+    if h % 2 == 0 then cone(x, 0.02, z + mz + 0.3, 0.2, 0.22, "#6a9444") end
+  end
+end
+
+local function roda(x, z, ang)
+  local r = 0.55
+  peca("cilindro", x, r, z - 0.06, r * 2, 0.12, r * 2, 0, "#4a2f1c", math.pi / 2)
+  peca("cilindro", x, r, z - 0.09, r * 0.36, 0.18, r * 0.36, 0, FERRO, math.pi / 2)
+  for k = 0, 1 do
+    peca("caixa", x, r, z + 0.075, r * 1.9, 0.07, 0.05, 0, "#a9794a", 0, ang + k * math.pi / 2)
+  end
+end
+
+-- carroça low poly, olhando para +x. `andando`: o cavalo troca as patas. O tempo balança o resto.
+local function carroca_modelo(x, z, ang, andando, tempo)
+  -- cavalo
+  local hx = x + 2.75
+  local passo = andando and math.sin(tempo * 11) * 0.3 or 0
+  local balanca = andando and math.abs(math.sin(tempo * 11)) * 0.04 or 0
+  caixa(hx, 0.72 + balanca, z, 1.2, 0.56, 0.48, "#7a4e2d")
+  for i, q in ipairs({ { -0.45, -0.17 }, { 0.45, -0.17 }, { -0.45, 0.17 }, { 0.45, 0.17 } }) do
+    local a = (i == 1 or i == 4) and passo or -passo
+    caixa(hx + q[1] + a, 0, z + q[2], 0.15, 0.74, 0.15, "#5e3b22")
+    caixa(hx + q[1] + a, 0, z + q[2], 0.17, 0.12, 0.17, "#2b2523")
+  end
+  local cabeca = andando and math.sin(tempo * 5.5) * 0.04 or math.sin(tempo * 1.3) * 0.08 + 0.04
+  peca("caixa", hx + 0.72, 1.42 + cabeca, z, 0.32, 0.7, 0.34, 0, "#7a4e2d", 0, -0.45)
+  caixa(hx + 1.0, 1.52 + cabeca, z, 0.54, 0.3, 0.3, "#7a4e2d")
+  caixa(hx + 1.23, 1.52 + cabeca, z, 0.14, 0.2, 0.26, "#d8c7a9")
+  caixa(hx + 0.56, 1.28 + cabeca, z, 0.14, 0.62, 0.1, "#2b2523")
+  cone(hx + 0.86, 1.8 + cabeca, z - 0.1, 0.09, 0.16, "#5e3b22")
+  cone(hx + 0.86, 1.8 + cabeca, z + 0.1, 0.09, 0.16, "#5e3b22")
+  -- rabo: abana parado, voa andando
+  local rabo = andando and 0.5 or math.sin(tempo * 2.4) * 0.28
+  peca("caixa", hx - 0.68, 0.82, z, 0.1, 0.62, 0.1, 0, "#2b2523", rabo, 0.25)
+  -- varais até o cavalo
+  caixa(x + 1.75, 0.72, z - 0.38, 1.7, 0.07, 0.07, MAD_ESC)
+  caixa(x + 1.75, 0.72, z + 0.38, 1.7, 0.07, 0.07, MAD_ESC)
+  -- caixa da carroça
+  local trem = andando and math.sin(tempo * 17) * 0.015 or 0
+  caixa(x, 0.6 + trem, z, 2.6, 0.14, 1.5, MAD_ESC)
+  caixa(x, 0.74 + trem, z - 0.72, 2.6, 0.42, 0.08, MAD_MED)
+  caixa(x, 0.74 + trem, z + 0.72, 2.6, 0.42, 0.08, MAD_MED)
+  caixa(x - 1.27, 0.74 + trem, z, 0.08, 0.42, 1.5, MAD_MED)
+  caixa(x + 1.27, 0.74 + trem, z, 0.08, 0.42, 1.5, MAD_MED)
+  caixa(x + 1.02, 1.0 + trem, z, 0.45, 0.1, 1.2, TAMPO)
+  -- toldo listrado, atrás do banco do comerciante
+  for i = 0, 2 do
+    local tx = x - 0.95 + i * 0.68
+    local c = i % 2 == 0 and "#e8dcc0" or "#b5483a"
+    peca("caixa", tx, 1.62 + trem, z - 0.48, 0.68, 0.08, 0.72, 0, c, -0.5)
+    peca("caixa", tx, 1.62 + trem, z + 0.48, 0.68, 0.08, 0.72, 0, c, 0.5)
+    caixa(tx, 1.76 + trem, z, 0.68, 0.08, 0.3, c)
+  end
+  for _, q in ipairs({ { -1.25, -0.68 }, { 0.65, -0.68 }, { -1.25, 0.68 }, { 0.65, 0.68 } }) do
+    caixa(x + q[1], 0.74 + trem, z + q[2], 0.07, 0.86, 0.07, MAD_ESC)
+  end
+  -- mercadoria que aparece atrás do toldo
+  barril(x - 0.6, z + 0.2, 0.42)
+  caixa(x + 0.1, 0.74, z - 0.2, 0.6, 0.45, 0.6, "#a87a42")
+  esfera(x + 0.1, 1.25, z - 0.2, 0.32, "#c8382e")
+  -- lampião balançando
+  local bal = math.sin(tempo * 2) * 0.06
+  peca("caixa", x + 0.72 + bal, 1.27, z + 0.78, 0.13, 0.2, 0.13, 0, "#ffc75a", 0, 0, 1.4)
+  roda(x - 0.85, z - 0.82, ang); roda(x + 0.85, z - 0.82, ang)
+  roda(x - 0.85, z + 0.82, ang); roda(x + 0.85, z + 0.82, ang)
+  -- comerciante: acena enquanto está parado
+  M.boneco({ x = x + 1.02, y = 0.58, z = z, giro = math.pi / 2, fase = tempo, sentado = true, pele = "#c68a5a", chapeu = "#7c3f8f",
+    tipo = { nome = "comum", corpo = "#7c3f8f", perna = "#3a3028", braco = "#6d3580" } })
+  if not andando then
+    peca("caixa", x + 1.02, 1.62 + math.sin(tempo * 4) * 0.05, z + 0.36, 0.09, 0.42, 0.09, 0, "#6d3580", math.sin(tempo * 5) * 0.4)
+  end
+end
+
 local function arvore_frutas(x, z, i, o, maduras)
   if i % 2 == 1 then
     -- macieira
@@ -1485,7 +1623,8 @@ function M.desenhar_botoes_andar()
   local lista = L.andares()
   if #lista < 2 then return end
   local a = U.celular() and 60 or 46
-  local y = (540 - #lista * (a + 6)) / 2
+  -- abaixo do painel de ouro, carroça, despensa e dívida
+  local y = math.max(236, (540 - #lista * (a + 6)) / 2)
   local curto = { [1] = "2º", [0] = "T", [-1] = "S" }
   for _, n in ipairs(lista) do
     local ativo = n == L.andar_ativo
@@ -1843,6 +1982,26 @@ local MODELOS = {
     caixa(0, 2.2, 0.1, 2.6, 0.12, 1.3, "#b5483a")
     esfera(-0.4, 1.1, 0, 0.32, "#c9a24a"); barril(0.55, -0.05, 0.4)
   end },
+  item_bebida = { d = 4.5, h = 0.5, fn = function()
+    barril(0, 0)
+    caixa(0.62, 0, 0.32, 0.22, 0.3, 0.22, TAMPO); caixa(0.62, 0.26, 0.32, 0.26, 0.08, 0.26, "#fff6e6")
+  end },
+  item_carne = { d = 3.6, h = 0.35, fn = function()
+    peca("esfera", -0.1, 0.3, 0, 0.9, 0.62, 0.72, 0.4, "#a8483a")
+    peca("caixa", 0.46, 0.3, -0.22, 0.46, 0.13, 0.13, 0.4, "#efe2c4")
+    peca("esfera", 0.68, 0.3, -0.32, 0.2, 0.2, 0.2, 0, "#efe2c4")
+  end },
+  item_especiaria = { d = 3.2, h = 0.3, fn = function()
+    caixa(0, 0, 0, 1.0, 0.36, 0.7, "#6d3580")
+    caixa(0, 0.36, 0, 1.06, 0.07, 0.76, OURO)
+    esfera(-0.24, 0.45, 0, 0.22, "#e08a3c"); esfera(0.2, 0.45, 0.05, 0.2, "#d9534a")
+  end },
+  item_hidromel = { d = 3.2, h = 0.5, fn = function()
+    cilindro(0, 0, 0, 0.5, 0.72, "#c9a24a")
+    cone(0, 0.72, 0, 0.5, 0.28, "#c9a24a")
+    cilindro(0, 0.96, 0, 0.16, 0.2, "#7b4a26")
+    caixa(0, 0.24, 0.24, 0.3, 0.24, 0.04, PERGAMINHO)
+  end },
   mesa_item = { d = 8.5, h = 0.6, fn = function() mesa(0, 0); banquinho(-1.25, 0); banquinho(1.25, 0) end },
 }
 for t in pairs(L.TIPOS_EXTRAS) do
@@ -1922,6 +2081,11 @@ function M.desenhar_cena()
   if ativo == 0 then
     salao()
     extras()
+    estrada(M.estrada_z or M.estrada_alvo())
+    do
+      local px, pz = M.carroca_pos()
+      if px then carroca_modelo(px, pz, M.carroca_roda or 0, M.carroca_movendo, M.tempo) end
+    end
     ala_leste(a.leste)
     caminho_de_pedras(a.caminho)
     grupo("jardim")
@@ -2019,6 +2183,17 @@ function M.desenhar_baloes()
     end
     ::proxima::
   end
+  -- carroça parada: um balão com a moeda chama para comprar
+  if ativo == 0 and J.carroca_presente() then
+    local x, y = M.posicao_carroca()
+    if x then
+      y = y + math.sin(M.tempo * 3) * 3
+      local q = 18 * e
+      motor.retangulo(x - q, y - q, q * 2, q * 2, "#fff6e6", 9 * e)
+      motor.triangulo(x - 6 * e, y + q - 1, x + 6 * e, y + q - 1, x, y + q + 6 * e, "#fff6e6")
+      U.moeda(x, y, 11 * e)
+    end
+  end
   -- quem está lá fora atrás de uma missão mostra o papel que quer
   if ativo == 0 then
     for _, p in ipairs(J.visitantes) do
@@ -2047,6 +2222,12 @@ function M.desenhar_baloes()
   motor.opacidade(1)
 end
 
+function M.posicao_carroca()
+  local px, pz = M.carroca_pos()
+  if not px then return nil end
+  return motor.projetar(px + 0.6, 2.8, pz)
+end
+
 -- toque na taverna: serve ou separa quem estiver mais perto
 function M.tocar(x, y)
   local melhor, md = nil, 42
@@ -2059,7 +2240,17 @@ function M.tocar(x, y)
       end
     end
   end
-  if not melhor then return false end
+  if not melhor then
+    -- nem cliente, nem briga: a carroça aceita um toque em volta dela, se estiver parada
+    if L.andar_ativo == 0 and J.carroca_presente() and M.ao_tocar_carroca then
+      local sx, sy = M.posicao_carroca()
+      if sx and util.distancia(x, y, sx, sy + 30) < 72 then
+        M.ao_tocar_carroca()
+        return true
+      end
+    end
+    return false
+  end
   if melhor.estado == "brigando" then return J.separar_briga(melhor) end
   return J.servir(melhor, false)
 end

@@ -51,3 +51,11 @@ Pronto em `layout.lua` e `mundo.lua`; a Loja usa estas funções sem tocar em de
 - **Outros limites**: mesas 40 objetos, mas o espaço trava antes (o salão original cabe 9 com a ala; ampliar abre mais); quartos = área da sala / 3,5 m²; árvores e vacas 20 em cena, canteiros o que couber na fazenda; passou disso a compra rende sem objeto novo. Mesa não vai atrás do balcão, e a ala leste é só das mesas 7 e 8.
 - **Miniaturas**: `motor.miniatura_gravar` renderiza o modelo uma vez, sem sombras, em uma textura de 128 px; a Loja só a redesenha. As áreas usam o móvel que as identifica. Compila igual para Android, mas não foi testado lá.
 - **Ritmo**: o robô termina em 17,7 h, contra 25,1 h antes destas etapas: unidades sem teto de níveis aceleram o fim do jogo. A Parte 3 rebalanceia a economia, então o preço ficou como está.
+
+## Parte 2: estrada e carroça (decisões sem o dono)
+- **Estrada**: faixa fora do mapa, sempre à frente da construção mais avançada do térreo; a câmera recua um pouco para ela caber. Nada se coloca nela.
+- **Carroça**: fica 90 s e volta 300 s depois da chegada anterior, já parada no início (save antigo também). O relógio é salvo e não anda com o jogo fechado. A lista não pausa o jogo e fecha quando ela parte.
+- **Fornecedor fixo**: adaptado, não removido. Encomenda sozinho pelo dobro do preço da carroça; o nó subiu de 40 para 400 de ouro, para a carroça valer a pena no começo.
+- **Bartolo**: sem nada para vender, socorre se faltar ouro com a carroça aqui ou, com ela longe, mesmo com ouro: traz 5 de comida, 5 de bebida e 40 de ouro, e cobra na dívida.
+- **Filhotes**: 80% do preço da Loja; a partir do rank B, 50%. Um de cada por visita. A Loja continua vendendo pelo preço cheio.
+- **Raros (a partir do rank B)**: especiarias e hidromel, um pacote de cada por visita. 20 pedidos rendem o dobro; custam 0,5 pedido por uso.

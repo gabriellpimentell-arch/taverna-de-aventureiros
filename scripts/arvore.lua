@@ -53,7 +53,7 @@ local n = {
 
   -- BEBIDAS E COMIDA ---------------------------------------------------------------------
   { id = "cardapio", ramo = "clientes", p = 1, l = -1, nome = "Cardápio", desc = "Pedidos rendem +30%", custo = 15, mult = 2.15, max = 20, ef = { x_pedido = 1.3 } },
-  { id = "fornecedor", pai = "cardapio", ramo = "clientes", p = 2, l = -2, nome = "Fornecedor fixo", desc = "Compra comida e bebida sozinho quando acabam", custo = 40, mult = 1, max = 1, ef = { fornecedor = 1 } },
+  { id = "fornecedor", pai = "cardapio", ramo = "clientes", p = 2, l = -2, nome = "Fornecedor fixo", desc = "Encomenda sozinho o que acabar, pelo dobro do preço da carroça", custo = 400, mult = 1, max = 1, ef = { fornecedor = 1 } },
   { id = "cervejaria", pai = "cozinha", ramo = "bebidas", p = 3, l = 0, nome = "Cervejaria", desc = "Vai para a Loja. Faz a própria cerveja: a bebida custa bem menos", custo = 1200, mult = 1, max = 1, ef = { a_cerveja = 1, bebida_casa = 1 } },
   { id = "cerveja_melhor", pai = "cervejaria", ramo = "bebidas", p = 4, l = 1, nome = "Receita da casa", desc = "A bebida feita em casa rende mais", custo = 6000, mult = 5, max = 5, ef = { bebida_casa = 1 } },
   { id = "especiais", pai = "cervejaria", ramo = "bebidas", p = 4, l = 2, nome = "Pratos especiais", desc = "Pedidos rendem +25%", custo = 2000000, mult = 4, max = 8, ef = { x_pedido = 1.25 } },

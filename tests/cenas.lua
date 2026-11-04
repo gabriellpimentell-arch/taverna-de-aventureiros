@@ -3,6 +3,7 @@ local J = require("jogo")
 local A = require("arvore")
 local T = require("telas")
 local M = require("mundo")
+local C_LONGE = require("config").carroca_intervalo - require("config").carroca_fica
 local function comprar_tudo_ate(lista)
   for _, id in ipairs(lista) do
     local no = A.POR_ID[id]
@@ -80,6 +81,12 @@ local passos = {
   { 0.3, function() T.aba = "taverna"; J.auto_colocar = true; require("layout").restaurar(); M.iniciar() end, "52_fim_loja" },
   { 0.2, function() local S = require("saves"); S.novo("jogo3.sav"); T.iniciar(); J.noticia = nil end, "00d_entrou" },
   { 3, function() end, "01_inicio" },
+  -- carroça: parada e com balão; lista de compras aberta; indo embora; chegando
+  { 0.8, function() T.modal = "carroca" end, "60_carroca_lista" },
+  { 0.6, function() T.modal = nil; J.estado.carroca.presente = false; J.estado.carroca.resta = C_LONGE - 2.2 end, "61_carroca_partindo" },
+  { 0.6, function() J.estado.carroca.resta = 3.5 end, "62_carroca_chegando" },
+  { 0.2, function() J.estado.carroca.presente = false; J.estado.carroca.resta = 90 end, "63_carroca_longe" },
+  { 0.2, function() J.estado.carroca.presente = true; J.estado.carroca.resta = 90 end, "64_carroca_volta" },
   { 1, function() T.aba = "arvore" end, "02_arvore_inicio" },
   { 1, function() T.arv.sel = "cardapio" end, "03_arvore_no" },
   -- revelação: comprar a mesa faz os filhos surgirem; "?" e tocos; painel da pista sem custo

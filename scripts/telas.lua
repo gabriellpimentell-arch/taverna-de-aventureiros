@@ -17,6 +17,11 @@ local T = {}
 
 local AREA = { x = 12, y = 62, w = 936, h = 412 }   -- conteúdo das abas
 
+local function relogio(s)
+  s = math.max(0, math.ceil(s))
+  return string.format("%d:%02d", math.floor(s / 60), s % 60)
+end
+
 local function duracao_texto(s)
   s = math.max(0, math.floor(s))
   if s < 60 then return s .. " s" end
@@ -28,6 +33,7 @@ local function duracao_texto(s)
 end
 
 function T.iniciar()
+  M.ao_tocar_carroca = function() T.abrir_carroca() end
   T.tela = J.em_menu and "titulo" or nil
   T.aba = "taverna"
   T.modal = nil
@@ -105,29 +111,32 @@ local function pilula(txt, y, fundo, frente, raio)
   end
 end
 
--- despensa e dívida do começo do jogo, logo abaixo do ouro
+-- carroça, despensa e dívida, logo abaixo do ouro
 local function painel_divida()
   local e = J.estado
-  if not e.mantimentos then return end
-  local fornecedor = J.ef("fornecedor") > 0
-  local divida = (e.divida or 0) > 0
-  if fornecedor and not divida and not J.pode_emprestimo() then return end
   local y = 58
   if J.pode_emprestimo() then
-    U.botao("emprestimo", 12, y, 236, 40, "Empréstimo: +" .. C.emprestimo .. " de ouro", { cor = cor.ouro, cor_texto = "#2a1608" }, J.pegar_emprestimo)
+    local rot = (e.emprestimos or 0) > 0 and "Socorro de Bartolo: +" or "Empréstimo: +"
+    U.botao("emprestimo", 12, y, 236, 40, rot .. C.emprestimo .. " de ouro", { cor = cor.ouro, cor_texto = "#2a1608", tam = 14 }, J.pegar_emprestimo)
     y = y + 44
   end
-  if not fornecedor then
-    for _, m in ipairs({ { "comida", "Comida" }, { "bebida", "Bebida" } }) do
-      motor.retangulo(12, y, 236, 40, "#21150ee8", 10)
-      local q = e.mantimentos[m[1]] or 0
-      motor.texto(m[2] .. ": " .. fmt(q), 22, y + 11, 14, q < 1 and "#ff9a8a" or cor.texto, "esquerda", true)
-      local preco = J.preco_mantimento(m[1]) * C.lote_mantimentos
-      U.botao("comprar_" .. m[1], 118, y + 4, 124, 32, "+" .. C.lote_mantimentos .. " por " .. fmt(preco), { ativo = e.ouro >= preco, tam = 13 }, function() J.comprar_mantimentos(m[1]) end)
-      y = y + 44
-    end
+  -- a carroça: botão enquanto está na estrada, relógio enquanto está longe
+  if J.carroca_presente() then
+    U.botao("carroca_abrir", 12, y, 236, 40, "Carroça: comprar (" .. relogio(J.carroca_resta()) .. ")", { cor = cor.verde, cor_texto = "#10210c", tam = 14 }, function() T.abrir_carroca() end)
+  else
+    motor.retangulo(12, y, 236, 40, "#21150ee8", 10)
+    motor.texto("Carroça volta em " .. relogio(J.carroca_resta()), 22, y + 11, 14, cor.texto_fraco, "esquerda", true)
   end
-  if divida then
+  y = y + 44
+  if not e.mantimentos then return end
+  motor.retangulo(12, y, 236, 36, "#21150ee8", 10)
+  U.coxa(30, y + 18, 0.6)
+  local qc, qb = e.mantimentos.comida or 0, e.mantimentos.bebida or 0
+  motor.texto(fmt(qc), 46, y + 9, 14, qc < 1 and "#ff9a8a" or cor.texto, "esquerda", true)
+  U.caneca(136, y + 18, 0.6)
+  motor.texto(fmt(qb), 152, y + 9, 14, qb < 1 and "#ff9a8a" or cor.texto, "esquerda", true)
+  y = y + 40
+  if (e.divida or 0) > 0 then
     motor.retangulo(12, y, 236, 40, "#3a1610e8", 10)
     motor.texto("Dívida: " .. fmt(e.divida), 22, y + 11, 14, "#ff9a8a", "esquerda", true)
     U.botao("pagar_divida", 158, y + 4, 84, 32, "Pagar", { ativo = e.ouro >= 1, tam = 13 }, function() J.pagar_divida(e.ouro) end)
@@ -986,6 +995,63 @@ local function alternador(id, rotulo, x, y, ligado, fn)
   U.botao(id, x + 280, y, 84, 40, ligado and "Ligado" or "Desligado", { cor = ligado and cor.verde or "#4a3627", cor_texto = ligado and "#10210c" or cor.texto, tam = 13 }, fn)
 end
 
+function T.abrir_carroca()
+  if J.carroca_presente() then T.modal = "carroca"; motor.som("clique") end
+end
+
+-- A lista da carroça: imagem, nome e preço. O jogo segue rodando; ela se fecha quando a carroça parte.
+local function janela_carroca()
+  if not J.carroca_presente() then T.modal = nil; return end
+  M.gravar_miniaturas()
+  bloquear()
+  local x, y, w, h = 56, 22, 848, 496
+  U.painel(x, y, w, h, cor.carta, cor.ouro_escuro)
+  U.zona("janela", { x = x, y = y, w = w, h = h })
+  motor.texto("Carroça do comerciante", x + 24, y + 12, 22, cor.texto, "esquerda", true)
+  motor.texto("Parte em " .. relogio(J.carroca_resta()) .. "  •  Volta a cada " .. math.floor(C.carroca_intervalo / 60) .. " minutos", x + 24, y + 42, 13, cor.texto_fraco)
+  U.moeda(x + w - 200, y + 30, 11)
+  motor.texto(fmt(J.estado.ouro), x + w - 184, y + 20, 16, cor.ouro, "esquerda", true)
+  U.botao("carroca_fechar", x + w - 52, y + 8, 44, 44, "x", { cor = "#4a3627", cor_texto = cor.texto }, function() T.modal = nil end)
+  local cw, ch, gx, gy = 404, 80, 16, 8
+  local n = 0
+  for _, d in ipairs(C.carroca) do
+    local est = J.estado_carroca(d.id)
+    if not est.sumir then
+      local cx = x + 12 + (n % 2) * (cw + gx)
+      local cy = y + 66 + math.floor(n / 2) * (ch + gy)
+      n = n + 1
+      motor.retangulo(cx, cy, cw, ch, "#3d291b", 8)
+      motor.retangulo(cx + 6, cy + 6, ch - 12, ch - 12, "#21150e", 6)
+      M.miniatura(d.modelo, cx + 6, cy + 6, ch - 12, ch - 12)
+      local tx = cx + ch + 2
+      motor.texto(d.nome, tx, cy + 7, 15, d.tipo == "raro" and "#c9a7ff" or cor.texto, "esquerda", true)
+      motor.texto(d.desc, tx, cy + 29, 12, cor.texto_fraco)
+      if est.motivo then
+        motor.texto(est.motivo, tx, cy + 50, 13, "#ffb0a2", "esquerda", true)
+      else
+        local pode = J.estado.ouro >= est.preco
+        local txt = fmt(est.preco) .. " de ouro"
+        if d.lote then txt = d.lote .. " por " .. fmt(est.preco) end
+        if d.tipo == "raro" then txt = C.raro_usos .. " usos por " .. fmt(est.preco) end
+        motor.texto(txt, tx, cy + 50, 13, pode and cor.ouro or "#ff9a8a", "esquerda", true)
+        local function comprar(mult)
+          local ok, motivo = J.comprar_carroca(d.id, mult)
+          if not ok and motivo then J.avisar(motivo) end
+        end
+        local bx = cx + cw - 78
+        if d.lote2 then
+          local k = d.lote2 / d.lote
+          U.botao("carroca_" .. d.id .. "_2", bx, cy + 18, 70, 44, "+" .. d.lote2, { ativo = J.estado.ouro >= est.preco * k, tam = 14 }, function() comprar(k) end)
+          bx = bx - 76
+          U.botao("carroca_" .. d.id, bx, cy + 18, 70, 44, "+" .. d.lote, { ativo = pode, tam = 14 }, function() comprar(1) end)
+        else
+          U.botao("carroca_" .. d.id, bx, cy + 18, 70, 44, "Levar", { ativo = pode, tam = 14 }, function() comprar(1) end)
+        end
+      end
+    end
+  end
+end
+
 local function janela_config()
   bloquear()
   local o = J.estado.opcoes
@@ -1440,7 +1506,8 @@ function T.desenhar()
   if T.aba == "taverna" or T.aba == "loja" then M.desenhar_botoes_andar() end
   dica()
   aviso()
-  if T.modal == "config" then janela_config()
+  if T.modal == "carroca" then janela_carroca()
+  elseif T.modal == "config" then janela_config()
   elseif T.modal == "stats" then janela_stats()
   elseif T.modal == "creditos" then janela_creditos()
   end
@@ -1500,7 +1567,7 @@ function T.esc()
   if J.offline then return end
   if J.noticia and not T.modal then J.noticia = nil return end
   if T.aba == "loja" and not T.modal and Lj.voltar() then return end
-  if T.modal == "config" then T.modal = nil
+  if T.modal == "config" or T.modal == "carroca" then T.modal = nil
   elseif T.modal then T.modal = "config"
   elseif T.aba ~= "taverna" then T.aba = "taverna"
   else T.modal = "config"; T.confirmar = false end

@@ -162,6 +162,8 @@ local function estado_inicial()
     invocados_feitos = 0,
     fama = 0,
     estoque = 0, ciclo = 0, colhido = 0,
+    carroca = { presente = true, resta = C.carroca_fica, visitas = 1, vendidos = {} },
+    raros = { comida = 0, bebida = 0 },   -- usos que sobram dos itens raros da carroça
     brigas = 0,
     final_resta = nil, fim = false,
     opcoes = { musica = 0.4, efeitos = 0.7, sombras = true, fps = false, fluxo = false },
@@ -374,7 +376,7 @@ function J.comecar_endividado()
     recalcular()
   end
   J.noticia = { id = "historia", titulo = "A taverna do seu tio",
-    texto = "Você herdou esta taverna, e com ela " .. C.divida_inicial .. " de ouro em dívidas e uma despensa vazia. Bartolo, o agiota da vila, empresta um pouco para recomeçar. Pegue o empréstimo, compre comida e bebida e revenda por um preço maior." }
+    texto = "Você herdou esta taverna, e com ela " .. C.divida_inicial .. " de ouro em dívidas e uma despensa vazia. Bartolo, o agiota da vila, empresta um pouco para recomeçar. Pegue o empréstimo, toque na carroça do comerciante, lá na estrada, compre comida e bebida e revenda por um preço maior." }
 end
 
 function J.fracao_custo(tipo)
@@ -390,6 +392,7 @@ function J.preco_mantimento(tipo) return J.valor_pedido() * J.fracao_custo(tipo)
 function J.comprar_mantimentos(tipo, qtd)
   local e = J.estado
   if not e.mantimentos then return false end
+  if not J.carroca_presente() then J.avisar("A carroça não está na estrada."); return false end
   qtd = qtd or C.lote_mantimentos
   local custo = J.preco_mantimento(tipo) * qtd
   if e.ouro < custo then J.avisar("Falta ouro para comprar."); return false end
@@ -399,14 +402,104 @@ function J.comprar_mantimentos(tipo, qtd)
   return true
 end
 
+-- Carroça do comerciante ------------------------------------------------------------------
+
+J.CARROCA = {}
+for _, d in ipairs(C.carroca) do J.CARROCA[d.id] = d end
+
+function J.carroca_presente() return J.estado.carroca.presente end
+-- segundos até ela ir embora (presente) ou até chegar (longe)
+function J.carroca_resta() return math.max(0, J.estado.carroca.resta) end
+function J.carroca_tardia() return J.nivel(C.carroca_tardio) > 0 end
+
+local function atualizar_carroca(dt)
+  local c = J.estado.carroca
+  c.resta = c.resta - dt
+  if c.resta > 0 then return end
+  if c.presente then
+    c.presente, c.resta = false, C.carroca_intervalo - C.carroca_fica
+    J.avisar("A carroça do comerciante foi embora.")
+  else
+    c.presente, c.resta, c.visitas, c.vendidos = true, C.carroca_fica, c.visitas + 1, {}
+    J.avisar("A carroça do comerciante chegou! Toque nela para comprar.")
+    J.som("moeda")
+  end
+end
+
+function J.preco_carroca(id)
+  local d = J.CARROCA[id]
+  if d.tipo == "mantimento" then return J.preco_mantimento(d.mantimento) * d.lote end
+  if d.tipo == "filhote" then
+    local k = J.carroca_tardia() and C.carroca_desconto_tardio or C.carroca_desconto
+    return math.floor(J.preco_unidade(d.unidade) * k)
+  end
+  if d.tipo == "raro" then return J.valor_pedido() * C.raro_preco * C.raro_usos end
+  return math.huge
+end
+
+-- Dá para comprar? Devolve o motivo se não der; sumir = nem aparece na lista (ainda).
+function J.estado_carroca(id)
+  local d = J.CARROCA[id]
+  local c = J.estado.carroca
+  local r = { preco = J.preco_carroca(id) }
+  if d.tipo == "mantimento" and not J.estado.mantimentos then r.sumir = true end
+  if d.tipo == "raro" and not J.carroca_tardia() then r.sumir = true end
+  if d.tipo == "filhote" then
+    local est = J.estado_unidade(d.unidade)
+    if est.motivo == "Libere na Árvore" then r.motivo = "Libere a Fazenda de animais"
+    elseif est.motivo then r.motivo = est.motivo end
+  end
+  if (d.tipo == "filhote" or d.tipo == "raro") and c.vendidos[id] then r.motivo = "Só um por visita: acabou" end
+  return r
+end
+
+-- mult: quantos lotes (só para quem tem lote)
+function J.comprar_carroca(id, mult)
+  local d = J.CARROCA[id]
+  if not d then return false, "Item desconhecido" end
+  if not J.carroca_presente() then return false, "A carroça não está na estrada" end
+  local est = J.estado_carroca(id)
+  if est.sumir then return false, "Não está à venda" end
+  if est.motivo then return false, est.motivo end
+  local e = J.estado
+  mult = mult or 1
+  local preco = est.preco * mult
+  if e.ouro < preco then return false, "Falta ouro" end
+  if d.tipo == "mantimento" then
+    return J.comprar_mantimentos(d.mantimento, d.lote * mult)
+  elseif d.tipo == "filhote" then
+    -- mesmo caminho da Loja: cai no primeiro lugar livre e pode ser movido depois
+    local ouro = e.ouro
+    e.ouro = e.ouro + J.preco_unidade(d.unidade) - preco
+    local ok, motivo = J.comprar_unidade(d.unidade)
+    if not ok then e.ouro = ouro; return false, motivo end
+    e.carroca.vendidos[id] = true
+  elseif d.tipo == "raro" then
+    e.ouro = e.ouro - preco
+    e.raros[d.raro] = e.raros[d.raro] + C.raro_usos
+    e.carroca.vendidos[id] = true
+  end
+  J.som("moeda")
+  return true
+end
+
+-- Bartolo: o primeiro empréstimo é o começo do jogo. Depois, só socorre quem ficou sem nada.
+function J.sem_nada()
+  local e = J.estado
+  if not e.mantimentos then return false end
+  local m = e.mantimentos
+  return m.comida < 1 and m.bebida < 1 and not J.tem_caseiro("comida") and not J.tem_caseiro("bebida")
+end
+
 function J.pode_emprestimo()
   local e = J.estado
   if not e.mantimentos then return false end
   if (e.emprestimos or 0) == 0 then return true end
-  -- socorro: sem ouro para comprar nem comida para vender, o jogo não pode travar
-  local m = e.mantimentos
-  local lote = J.ef("fornecedor") > 0 and 1 or C.lote_mantimentos
-  return m.comida < 1 and m.bebida < 1 and e.ouro < J.preco_mantimento("bebida") * lote
+  if not J.sem_nada() then return false end
+  if J.ef("fornecedor") > 0 and e.ouro >= J.preco_mantimento("bebida") * C.fornecedor_mult then return false end
+  -- carroça longe: não adianta ter ouro, ele traz uma cesta. Carroça aqui: só falta ouro.
+  if not J.carroca_presente() then return true end
+  return e.ouro < J.preco_mantimento("bebida") * C.lote_mantimentos
 end
 
 function J.pegar_emprestimo()
@@ -415,6 +508,11 @@ function J.pegar_emprestimo()
   e.ouro = e.ouro + C.emprestimo
   e.divida = (e.divida or 0) + C.emprestimo * C.juros_emprestimo
   e.emprestimos = (e.emprestimos or 0) + 1
+  if e.emprestimos > 1 and not J.carroca_presente() then
+    e.mantimentos.comida = e.mantimentos.comida + C.socorro_cesta
+    e.mantimentos.bebida = e.mantimentos.bebida + C.socorro_cesta
+    J.avisar("Bartolo trouxe uma cesta e um pouco de ouro. Vai cobrar depois.", 4)
+  end
   J.som("moeda")
   return true
 end
@@ -430,18 +528,18 @@ function J.pagar_divida(v)
   end
 end
 
-local function caseiro(p)
-  local e = J.estado
-  if e.estoque < 1 then return false end
-  return (p.pedido == "comida" and J.ef("cozinheiro") > 0) or (p.pedido == "bebida" and J.ef("bebida_casa") > 0)
+function J.tem_caseiro(pedido)
+  if J.estado.estoque < 1 then return false end
+  return (pedido == "comida" and J.ef("cozinheiro") > 0) or (pedido == "bebida" and J.ef("bebida_casa") > 0)
 end
+local function caseiro(p) return J.tem_caseiro(p.pedido) end
 
 -- tem como atender este pedido agora?
 function J.tem_mantimento(p)
   local e = J.estado
   if not e.mantimentos or caseiro(p) then return true end
   if (e.mantimentos[p.pedido] or 0) >= 1 then return true end
-  return J.ef("fornecedor") > 0 and e.ouro >= J.preco_mantimento(p.pedido)
+  return J.ef("fornecedor") > 0 and e.ouro >= J.preco_mantimento(p.pedido) * C.fornecedor_mult
 end
 
 local function gastar_mantimento(p)
@@ -450,7 +548,7 @@ local function gastar_mantimento(p)
   if (e.mantimentos[p.pedido] or 0) >= 1 then
     e.mantimentos[p.pedido] = e.mantimentos[p.pedido] - 1
   else
-    e.ouro = e.ouro - J.preco_mantimento(p.pedido)
+    e.ouro = e.ouro - J.preco_mantimento(p.pedido) * C.fornecedor_mult
   end
 end
 
@@ -1345,6 +1443,10 @@ function J.servir(p, por_garcom)
     e.estoque = e.estoque - 1
     v = v * (C.bonus_bebida_casa + C.bonus_bebida_nivel * (J.ef("bebida_casa") - 1))
   end
+  if (e.raros[p.pedido] or 0) >= 1 then
+    e.raros[p.pedido] = e.raros[p.pedido] - 1
+    v = v * C.raro_bonus
+  end
   local par = companheiro(p)
   if par and combina(p, par) == "combo" then
     v = v * C.combo_mesa
@@ -2158,7 +2260,9 @@ function J.objetivo()
   if e.final_resta then return "A party enfrenta o Lorde Demônio..." end
   if e.mantimentos then
     if (e.emprestimos or 0) == 0 then return "Pegue o empréstimo com Bartolo" end
-    if e.mantimentos.comida < 1 and e.mantimentos.bebida < 1 and J.ef("fornecedor") < 1 then return "Compre comida e bebida para vender" end
+    if e.mantimentos.comida < 1 and e.mantimentos.bebida < 1 and J.ef("fornecedor") < 1 then
+      return J.carroca_presente() and "Toque na carroça e compre comida e bebida" or "Espere a carroça ou peça socorro a Bartolo"
+    end
   end
   for _, o in ipairs(OBJETIVOS) do
     if o[1] == "servidos" then
@@ -2302,6 +2406,7 @@ function J.atualizar(dt)
   end
   atualizar_missoes(dt)
   atualizar_jardim(dt)
+  atualizar_carroca(dt)
 
   local passiva = J.renda_passiva()
   if passiva > 0 then J.ganhar(passiva * dt) end
@@ -2457,6 +2562,16 @@ function J.carregar()
   end
   for k, v in pairs(estado_inicial()) do
     if type(v) == "number" then e[k] = saneado(e[k], v) end
+  end
+  -- carroça: save de antes dela (ou estragado) começa com ela parada na estrada
+  do
+    local c = e.carroca
+    if type(c.presente) ~= "boolean" then c.presente = true end
+    local maximo = c.presente and C.carroca_fica or C.carroca_intervalo - C.carroca_fica
+    c.resta = util.limitar(saneado(c.resta, maximo), 0, maximo)
+    c.visitas = math.max(1, math.floor(saneado(c.visitas, 1)))
+    if type(c.vendidos) ~= "table" then c.vendidos = {} end
+    for _, k in ipairs({ "comida", "bebida" }) do e.raros[k] = math.max(0, saneado(e.raros[k], 0)) end
   end
   -- contadores da Loja: arquivo estragado volta a colocar sozinho, nunca trava
   if type(e.colocados) == "table" then
