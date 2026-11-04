@@ -78,6 +78,14 @@ Saves com níveis já comprados precisam continuar funcionando, com uma migraç�
 
 Todo item da Loja mostra imagem e nome, porque só o texto não é intuitivo. O ideal é uma miniatura do próprio modelo 3D, para o item parecer igual ao que aparece no jogo. Isso exige mudar o motor, mas basta o `.exe` novo, que se atualiza sozinho.
 
+### Regra geral das áreas
+
+Toda área nova segue o mesmo caminho: um nó da árvore principal a libera, ela vai para a Loja, e o jogador escolhe na Loja onde colocá-la, junto à taverna. Nenhuma aparece sozinha no mapa.
+
+Isso vale para quartos, sala da guilda, área de avaliação, mercadinho, mural de missões, as três fazendas, cozinha, cervejaria e sala de invocação.
+
+O mercadinho e o mural seguem a regra e ficam ligados ao caminho de pedras: colocar o primeiro deles define o lugar do caminho, e o segundo fica ao lado.
+
 ### Saves independentes
 
 Hoje, tamanhos e decoração valem para todos os saves, então um jogo novo herda o que foi construído em outro. Isso deve ser corrigido nesta parte: cada save guarda sua própria construção.
