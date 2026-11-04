@@ -18,7 +18,7 @@ A.RAMOS = {
   clientes = { nome = "Clientes",         cor = "#e0b04a", angulo = -128 },
 }
 
--- arvore: a que árvore o nó pertence ("principal"; na Parte 3 entram as dos ambientes).
+-- arvore: a que árvore o nó pertence (sem campo: "principal"; as dos ambientes estão no fim da lista).
 -- Revelação: o nó aparece quando TODOS os pré-requisitos (pai e req) foram comprados. Não há
 -- estado salvo para isso: tudo sai das compras, então save antigo vê de imediato o que já tem.
 -- em_breve: lugar reservado na sequência; aparece como "?" e ainda não pode ser comprado.
@@ -48,23 +48,13 @@ local n = {
   { id = "agilidade", pai = "garcom", ramo = "servico", p = 2, l = 1, nome = "Treino da equipe", desc = "Garçons servem 15% mais rápido", custo = 350, mult = 2.2, max = 10, ef = { x_garcom = 0.85 } },
   { id = "bardo", pai = "garcom", ramo = "servico", p = 2, l = -1, nome = "Bardo", desc = "A música faz os pedidos renderem +15%", custo = 3000, mult = 3.2, max = 5, ef = { x_pedido = 1.15, bardo = 1 } },
   { id = "cozinha", pai = "garcom", ramo = "servico", p = 3, l = 0, nome = "Cozinha", desc = "Vai para a Loja. Faz pão na própria taverna: a comida custa bem menos", custo = 300, mult = 1, max = 1, ef = { a_cozinha = 1 } },
-  { id = "moco", pai = "cozinha", ramo = "servico", p = 4, l = 1, nome = "Moço de cozinha", desc = "Traz a comida até o balcão: garçons 15% mais rápidos", custo = 500, mult = 1, max = 1, ef = { moco = 1, x_garcom = 0.85 } },
-  { id = "cozinheiro", pai = "cozinha", req = "jardim", ramo = "servico", p = 4, l = -1, nome = "Cozinheiro", desc = "Usa o que você colhe: comida rende bem mais", custo = 8000, mult = 4, max = 6, ef = { cozinheiro = 1 } },
 
   -- BEBIDAS E COMIDA ---------------------------------------------------------------------
   { id = "cardapio", ramo = "clientes", p = 1, l = -1, nome = "Cardápio", desc = "Pedidos rendem +30%", custo = 15, mult = 2.15, max = 20, ef = { x_pedido = 1.3 } },
   { id = "fornecedor", pai = "cardapio", ramo = "clientes", p = 2, l = -2, nome = "Fornecedor fixo", desc = "Encomenda sozinho o que acabar, pelo dobro do preço da carroça", custo = 400, mult = 1, max = 1, ef = { fornecedor = 1 } },
   { id = "cervejaria", pai = "cozinha", ramo = "bebidas", p = 3, l = 0, nome = "Cervejaria", desc = "Vai para a Loja. Faz a própria cerveja: a bebida custa bem menos", custo = 1200, mult = 1, max = 1, ef = { a_cerveja = 1, bebida_casa = 1 } },
-  { id = "cerveja_melhor", pai = "cervejaria", ramo = "bebidas", p = 4, l = 1, nome = "Receita da casa", desc = "A bebida feita em casa rende mais", custo = 6000, mult = 5, max = 5, ef = { bebida_casa = 1 } },
-  { id = "especiais", pai = "cervejaria", ramo = "bebidas", p = 4, l = 2, nome = "Pratos especiais", desc = "Pedidos rendem +25%", custo = 2000000, mult = 4, max = 8, ef = { x_pedido = 1.25 } },
   { id = "jardim", pai = "cervejaria", ramo = "bebidas", p = 4, l = -1, nome = "Fazenda de sementes", desc = "Vai para a Loja. Planta trigo e lúpulo, que viram comida e bebida da casa", custo = 5000, mult = 1, max = 1, ef = { a_jardim = 1, canteiros = 2 } },
-  { id = "canteiro", pai = "jardim", ramo = "bebidas", p = 5, l = 0, nome = "Mais canteiros", desc = "A Loja passa a vender canteiros", custo = 1000, mult = 1, max = 1, ef = {} },
-  { id = "adubo", pai = "canteiro", ramo = "bebidas", p = 6, l = 0, nome = "Adubo", desc = "Colheitas rendem +30%", custo = 5000, mult = 3.2, max = 8, ef = { x_colheita = 1.3 } },
-  { id = "fazendeiro", pai = "canteiro", ramo = "bebidas", p = 6, l = 1, nome = "Fazendeiro das plantações", desc = "A Loja passa a vender quem cuida só da Fazenda de sementes", custo = 1000, mult = 1, max = 1, ef = {} },
-  { id = "irrigacao", pai = "adubo", ramo = "bebidas", p = 7, l = 0, nome = "Irrigação", desc = "As plantas crescem 15% mais rápido", custo = 16000, mult = 3, max = 6, ef = { x_ciclo = 0.85 } },
   { id = "pomar", pai = "jardim", ramo = "bebidas", p = 5, l = -2, nome = "Fazenda de árvores frutíferas", desc = "Vai para a Loja, com mais árvores à venda. Frutas para tortas e sucos: pedidos +10%", custo = 30000, mult = 1, max = 1, ef = { a_pomar = 1, frutas = 1, x_pedido = 1.1 } },
-  { id = "fazendeiro_arvores", pai = "pomar", ramo = "bebidas", p = 6, l = -3, nome = "Fazendeiro das árvores", desc = "A Loja passa a vender quem cuida só da Fazenda de árvores frutíferas", custo = 6000, mult = 1, max = 1, ef = {} },
-  { id = "fazendeiro_animais", pai = "fazenda", ramo = "bebidas", p = 7, l = -2, nome = "Fazendeiro dos animais", desc = "A Loja passa a vender quem cuida só da Fazenda de animais", custo = 70000, mult = 1, max = 1, ef = {} },
   { id = "fazenda", pai = "pomar", ramo = "bebidas", p = 6, l = -2, nome = "Fazenda de animais", desc = "Vai para a Loja, com vacas, porcos e galinhas à venda. Carne e ovos: +60 ouro por segundo e pedidos +15%", custo = 350000, mult = 1, max = 1, ef = { a_fazenda = 1, vacas = 1, renda_fazenda = 60, x_pedido = 1.15 } },
 
   -- GUILDA -----------------------------------------------------------------------------------
@@ -104,7 +94,50 @@ local n = {
   { id = "cartazes", pai = "propaganda", ramo = "herois", p = 6, l = 0, nome = "Cartazes", desc = "Heróis ganham +50% de fama", custo = 300000000, mult = 3, max = 8, ef = { x_fama = 1.5 } },
   { id = "arautos", pai = "propaganda", ramo = "herois", p = 6, l = 2, nome = "Arautos do bardo", desc = "Heróis ganham o dobro de fama", custo = 500000000, mult = 3.5, max = 5, ef = { x_fama = 2 } },
   { id = "invocacao", pai = "propaganda", ramo = "herois", p = 7, l = 1, nome = "Círculo de invocação", desc = "Vai para a Loja. Invoca heróis de outro mundo", custo = 3000000000.0, mult = 1, max = 1, ef = { invocar = 1, a_circulo = 1 } },
-  { id = "ritual", pai = "invocacao", ramo = "herois", p = 8, l = 1, nome = "Ritual aperfeiçoado", desc = "Invocados ficam 30% mais fortes", custo = 5000000000.0, mult = 3, max = 6, ef = { x_invocado = 1.3 } },
+  -- ÁRVORES DOS AMBIENTES ------------------------------------------------------------------------------
+  -- Abrem ao colocar a sala. Raiz: sem pai. Posição: p = coluna, l = linha (ver o fim do arquivo).
+  -- COZINHA: receitas e cardápio
+  { id = "moco", arvore = "cozinha", ramo = "cozinha", p = 1, l = -1, nome = "Moço de cozinha", desc = "Traz a comida até o balcão: garçons 15% mais rápidos", custo = 500, mult = 1, max = 1, ef = { moco = 1, x_garcom = 0.85 } },
+  { id = "cardapio_maior", arvore = "cozinha", ramo = "cozinha", p = 1, l = 1, nome = "Cardápio maior", desc = "+1 receita no cardápio", custo = 800, mult = 6, max = 3, ef = { vagas_cardapio = 1 } },
+  { id = "cozinheiro", pai = "moco", req = "jardim", arvore = "cozinha", ramo = "cozinha", p = 2, l = -1, nome = "Cozinheiro", desc = "Usa o que você colhe: comida rende bem mais", custo = 8000, mult = 4, max = 6, ef = { cozinheiro = 1 } },
+  { id = "temperos", pai = "cardapio_maior", arvore = "cozinha", ramo = "cozinha", p = 2, l = 1, nome = "Temperos", desc = "Receitas rendem +10%", custo = 3000, mult = 3, max = 6, ef = { x_receita = 1.1 } },
+  { id = "panela", pai = "temperos", arvore = "cozinha", ramo = "cozinha", p = 3, l = 2, nome = "Panela grande", desc = "Receitas gastam 25% menos ingredientes", custo = 20000, mult = 1, max = 1, ef = { x_gasto_receita = 0.75 } },
+  { id = "receitas_nobres", pai = "temperos", arvore = "cozinha", ramo = "cozinha", p = 3, l = 0, nome = "Cortes nobres", desc = "Libera as receitas com carne de vaca", custo = 60000, mult = 1, max = 1, ef = {} },
+  { id = "receitas_porco", pai = "receitas_nobres", req = "chiqueiro", arvore = "cozinha", ramo = "cozinha", p = 4, l = 0, nome = "Receitas de porco", desc = "Libera as receitas com carne de porco", custo = 300000, mult = 1, max = 1, ef = {} },
+  { id = "especiais", pai = "receitas_nobres", arvore = "cozinha", ramo = "cozinha", p = 4, l = 1, nome = "Pratos especiais", desc = "Pedidos rendem +25%", custo = 2000000, mult = 4, max = 8, ef = { x_pedido = 1.25 } },
+  -- CERVEJARIA: bebida melhor
+  { id = "cerveja_melhor", arvore = "cervejaria", ramo = "cervejaria", p = 1, l = -1, nome = "Receita da casa", desc = "A bebida feita em casa rende mais", custo = 6000, mult = 5, max = 5, ef = { bebida_casa = 1 } },
+  { id = "tonel", arvore = "cervejaria", ramo = "cervejaria", p = 1, l = 1, nome = "Tonéis de carvalho", desc = "Bebida da casa rende +12%", custo = 2500, mult = 3, max = 5, ef = { x_bebida = 1.12 } },
+  { id = "chope", pai = "cerveja_melhor", arvore = "cervejaria", ramo = "cervejaria", p = 2, l = -1, nome = "Chope gelado", desc = "Clientes esperam +2 s", custo = 15000, mult = 3, max = 3, ef = { paciencia = 2 } },
+  { id = "rodada", pai = "tonel", arvore = "cervejaria", ramo = "cervejaria", p = 2, l = 1, nome = "Rodada da casa", desc = "Clientes chegam 7% mais rápido", custo = 8000, mult = 3.2, max = 4, ef = { x_chegada = 0.93 } },
+  { id = "mestre_cervejeiro", pai = "rodada", req = "cerveja_melhor", arvore = "cervejaria", ramo = "cervejaria", p = 3, l = 0, nome = "Mestre cervejeiro", desc = "Receitas de bebida rendem +25%", custo = 200000, mult = 5, max = 3, ef = { x_receita_bebida = 1.25 } },
+  -- FAZENDA DE SEMENTES
+  { id = "canteiro", arvore = "jardim", ramo = "jardim", p = 1, l = 0, nome = "Mais canteiros", desc = "A Loja passa a vender canteiros", custo = 1000, mult = 1, max = 1, ef = {} },
+  { id = "adubo", pai = "canteiro", arvore = "jardim", ramo = "jardim", p = 2, l = -1, nome = "Adubo", desc = "Colheitas rendem +30%", custo = 5000, mult = 3.2, max = 8, ef = { x_colheita = 1.3 } },
+  { id = "fazendeiro", pai = "canteiro", arvore = "jardim", ramo = "jardim", p = 2, l = 1, nome = "Fazendeiro das plantações", desc = "A Loja passa a vender quem cuida só da Fazenda de sementes", custo = 1000, mult = 1, max = 1, ef = {} },
+  { id = "irrigacao", pai = "adubo", arvore = "jardim", ramo = "jardim", p = 3, l = -1, nome = "Irrigação", desc = "As plantas crescem 15% mais rápido", custo = 16000, mult = 3, max = 6, ef = { x_ciclo = 0.85 } },
+  { id = "silo", pai = "fazendeiro", arvore = "jardim", ramo = "jardim", p = 3, l = 1, nome = "Silo", desc = "Cada estoque guarda +50%", custo = 12000, mult = 4, max = 4, ef = { x_estoque = 1.5 } },
+  { id = "sementes_boas", pai = "irrigacao", arvore = "jardim", ramo = "jardim", p = 4, l = -1, nome = "Sementes selecionadas", desc = "Cada semente rende +50% na colheita", custo = 90000, mult = 4, max = 2, ef = { semente_bonus = 0.5 } },
+  -- FAZENDA DE ÁRVORES FRUTÍFERAS: simples, mais produção e colheita mais rápida
+  { id = "poda", arvore = "pomar", ramo = "pomar", p = 1, l = -1, nome = "Poda", desc = "As árvores dão +30% de frutas", custo = 8000, mult = 3, max = 6, ef = { x_frutas = 1.3 } },
+  { id = "fazendeiro_arvores", arvore = "pomar", ramo = "pomar", p = 1, l = 1, nome = "Fazendeiro das árvores", desc = "A Loja passa a vender quem cuida só da Fazenda de árvores frutíferas", custo = 6000, mult = 1, max = 1, ef = {} },
+  { id = "colheita_rapida", pai = "poda", arvore = "pomar", ramo = "pomar", p = 2, l = -1, nome = "Colheita rápida", desc = "As frutas ficam prontas 15% mais rápido", custo = 20000, mult = 3, max = 5, ef = { x_ciclo_pomar = 0.85 } },
+  { id = "caixas", pai = "fazendeiro_arvores", arvore = "pomar", ramo = "pomar", p = 2, l = 1, nome = "Fruta na mesa", desc = "Pedidos rendem +8%", custo = 25000, mult = 3.2, max = 4, ef = { x_pedido = 1.08 } },
+  { id = "enxertos", pai = "colheita_rapida", req = "caixas", arvore = "pomar", ramo = "pomar", p = 3, l = 0, nome = "Enxertos", desc = "As árvores dão +50% de frutas", custo = 400000, mult = 1, max = 1, ef = { x_frutas = 1.5 } },
+  -- FAZENDA DE ANIMAIS: galinha, porco e vaca, um de cada vez
+  { id = "galinheiro", arvore = "fazenda", ramo = "fazenda", p = 1, l = -1, nome = "Galinheiro", desc = "A Loja passa a vender galinhas, que dão ovos", custo = 60000, mult = 1, max = 1, ef = {} },
+  { id = "pasto", arvore = "fazenda", ramo = "fazenda", p = 1, l = 1, nome = "Pasto verde", desc = "Os animais produzem +30%", custo = 100000, mult = 3, max = 6, ef = { x_animais = 1.3 } },
+  { id = "chiqueiro", pai = "galinheiro", arvore = "fazenda", ramo = "fazenda", p = 2, l = -1, nome = "Chiqueiro", desc = "A Loja passa a vender porcos, que dão mais carne", custo = 200000, mult = 1, max = 1, ef = {} },
+  { id = "fazendeiro_animais", pai = "pasto", arvore = "fazenda", ramo = "fazenda", p = 2, l = 1, nome = "Fazendeiro dos animais", desc = "A Loja passa a vender quem cuida só da Fazenda de animais", custo = 70000, mult = 1, max = 1, ef = {} },
+  { id = "racao", pai = "pasto", arvore = "fazenda", ramo = "fazenda", p = 2, l = 2, nome = "Ração reforçada", desc = "Os animais produzem 15% mais rápido", custo = 150000, mult = 3, max = 5, ef = { x_ciclo_fazenda = 0.85 } },
+  { id = "curral", pai = "chiqueiro", arvore = "fazenda", ramo = "fazenda", p = 3, l = -1, nome = "Curral", desc = "A Loja passa a vender mais vacas", custo = 500000, mult = 1, max = 1, ef = {} },
+  -- INVOCAÇÃO: a Ordem é obrigatória; o resto fortalece
+  { id = "ordem_sacerdotes", arvore = "invocacao", ramo = "invocacao", p = 1, l = 0, nome = "Ordem dos Sumos Sacerdotes", desc = "Libera a contratação dos quatro sumos sacerdotes, que acendem os pilares do círculo", custo = 150000000, mult = 1, max = 1, ef = { ordem = 1 } },
+  { id = "ritual", pai = "ordem_sacerdotes", arvore = "invocacao", ramo = "invocacao", p = 2, l = -1, nome = "Ritual aperfeiçoado", desc = "Invocados ficam 30% mais fortes", custo = 5000000000.0, mult = 3, max = 6, ef = { x_invocado = 1.3 } },
+  { id = "vigilia", pai = "ordem_sacerdotes", arvore = "invocacao", ramo = "invocacao", p = 2, l = 0, nome = "Vigília", desc = "Com a luz do círculo, pedidos rendem +20%", custo = 400000000, mult = 3, max = 3, ef = { x_pedido = 1.2 } },
+  { id = "incenso", pai = "ordem_sacerdotes", arvore = "invocacao", ramo = "invocacao", p = 2, l = 1, nome = "Incenso raro", desc = "Invocar custa 15% menos", custo = 800000000, mult = 3, max = 3, ef = { x_invocar = 0.85 } },
+  { id = "canticos", pai = "ritual", arvore = "invocacao", ramo = "invocacao", p = 3, l = -1, nome = "Cânticos antigos", desc = "Heróis ganham +50% de fama", custo = 2000000000, mult = 3, max = 3, ef = { x_fama = 1.5 } },
+  { id = "oferendas", pai = "incenso", arvore = "invocacao", ramo = "invocacao", p = 3, l = 1, nome = "Oferendas", desc = "Missões pagam +25%", custo = 1500000000, mult = 3, max = 3, ef = { x_missao = 1.25 } },
 }
 
 A.NOS = n
@@ -126,17 +159,49 @@ for _, no in ipairs(n) do
   end
 end
 
--- Cada árvore que a tela sabe mostrar. A Parte 3 acrescenta aqui as dos ambientes (cozinha,
--- cervejaria, fazendas, invocação): a tela e as regras só usam nós, ramos e o centro da árvore.
-A.ARVORES = { principal = { nome = "Principal", nos = n, ramos = A.RAMOS, ordem_ramos = { "clientes", "salao", "servico", "bebidas", "guilda", "mercado", "herois" } } }
+-- Os ambientes, na ordem da faixa da aba Árvore. no = nó da principal que compra a sala; sala = id em layout.lua.
+-- modelo = miniatura em mundo.lua. Para criar outra árvore: uma linha aqui e os nós acima.
+A.AMBIENTES = {
+  { id = "cozinha", nome = "Cozinha", sala = "cozinha", no = "cozinha", cor = "#e0924a", modelo = "cozinha" },
+  { id = "cervejaria", nome = "Cervejaria", sala = "cervejaria", no = "cervejaria", cor = "#d9b24a", modelo = "cervejaria" },
+  { id = "jardim", nome = "Sementes", titulo = "Fazenda de sementes", sala = "jardim", no = "jardim", cor = "#7cc56a", modelo = "jardim" },
+  { id = "pomar", nome = "Frutíferas", titulo = "Fazenda de árvores frutíferas", sala = "pomar", no = "pomar", cor = "#d9685a", modelo = "pomar" },
+  { id = "fazenda", nome = "Animais", titulo = "Fazenda de animais", sala = "fazenda", no = "fazenda", cor = "#c98a4e", modelo = "fazenda" },
+  { id = "invocacao", nome = "Invocação", sala = "circulo", no = "invocacao", cor = "#9c78ff", modelo = "circulo" },
+}
+A.AMBIENTE = {}
+A.AMBIENTE_DA_SALA = {}
 
--- posição na tela da árvore: cada ramo sai do centro em uma direção
+-- Cada árvore que a tela sabe mostrar: a tela e as regras só usam nós, ramos e o centro.
+local principal = {}
 for _, no in ipairs(n) do
-  local a = math.rad(A.RAMOS[no.ramo].angulo)
-  local dx, dy = math.cos(a), -math.sin(a)
-  local d = 62 + no.p * 92
-  no.x = dx * d + (-dy) * no.l * 58
-  no.y = dy * d + dx * no.l * 58
+  if no.arvore == "principal" then principal[#principal + 1] = no end
+end
+A.ARVORES = { principal = { nome = "Principal", nos = principal, ramos = A.RAMOS, ordem_ramos = { "clientes", "salao", "servico", "bebidas", "guilda", "mercado", "herois" } } }
+for _, am in ipairs(A.AMBIENTES) do
+  A.AMBIENTE[am.id] = am
+  A.AMBIENTE_DA_SALA[am.sala] = am
+  local nos = {}
+  for _, no in ipairs(n) do
+    if no.arvore == am.id then nos[#nos + 1] = no end
+  end
+  A.RAMOS[am.id] = { nome = am.titulo or am.nome, cor = am.cor, angulo = 0 }
+  A.ARVORES[am.id] = { nome = am.titulo or am.nome, nos = nos, ramos = A.RAMOS, ordem_ramos = {}, ambiente = am }
+end
+
+-- posição na tela da árvore: na principal, cada ramo sai do centro em uma direção;
+-- nos ambientes, colunas da esquerda para a direita, cabendo sem zoom nem arrasto
+for _, no in ipairs(n) do
+  if no.arvore == "principal" then
+    local a = math.rad(A.RAMOS[no.ramo].angulo)
+    local dx, dy = math.cos(a), -math.sin(a)
+    local d = 62 + no.p * 92
+    no.x = dx * d + (-dy) * no.l * 58
+    no.y = dy * d + dx * no.l * 58
+  else
+    no.x = 20 + no.p * 135
+    no.y = no.l * 82
+  end
 end
 
 return A

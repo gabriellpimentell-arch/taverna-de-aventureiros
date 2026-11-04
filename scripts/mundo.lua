@@ -5,6 +5,7 @@
 
 local J = require("jogo")
 local C = require("config")
+local A = require("arvore")
 local util = require("util")
 local U = require("ui")
 local cor = util.cores
@@ -1349,7 +1350,7 @@ local function pomar(e)
   local x0, x1, z0, z1 = L.sala("pomar")
   area_externa("pomar", x0, x1, z0, z1, o, "#6f9a48", "#6a9444", "#86b552")
   -- as frutas só aparecem perto da colheita: a árvore mostra o estado do jogo
-  local maduras = J.estado.ciclo / J.ciclo_jardim() > 0.5
+  local maduras = J.estado.ciclo_pomar / J.ciclo_de("pomar") > 0.5
   for i = 1, math.min(J.ef("frutas") + 2, #L.ARVORES) do
     local x, z = L.ARVORES[i][1], L.ARVORES[i][2]
     grupo("arvore" .. i)
@@ -2403,8 +2404,22 @@ function M.tocar(x, y)
     end
     return false
   end
-  if melhor.estado == "brigando" then return J.separar_briga(melhor) end
-  return J.servir(melhor, false)
+  if melhor.estado == "brigando" then J.separar_briga(melhor) else J.servir(melhor, false) end
+  -- mesmo sem comida para servir, o toque foi no balão: não é um toque na sala
+  return true
+end
+
+-- Qual sala com árvore própria está sob este ponto da tela? nil se nenhuma (ou se a árvore não abriu).
+function M.sala_em(x, y)
+  local gx, gz = motor.chao(x, y)
+  if not gx then return nil end
+  for _, am in ipairs(A.AMBIENTES) do
+    if L.aberta(am.sala) and L.andar_de(am.sala) == L.andar_ativo and J.arvore_aberta(am.id) then
+      local x0, x1, z0, z1 = L.sala_mundo(am.sala)
+      if gx >= x0 and gx <= x1 and gz >= z0 and gz <= z1 then return am.id end
+    end
+  end
+  return nil
 end
 
 return M

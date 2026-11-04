@@ -76,3 +76,12 @@ Pronto em `layout.lua` e `mundo.lua`; a Loja usa estas funções sem tocar em de
 - **Saves prontos**: Metade e Completo agora nascem com a despensa e a carroça, como um jogo novo. Quem já tinha cópia antiga em uma vaga de teste segue migrando normalmente.
 - **Ritmo**: o robô de jogo novo termina em 14,7 h, contra 17,7 h antes da Parte 2. Porcos e galinhas somam pedidos e renda, e o prato da casa rende mais cedo. Ficou assim porque a Parte 3 rebalanceia a economia.
 - **Para o dono rever depois de jogar**: preços da carroça e das sementes; a carroça só anda com o jogo aberto; o desconto de filhotes em um por visita; a estrada encurta um pouco o zoom da taverna.
+
+## Parte 3: árvores dos ambientes (decisões sem o dono)
+- **Abertura**: comprar o nó na principal libera a sala na Loja; colocar a sala abre a árvore, com um aviso e o selo "Novo" na faixa. A aba não muda sozinha, para não interromper a Loja.
+- **Faixa**: fixa em x = 256, à direita do painel da dívida. Ponto dourado = há compra naquela árvore. Câmera e seleção por árvore valem só enquanto o jogo está aberto: não vão para o save.
+- **Toque na sala**: abre ao soltar, sem arrastar, e só se o toque não pegou balão nem carroça. Conta só o piso da sala no andar ativo.
+- **Saíram da principal**: Moço de cozinha, Cozinheiro, Pratos especiais (cozinha); Receita da casa (cervejaria); Mais canteiros, Adubo, Fazendeiro, Irrigação (sementes); Fazendeiro das árvores (frutíferas); Fazendeiro dos animais (animais); Ritual (invocação). Os ids não mudaram, então o comprado continua valendo.
+- **Animais**: a fazenda traz 1 vaca; Galinheiro, Chiqueiro e Curral liberam a venda, nesta ordem. Save com a fazenda já ganha os três.
+- **Relógios**: cada fazenda tem o próprio (`ciclo`, `ciclo_pomar`, `ciclo_fazenda`). Irrigação agora só acelera as plantas; quem já a tinha perde esse efeito nas outras duas fazendas.
+- **Frutíferas**: li "tempo de colheita" como colheita mais rápida, como o documento supõe.

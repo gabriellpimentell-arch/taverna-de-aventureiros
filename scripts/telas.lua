@@ -41,7 +41,7 @@ function T.iniciar()
   T.total_antes = J.estado.total
   T.pulso = 0
   T.toque = nil
-  T.arv = { x = 0, y = 0, zoom = 0.85, sel = nil, arvore = "principal", vistos = nil, anim = {}, novos = {} }
+  T.arv = { x = 0, y = 0, zoom = 0.85, sel = nil, arvore = "principal", vistos = nil, anim = {}, novos = {}, cams = {} }
   T.rolagem = { aventureiros = 0 }
   T.confirmar = false
   Lj.iniciar()
@@ -78,6 +78,7 @@ local function barra_abas()
       { cor = sel and cor.ouro or "#2c1d13f0", cor_texto = sel and cor.texto_ouro or cor.texto, tam = 15 },
       function() T.aba = a.id end)
     if a.id == "arvore" and J.tem_compra() then
+      -- há algo para comprar em alguma árvore; a faixa mostra em qual
       motor.circulo(x + w - 10, 496, 6, cor.vermelho)
       motor.anel(x + w - 10, 496, 5, 7, "#ffffff")
     end
@@ -215,7 +216,7 @@ end
 
 local ZOOM_MIN, ZOOM_MAX = 0.6, 1.3
 
--- a árvore à vista: hoje só a principal; a Parte 3 troca T.arv.arvore pelas abas de ambiente
+-- a árvore à vista: a principal ou a de um ambiente (faixa no topo da aba)
 local function arvore_atual() return A.ARVORES[T.arv.arvore] or A.ARVORES.principal end
 
 local function no_tela(no)
@@ -243,9 +244,10 @@ local function quadro_ideal()
   -- no começo, o painel da dívida ocupa a esquerda da tela
   local esq = J.estado.mantimentos and 256 or 0
   local zx = (960 - esq - 2 * 78) / math.max(1, x1 - x0)
-  local zy = (416 - 44 - 62) / math.max(1, y1 - y0)
+  -- abaixo da faixa de ambientes (até y = 106) e acima do botão Centralizar
+  local zy = (324 - 62) / math.max(1, y1 - y0)
   local z = util.limitar(math.min(zx, zy), ZOOM_MIN, 1.05)
-  return esq / 2 - z * (x0 + x1) / 2, 266 + 9 - 268 - z * (y0 + y1) / 2, z, n
+  return esq / 2 - z * (x0 + x1) / 2, 272 - 268 - z * (y0 + y1) / 2, z, n
 end
 
 local function enquadrar_arvore()
@@ -282,7 +284,7 @@ end
 
 -- Rótulos: cada um procura um lugar livre; se não houver, não é desenhado.
 local function bate(r, lista)
-  if r.x < 4 or r.x + r.w > 956 or r.y < 60 or r.y + r.h > 476 then return true end
+  if r.x < 4 or r.x + r.w > 956 or r.y < 108 or r.y + r.h > 476 then return true end
   for _, o in ipairs(lista) do
     if r.x < o.x + o.w and r.x + r.w > o.x and r.y < o.y + o.h and r.y + r.h > o.y then return true end
   end
@@ -367,7 +369,7 @@ local function escala_nascendo(f)
   return 1.1 - (f - 0.7) / 0.3 * 0.1
 end
 
-local function ponto_visivel(x, y) return x > 20 and x < 940 and y > 76 and y < 460 end
+local function ponto_visivel(x, y) return x > 20 and x < 940 and y > 112 and y < 460 end
 
 local function linha_tracejada(x0, y0, x1, y1, esp, c)
   local d = math.max(1, util.distancia(x0, y0, x1, y1))
@@ -396,9 +398,64 @@ local function escurecer(c)
   return "#" .. canal(2) .. canal(4) .. canal(6)
 end
 
+-- Troca de árvore: cada uma guarda a própria câmera e seleção enquanto o jogo está aberto.
+function T.trocar_arvore(id)
+  local a = T.arv
+  a.cams[a.arvore] = { x = a.x, y = a.y, zoom = a.zoom, manual = a.manual, sel = a.sel }
+  a.arvore = id
+  a.anim, a.alvo, a.anel = {}, nil, nil
+  local c = a.cams[id]
+  if c then a.x, a.y, a.zoom, a.manual, a.sel = c.x, c.y, c.zoom, c.manual, c.sel
+  else a.manual, a.sel = false, nil end
+  if A.ARVORES[id] and not a.manual then enquadrar_arvore() end
+  if A.AMBIENTE[id] then J.estado.arvores_vistas[id] = true end
+end
+
+-- Abre a aba já na árvore desta sala (toque na sala, no mapa)
+function T.abrir_arvore(id)
+  T.aba = "arvore"
+  T.trocar_arvore(id)
+  motor.som("clique")
+end
+
+-- Faixa de ambientes: um ícone só para o que já foi liberado. Ponto dourado = há compra; "Novo" = ainda não aberta.
+local function faixa_ambientes()
+  local a = T.arv
+  local x, y, w, h = 256, 58, 62, 48
+  local function celula(id, nome, sel, ponto, novo, icone, c)
+    motor.retangulo(x, y, w - 2, h, sel and "#4a3627" or "#21150ee8", 8)
+    if sel then motor.contorno(x, y, w - 2, h, c or cor.ouro, 2, 8) end
+    icone(x + (w - 2) / 2, y + 16)
+    motor.texto(nome, x + (w - 2) / 2, y + 32, 12, sel and cor.texto or cor.texto_fraco, "centro", sel)
+    if ponto then
+      motor.circulo(x + w - 11, y + 8, 6, cor.ouro)
+      motor.anel(x + w - 11, y + 8, 5, 7, "#21150e")
+    end
+    if novo then
+      motor.retangulo(x + 1, y - 1, 30, 14, cor.vermelho, 7)
+      motor.texto("Novo", x + 16, y - 2, 12, "#ffffff", "centro", true)
+    end
+    U.zona("faixa_" .. id, { x = x, y = y, w = w - 2, h = h }, function()
+      if a.arvore ~= id then T.trocar_arvore(id); motor.som("clique") end
+    end)
+    x = x + w
+  end
+  celula("principal", "Principal", a.arvore == "principal", J.arvore_tem_compra("principal"), false, function(cx, cy) U.caneca(cx, cy, 0.7) end)
+  for _, am in ipairs(A.AMBIENTES) do
+    if J.arvore_aberta(am.id) then
+      celula(am.id, am.nome, a.arvore == am.id, J.arvore_tem_compra(am.id), not J.estado.arvores_vistas[am.id],
+        function(cx, cy) M.miniatura(am.modelo, cx - 15, cy - 15, 30, 30) end, am.cor)
+    end
+  end
+end
+
 local function tela_arvore(entrando)
   local a = T.arv
+  -- a sala desta árvore não está mais de pé (save novo, por exemplo): volta à principal
+  if not J.arvore_aberta(a.arvore) then a.arvore, a.sel = "principal", nil end
+  if A.AMBIENTE[a.arvore] then J.estado.arvores_vistas[a.arvore] = true end
   local arv = arvore_atual()
+  M.gravar_miniaturas()
   if entrando then a.alvo = nil end
   if entrando and not a.manual then enquadrar_arvore() end
   perceber_novidades()
@@ -450,8 +507,9 @@ local function tela_arvore(entrando)
   -- centro
   local rc0 = 34 * zoom
   motor.circulo(cx, cy, rc0, "#3d291b")
-  motor.anel(cx, cy, rc0 - 3 * zoom, rc0, cor.ouro)
-  U.caneca(cx - 1, cy, 1.1 * zoom)
+  motor.anel(cx, cy, rc0 - 3 * zoom, rc0, arv.ambiente and arv.ambiente.cor or cor.ouro)
+  if arv.ambiente then M.miniatura(arv.ambiente.modelo, cx - rc0 * 0.8, cy - rc0 * 0.8, rc0 * 1.6, rc0 * 1.6)
+  else U.caneca(cx - 1, cy, 1.1 * zoom) end
 
   -- nós
   local raio = math.max(19, 25 * zoom)
@@ -585,13 +643,18 @@ local function tela_arvore(entrando)
   end
   nomes(true)
   motor.recorte()
+  faixa_ambientes()
+  if arv.ambiente then
+    motor.retangulo(256, 110, motor.largura_texto(arv.nome, 15, true) + 20, 26, "#21150ee8", 8)
+    motor.texto(arv.nome, 266, 113, 15, arv.ambiente.cor, "esquerda", true)
+  end
 
   -- jogador mexeu na câmera e surgiu novidade fora da vista: seta na borda, sem tomar o controle
   for id in pairs(a.novos) do
     local no = A.POR_ID[id]
     local x, y = no_tela(no)
     if not ponto_visivel(x, y) then
-      local sx, sy = util.limitar(x, 34, 926), util.limitar(y, 90, 446)
+      local sx, sy = util.limitar(x, 34, 926), util.limitar(y, 130, 446)
       local d = math.max(1, util.distancia(sx, sy, x, y))
       local ux, uy = (x - sx) / d, (y - sy) / d
       motor.circulo(sx, sy, 20, "#21150ef0")
@@ -618,7 +681,7 @@ local function tela_arvore(entrando)
   if no and J.estado_no(no) == "oculto" then no, a.sel = nil, nil end
   if no then
     local est = J.estado_no(no)
-    local px, py, pw, ph = 672, 64, 276, 280
+    local px, py, pw, ph = 672, 110, 276, 280
     U.painel(px, py, pw, ph, "#2c1d13f8", est == "pista" and "#6e5a48" or arv.ramos[no.ramo].cor)
     U.zona("painel_no", { x = px, y = py, w = pw, h = ph })
     if est == "pista" then
@@ -805,6 +868,7 @@ local function tela_producao()
   motor.texto("Próxima colheita em " .. duracao_texto(J.ciclo_jardim() - e.ciclo), px + 2, AREA.y + 62, 13, cor.texto_fraco)
   U.barra(px + 230, AREA.y + 66, 218, 8, e.ciclo / J.ciclo_jardim(), cor.verde)
   local yb, wb = AREA.y + 82, 448
+  -- cada fazenda tem o próprio relógio; a barra de cima é a das plantas
   local function quem(ef) local n = J.ef(ef); return n > 0 and ("  •  fazendeiro nível " .. n) or "" end
   bloco_fazenda("jardim", "Fazenda de sementes",
     J.ef("canteiros") .. " canteiros  •  " .. fmt(e.sementes.lupulo) .. " sementes de lúpulo" .. quem("fazendeiro"), px, yb, wb, true)
@@ -1558,7 +1622,9 @@ function T.tocar(x, y)
   end
   T.toque.arrasta = true
   local livre = not T.modal and not J.offline and not J.estado.fim
-  if T.aba == "taverna" and livre then M.tocar(x, y)
+  if T.aba == "taverna" and livre then
+    -- balão e carroça têm a vez; a sala só abre ao soltar sem arrastar, para não atrapalhar
+    if not M.tocar(x, y) and not J.noticia then T.toque.sala = M.sala_em(x, y) end
   elseif T.aba == "loja" and livre and Lj.tocar(x, y) then T.toque.arrasta = false end
 end
 
@@ -1567,6 +1633,9 @@ function T.soltar(x, y)
   local t = T.toque
   T.toque = nil
   if T.aba == "loja" then Lj.soltar() end
+  if t and t.sala and not t.moveu and T.aba == "taverna" and math.abs(x - t.x) + math.abs(y - t.y) <= 8 and not U.achar(x, y) then
+    T.abrir_arvore(t.sala)
+  end
   if t and t.zona and not t.moveu and t.zona.fn then
     local z = U.achar(x, y)
     if z and z.id == t.zona.id then z.fn() end

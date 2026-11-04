@@ -73,6 +73,9 @@ local UNIDADE = { mesa = "mesa", garcom = "garcom", canteiro = "canteiro", quart
 local PRIMEIRA = { mesa = true, garcom = true, canteiro = true, fazendeiro = true, fazendeiro_arvores = true, fazendeiro_animais = true }
 local function libera_no(id)
   local no = A.POR_ID[id]
+  -- nó de árvore de ambiente: antes, a sala que abre essa árvore
+  local am = A.AMBIENTE[no.arvore]
+  if am and J.nivel(am.no) < 1 then libera_no(am.no) end
   for _, p in ipairs(no.pre) do if J.nivel(p) < 1 then libera_no(p) end end
   if not J.no_maximo(no) then
     J.estado.ouro = J.custo_no(no) + 1
@@ -185,7 +188,7 @@ do
     local n = 0
     for _, f in ipairs(no.filhos) do if A.POR_ID[f].pai == no.id then n = n + 1 end end
     ok("no máximo 3 filhos: " .. no.id, n <= 3, n)
-    ok("raiz só onde deve", no.pai ~= nil or no.id == "cardapio" or no.id == "mesa" or no.id == "placa", no.id)
+    ok("raiz só onde deve", no.pai ~= nil or no.arvore ~= "principal" or no.id == "cardapio" or no.id == "mesa" or no.id == "placa", no.id)
   end
   -- sequências obrigatórias
   ok("sementes antes de frutíferas", A.POR_ID.pomar.pai == "jardim")
@@ -331,7 +334,11 @@ for _, d in ipairs(C.estoques) do ok("estoque nunca negativo: " .. d.id, J.estad
 do
   local Mu, Lj = require("mundo"), require("loja")
   local Lay = require("layout")
-  local function colher() J.estado.ciclo = J.ciclo_jardim(); J.atualizar(0.01) end
+  local function colher()
+    local e0 = J.estado
+    e0.ciclo, e0.ciclo_pomar, e0.ciclo_fazenda = J.ciclo_jardim(), J.ciclo_de("pomar"), J.ciclo_de("fazenda")
+    J.atualizar(0.01)
+  end
   ok("nomes novos na árvore", A.POR_ID.jardim.nome == "Fazenda de sementes" and A.POR_ID.pomar.nome == "Fazenda de árvores frutíferas" and A.POR_ID.fazenda.nome == "Fazenda de animais")
   ok("nomes novos nas salas", select(2, Lay.nome_sala("pomar")) == "Fazenda de árvores frutíferas" and select(2, Lay.nome_sala("jardim")) == "Fazenda de sementes" and select(2, Lay.nome_sala("fazenda")) == "Fazenda de animais")
   novo()
@@ -346,7 +353,7 @@ do
   colher()
   ok("frutíferas dão frutas", e.estoques.frutas == (J.ef("frutas") + 2) * C.frutas_por_arvore)
   ok("frutífera não mexe na colheita das plantas", e.estoques.trigo == t0 + J.por_colheita() / 2)
-  libera("fazenda")
+  libera("fazenda"); libera_no("curral")
   colher()
   ok("vaca dá carne de vaca", e.estoques.carne_vaca == C.carne_por_vaca and e.estoques.carne_porco == 0 and e.estoques.ovos == 0)
   e.ouro = 1e30
@@ -467,7 +474,7 @@ do
   -- Três fazendeiros, comprados na Loja, um por fazenda
   novo()
   e = J.estado
-  ok("fazendeiro tem nó para liberar", A.POR_ID.fazendeiro.max == 1 and A.POR_ID.fazendeiro_arvores.pai == "pomar" and A.POR_ID.fazendeiro_animais.pai == "fazenda")
+  ok("fazendeiro tem nó para liberar", A.POR_ID.fazendeiro.max == 1 and A.POR_ID.fazendeiro_arvores.arvore == "pomar" and A.POR_ID.fazendeiro_animais.arvore == "fazenda")
   ok("sem o nó, a Loja não vende", J.estado_unidade("fazendeiro").motivo == "Libere na Árvore")
   libera_no("fazenda"); libera_no("canteiro"); libera_no("fazendeiro"); libera_no("fazendeiro_arvores"); libera_no("fazendeiro_animais")
   ok("o nó sozinho não contrata ninguém", J.ef("fazendeiro") == 0 and J.ef("fazendeiro_arvores") == 0 and J.ef("fazendeiro_animais") == 0)
@@ -2380,7 +2387,9 @@ do
 
   -- Itens que dependem de sala: canteiro, árvore e vaca
   jogo_novo()
-  comprar("cardapio", "garcom", "cozinha", "cervejaria", "jardim", "canteiro", "pomar", "pomar", "fazenda", "fazenda")
+  comprar("cardapio", "garcom", "cozinha", "cervejaria", "jardim", "pomar", "pomar", "fazenda", "fazenda")
+  -- save de antes das árvores por ambiente: o canteiro podia ser comprado antes de pôr a fazenda
+  J.estado.nos.canteiro = 1; J.estado.compras.canteiro = 1
   local x0, z0 = L.vaga_sala("jardim", 0)
   ok("canteiro espera o jardim", not J.por_item("canteiro"))
   ok("árvore espera o pomar", not J.por_item("arvore"))
@@ -2886,7 +2895,7 @@ do
   e = J.estado
   ok("save sem despensa: nem mostra bebidas", J.estado_carroca("bebida").sumir and J.estado_carroca("carne").sumir)
   ok("filhote só com a fazenda", J.estado_carroca("filhote_vaca").motivo ~= nil and not J.comprar_carroca("filhote_vaca"))
-  libera("fazenda")
+  libera("fazenda"); libera_no("curral")
   local cheio = J.preco_unidade("vaca")
   local cedo = J.preco_carroca("filhote_vaca")
   ok("filhote sai mais barato que na Loja", cedo < cheio)
@@ -3719,6 +3728,91 @@ do
   motor._saves, motor._atual, motor._save, motor._layout = {}, false, false, false
   T.iniciar()
   J.em_menu = false
+  novo()
+end
+
+-- Árvores dos ambientes -----------------------------------------------------------------------------
+do
+  local Mu, L = require("mundo"), require("layout")
+  for _, am in ipairs(A.AMBIENTES) do
+    local nos = A.ARVORES[am.id].nos
+    ok("árvore com 5 a 8 nós: " .. am.id, #nos >= 5 and #nos <= 8, #nos)
+    ok("o nó da sala fica na principal: " .. am.id, A.POR_ID[am.no].arvore == "principal")
+    local raizes = 0
+    for _, no in ipairs(nos) do
+      if not no.pai then raizes = raizes + 1 end
+      ok("só pré-requisito dentro da árvore ou da principal: " .. no.id, not no.pai or A.POR_ID[no.pai].arvore == am.id)
+    end
+    ok("revela aos poucos: " .. am.id, raizes >= 1 and raizes <= 3)
+  end
+  -- fecha sem a sala: nada aparece nem se compra
+  novo()
+  ok("árvore fechada não mostra nó", J.estado_no(A.POR_ID.moco) == "oculto" and not J.arvore_aberta("cozinha"))
+  J.estado.ouro = 1e30
+  ok("árvore fechada não vende", not J.comprar_no("moco"))
+  ok("sem selo na fechada", not J.arvore_tem_compra("cozinha"))
+  libera_no("cozinha")
+  ok("sala comprada abre (colocando sozinho)", J.arvore_aberta("cozinha") and J.estado_no(A.POR_ID.moco) == "revelado")
+  J.estado.ouro = 1e30
+  ok("selo na que tem compra", J.arvore_tem_compra("cozinha"))
+  -- à mão: a árvore só abre ao colocar a sala
+  local auto0 = J.auto_colocar
+  J.auto_colocar = false
+  novo()
+  J.comecar_endividado(); J.noticia = nil
+  libera_no("cozinha")
+  ok("comprada e sem lugar: árvore fechada", not J.arvore_aberta("cozinha"))
+  local vx, vz = L.vaga_sala("cozinha", 0)
+  ok("põe a cozinha", J.por_sala("cozinha", vx, vz, 0))
+  ok("posta: árvore aberta e aviso", J.arvore_aberta("cozinha") and J.aviso and J.aviso.texto:find("Cozinha"))
+  J.auto_colocar = auto0
+  -- faixa da aba: principal e só o que está aberto; a troca guarda a câmera de cada árvore
+  novo()
+  T.iniciar(); T.aba = "arvore"; desenhar()
+  ok("faixa só com a principal no começo", U.apertar("faixa_principal") and not U.apertar("faixa_cozinha"))
+  libera_no("cozinha"); J.noticia = nil
+  desenhar()
+  ok("ícone novo na faixa", not J.estado.arvores_vistas.cozinha)
+  T.arv.x, T.arv.manual = 123, true
+  ok("toca no ícone", U.apertar("faixa_cozinha") and T.arv.arvore == "cozinha" and J.estado.arvores_vistas.cozinha)
+  desenhar()
+  ok("nó da cozinha na tela", U.apertar("no_moco") and T.arv.sel == "moco")
+  ok("voltar devolve a câmera", U.apertar("faixa_principal") and T.arv.x == 123 and T.arv.manual)
+  desenhar()
+  -- toque na sala: abre ao soltar; arrastar não abre; balão tem a vez
+  T.aba = "taverna"; J.pessoas = {}; desenhar()
+  local x0, x1, z0, z1 = L.sala_mundo("cozinha")
+  local gx, gz = (x0 + x1) / 2, (z0 + z1) / 2
+  local sx, sy = 480 + gx * 30, 300 + gz * 26
+  ok("reconhece a sala", Mu.sala_em(sx, sy) == "cozinha")
+  ok("fora da sala, nada", Mu.sala_em(480 + (x0 - 20) * 30, sy) == nil)
+  motor._mouse = { sx, sy }; motor._baixo = true
+  T.tocar(sx, sy); ok("só abre ao soltar", T.aba == "taverna")
+  T.soltar(sx, sy); motor._baixo = false
+  ok("toque abre a árvore da sala", T.aba == "arvore" and T.arv.arvore == "cozinha")
+  T.aba = "taverna"; desenhar()
+  T.tocar(sx, sy); T.toque.moveu = true; T.soltar(sx + 60, sy)
+  ok("arrastar o mapa não abre", T.aba == "taverna")
+  local p = { estado = "esperando", x = gx, z = gz, t = 0, tipo = J.TIPOS[1], pedido = "bebida", andar = 0 }
+  J.pessoas = { p }
+  local bx, by = Mu.posicao_balao(p)
+  J.pessoas = { p }
+  if bx then
+    T.tocar(bx, by); T.soltar(bx, by)
+    ok("toque no balão não abre a árvore", T.aba == "taverna")
+  end
+  J.pessoas = {}
+  T.arv.arvore = "principal"
+  -- migração: nada comprado se perde
+  motor._save = util.serializar({ versao = 2, arvore_v = 4, nos = { mesa = 1, garcom = 1, cozinha = 1, moco = 1, cervejaria = 1, cerveja_melhor = 2, jardim = 1, canteiro = 1, adubo = 3, fazendeiro = 1, pomar = 1, fazendeiro_arvores = 1, fazenda = 1, fazendeiro_animais = 1 }, compras = { porco = 2, galinha = 3 }, ouro = 1 })
+  iniciar()
+  for id, nv in pairs({ moco = 1, cerveja_melhor = 2, canteiro = 1, adubo = 3, fazendeiro = 1, fazendeiro_arvores = 1, fazendeiro_animais = 1, galinheiro = 1, chiqueiro = 1, curral = 1 }) do
+    ok("migração guarda " .. id, J.nivel(id) == nv, J.nivel(id))
+  end
+  ok("migração mantém os animais", J.ef("porcos") == 2 and J.ef("galinhas") == 3)
+  J.estado.ouro = 1e30
+  ok("migração: a Loja segue vendendo", not J.estado_unidade("porco").motivo and not J.estado_unidade("vaca").motivo)
+  motor._save = false
   novo()
 end
 

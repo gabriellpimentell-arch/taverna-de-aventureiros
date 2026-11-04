@@ -12,7 +12,7 @@ local Cam = require("caminhos")
 
 local J = {}
 
-J.VERSAO_ARVORE = 4      -- sobe quando a forma da árvore muda: o save antigo passa pela migração
+J.VERSAO_ARVORE = 5      -- sobe quando a forma da árvore muda: o save antigo passa pela migração
 
 J.PORTA = { x = -6.4, z = 1.6 }
 J.RUA_Z = 1.6
@@ -163,7 +163,8 @@ local function estado_inicial()
     fama = 0,
     estoques = { trigo = 0, lupulo = 0, frutas = 0, carne_vaca = 0, carne_porco = 0, ovos = 0 },
     sementes = { lupulo = 0, fruta = 0 },
-    ciclo = 0, colhido = 0,
+    ciclo = 0, ciclo_pomar = 0, ciclo_fazenda = 0, colhido = 0,
+    arvores_vistas = {},    -- árvores de ambiente que o jogador já abriu: as outras têm o selo "Novo"
     carroca = { presente = true, resta = C.carroca_fica, visitas = 1, vendidos = {} },
     raros = { comida = 0, bebida = 0 },   -- usos que sobram dos itens raros da carroça
     brigas = 0,
@@ -257,7 +258,23 @@ end
 
 function J.custo_no(no) return math.floor(no.custo * no.mult ^ J.nivel(no.id)) end
 
+-- Árvore de ambiente: abre ao colocar a sala. A principal está sempre aberta.
+function J.arvore_aberta(id)
+  local am = A.AMBIENTE[id]
+  if not am then return true end
+  return J.nivel(am.no) > 0 and J.sala_posta(am.sala)
+end
+
+function J.arvore_tem_compra(id)
+  if not J.arvore_aberta(id) then return false end
+  for _, no in ipairs(A.ARVORES[id].nos) do
+    if J.pode_comprar_no(no) then return true end
+  end
+  return false
+end
+
 function J.no_liberado(no)
+  if not J.arvore_aberta(no.arvore) then return false end
   for _, p in ipairs(no.pre) do
     if J.nivel(p) < 1 then return false end
   end
@@ -275,6 +292,7 @@ end
 -- "oculto" (não aparece; quando muito, um toco de linha no nó de onde ele sai).
 function J.estado_no(no)
   if J.nivel(no.id) > 0 then return "comprado" end
+  if not J.arvore_aberta(no.arvore) then return "oculto" end
   if no.em_breve then return J.no_liberado(no) and "pista" or "oculto" end
   if J.no_liberado(no) then return "revelado" end
   local algum = false
@@ -542,7 +560,7 @@ local function bonus_caseiro(pedido)
     return n > 0 and C.bonus_cozinheiro + C.bonus_cozinheiro_nivel * (n - 1) or 1
   end
   local n = J.ef("bebida_casa")
-  return n > 0 and C.bonus_bebida_casa + C.bonus_bebida_nivel * (n - 1) or 1
+  return (n > 0 and C.bonus_bebida_casa + C.bonus_bebida_nivel * (n - 1) or 1) * J.ef("x_bebida")
 end
 
 -- O ingrediente que atende o pedido: o de maior estoque, para nenhum encalhar. nil = nada serve.
@@ -1244,6 +1262,9 @@ function J.por_sala(id, x, z, andar)
   end
   J.ajustar_equipe()
   depois_de_colocar()
+  -- a sala posta abre a árvore dela
+  local am = A.AMBIENTE_DA_SALA[id]
+  if am then J.avisar("Nova árvore: " .. A.ARVORES[am.id].nome .. ". Veja na aba Árvore!", 5) end
   return true
 end
 
@@ -2011,8 +2032,14 @@ function J.renda_passiva() return J.ef("renda_quartos") + J.ef("renda_fazenda") 
 
 function J.jardim_aberto() return J.ef("a_jardim") > 0 end
 function J.ciclo_jardim() return C.ciclo_jardim * J.ef("x_ciclo") end
+-- cada fazenda tem o próprio relógio, para a árvore dela poder acelerá-la
+function J.ciclo_de(sala)
+  if sala == "pomar" then return C.ciclo_jardim * J.ef("x_ciclo_pomar") end
+  if sala == "fazenda" then return C.ciclo_jardim * J.ef("x_ciclo_fazenda") end
+  return J.ciclo_jardim()
+end
 function J.por_colheita() return J.ef("canteiros") * C.colheita * J.ef("x_colheita") end
-function J.estoque_maximo() return C.estoque_maximo * (1 + J.ef("canteiros") * 0.25) end
+function J.estoque_maximo() return C.estoque_maximo * (1 + J.ef("canteiros") * 0.25) * J.ef("x_estoque") end
 
 -- O que a próxima colheita traz, por ingrediente. Canteiros: metade trigo, metade lúpulo.
 -- Semente guardada dobra um canteiro de lúpulo ou uma árvore naquela colheita.
@@ -2023,7 +2050,7 @@ function J.proxima_colheita()
     if plantas <= 0 then return 0 end
     local usa = math.min(math.floor(e.sementes[tipo]), math.ceil(plantas))
     gasto[tipo] = usa
-    return base * (1 + (C.semente_bonus - 1) * usa / plantas)
+    return base * (1 + (C.semente_bonus + J.ef("semente_bonus") - 1) * usa / plantas)
   end
   if J.jardim_aberto() then
     local q = J.por_colheita()
@@ -2043,20 +2070,31 @@ function J.proxima_colheita()
   return r, gasto
 end
 
+local RELOGIOS = { { "jardim", "ciclo" }, { "pomar", "ciclo_pomar" }, { "fazenda", "ciclo_fazenda" } }
+local ABERTA_FAZENDA = { jardim = "a_jardim", pomar = "a_pomar", fazenda = "a_fazenda" }
+local DA_FAZENDA = {}
+for _, d in ipairs(C.estoques) do DA_FAZENDA[d.id] = d.fazenda end
+
 local function atualizar_jardim(dt)
-  if not J.jardim_aberto() and J.ef("a_pomar") < 1 and J.ef("a_fazenda") < 1 then return end
   local e = J.estado
-  e.ciclo = e.ciclo + dt
-  if e.ciclo >= J.ciclo_jardim() then
-    e.ciclo = 0
-    local r, gasto = J.proxima_colheita()
-    local teto = J.estoque_maximo()
-    for id, q in pairs(r) do
-      e.estoques[id] = math.min(teto, e.estoques[id] + q)
-      e.colhido = e.colhido + q
+  for _, f in ipairs(RELOGIOS) do
+    local sala, campo = f[1], f[2]
+    if J.ef(ABERTA_FAZENDA[sala]) > 0 then
+      e[campo] = e[campo] + dt
+      if e[campo] >= J.ciclo_de(sala) then
+        e[campo] = 0
+        local r, gasto = J.proxima_colheita()
+        local teto = J.estoque_maximo()
+        for id, q in pairs(r) do
+          if DA_FAZENDA[id] == sala then
+            e.estoques[id] = math.min(teto, e.estoques[id] + q)
+            e.colhido = e.colhido + q
+          end
+        end
+        if sala == "jardim" then e.sementes.lupulo = e.sementes.lupulo - gasto.lupulo end
+        if sala == "pomar" then e.sementes.fruta = e.sementes.fruta - gasto.fruta end
+      end
     end
-    e.sementes.lupulo = e.sementes.lupulo - gasto.lupulo
-    e.sementes.fruta = e.sementes.fruta - gasto.fruta
   end
 end
 
@@ -2250,7 +2288,7 @@ end
 
 function J.invocacao_aberta() return J.ef("invocar") > 0 end
 
-function J.custo_invocar() return C.invocar_custo * C.invocar_mult ^ J.estado.invocados_feitos end
+function J.custo_invocar() return C.invocar_custo * C.invocar_mult ^ J.estado.invocados_feitos * J.ef("x_invocar") end
 
 function J.invocar()
   local e = J.estado
@@ -2580,6 +2618,10 @@ local function migrar_arvore(e, dados)
   if nv > 0 then
     nos.fazendeiro = 1
     e.compras.fazendeiro = (tonumber(e.compras.fazendeiro) or 0) + nv
+  end
+  -- árvores dos ambientes: a Loja vendia os três animais com a fazenda; continua vendendo
+  if v < 5 and (tonumber(nos.fazenda) or 0) > 0 then
+    nos.galinheiro, nos.chiqueiro, nos.curral = 1, 1, 1
   end
   e.arvore_v = J.VERSAO_ARVORE
 end

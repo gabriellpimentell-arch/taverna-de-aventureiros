@@ -1,32 +1,30 @@
 {
-["arvore_v"] = 4,
-["brigas"] = 59,
+["arvore_v"] = 5,
+["arvores_vistas"] = {
+
+},
+["brigas"] = 77,
 ["carroca"] = {
-["presente"] = false,
-["resta"] = 197,
+["presente"] = true,
+["resta"] = 72,
 ["vendidos"] = {
-["filhote_galinha"] = true,
-["filhote_porco"] = true,
-["filhote_vaca"] = true,
 ["raro_especiaria"] = true,
 ["raro_hidromel"] = true
 },
 ["visitas"] = 36
 },
-["ciclo"] = 11,
-["colhido"] = 59867.506591796875,
+["ciclo"] = 1.5,
+["ciclo_fazenda"] = 0,
+["ciclo_pomar"] = 4.5,
+["colhido"] = 59837.833828125047,
 ["compras"] = {
 ["arvore"] = 2,
 ["canteiro"] = 6,
 ["fazendeiro"] = 4,
-["fazendeiro_animais"] = 1,
 ["fazendeiro_arvores"] = 3,
-["galinha"] = 3,
-["garcom"] = 11,
+["garcom"] = 10,
 ["mesa"] = 6,
-["porco"] = 2,
-["quartos"] = 5,
-["vaca"] = 1
+["quartos"] = 5
 },
 ["contratados"] = {
 [1] = {
@@ -36,19 +34,19 @@
 ["fama"] = 0,
 ["id"] = 1,
 ["magia"] = 13,
-["missoes"] = 92,
+["missoes"] = 79,
 ["nome"] = "Bruno",
 ["pele"] = "#f1c9a5",
 ["tipo"] = "guerreiro"
 },
 [2] = {
 ["arma"] = 14,
-["armadura"] = 15,
+["armadura"] = 14,
 ["em_missao"] = true,
 ["fama"] = 0,
 ["id"] = 2,
 ["magia"] = 13,
-["missoes"] = 78,
+["missoes"] = 71,
 ["nome"] = "Lia",
 ["pele"] = "#e0ac7e",
 ["tipo"] = "mago"
@@ -56,61 +54,61 @@
 },
 ["divida"] = 0,
 ["emprestimos"] = 1,
-["espolios"] = 383,
+["espolios"] = 375,
 ["estoques"] = {
-["carne_porco"] = 69.375,
-["carne_vaca"] = 67.5,
-["frutas"] = 895,
-["lupulo"] = 894,
-["ovos"] = 108.75,
-["trigo"] = 898
+["carne_porco"] = 0,
+["carne_vaca"] = 0,
+["frutas"] = 3035.5,
+["lupulo"] = 3034.5,
+["ovos"] = 0,
+["trigo"] = 3035.5
 },
 ["fama"] = 0,
-["feitas"] = 846,
+["feitas"] = 797,
 ["feitas_rank"] = {
-[1] = 12,
-[2] = 64,
-[3] = 124,
-[4] = 501,
-[5] = 145
+[1] = 10,
+[2] = 63,
+[3] = 131,
+[4] = 485,
+[5] = 108
 },
 ["fim"] = false,
 ["invocados_feitos"] = 0,
-["lucro_espolios"] = 210113.89200000008,
+["lucro_espolios"] = 198316.57199999949,
 ["mantimentos"] = {
-["bebida"] = 211,
-["comida"] = 209
+["bebida"] = 201,
+["comida"] = 202
 },
 ["missoes"] = {
 [1] = {
 ["rank"] = 5,
-["resta"] = 5.5367500000000049
+["resta"] = 5.2075000000000031
 },
 [2] = {
-["contratado"] = 1,
 ["rank"] = 5,
-["resta"] = 6.2867500000000049
+["resta"] = 14.207500000000003
 },
 [3] = {
 ["rank"] = 5,
-["resta"] = 14.536750000000005
+["resta"] = 23.207500000000003
 },
 [4] = {
 ["rank"] = 5,
-["resta"] = 23.536750000000005
+["resta"] = 32.207500000000003
 },
 [5] = {
+["contratado"] = 1,
 ["rank"] = 5,
-["resta"] = 32.536750000000005
+["resta"] = 40.457500000000003
 },
 [6] = {
-["rank"] = 5,
-["resta"] = 41.536750000000005
-},
-[7] = {
 ["contratado"] = 2,
 ["rank"] = 5,
-["resta"] = 43.286750000000005
+["resta"] = 40.707500000000003
+},
+[7] = {
+["rank"] = 5,
+["resta"] = 41.207500000000003
 }
 },
 ["nos"] = {
@@ -119,21 +117,23 @@
 ["ala_leste"] = 1,
 ["balcao"] = 1,
 ["bardo"] = 5,
+["caixas"] = 3,
 ["canteiro"] = 1,
 ["cardapio"] = 14,
+["cardapio_maior"] = 3,
 ["cerveja_melhor"] = 3,
 ["cervejaria"] = 1,
+["chope"] = 3,
+["colheita_rapida"] = 3,
 ["comissao"] = 4,
 ["conforto"] = 6,
 ["cozinha"] = 1,
 ["cozinheiro"] = 3,
-["decoracao"] = 5,
+["decoracao"] = 4,
 ["fama_local"] = 6,
-["fazenda"] = 1,
 ["fazendeiro"] = 1,
-["fazendeiro_animais"] = 1,
 ["fazendeiro_arvores"] = 1,
-["festa"] = 4,
+["festa"] = 3,
 ["fornecedor"] = 1,
 ["garcom"] = 1,
 ["irrigacao"] = 3,
@@ -144,12 +144,15 @@
 ["merc_e"] = 1,
 ["mercadinho"] = 1,
 ["mesa"] = 1,
+["mestre_cervejeiro"] = 1,
 ["mestre_obras"] = 1,
 ["moco"] = 1,
 ["negociar"] = 3,
+["panela"] = 1,
 ["party"] = 1,
 ["placa"] = 10,
 ["pocoes"] = 1,
+["poda"] = 4,
 ["pomar"] = 1,
 ["prateleira"] = 1,
 ["quartos"] = 1,
@@ -157,12 +160,18 @@
 ["rank_c"] = 1,
 ["rank_d"] = 1,
 ["rank_e"] = 1,
-["rapidas"] = 5,
+["rapidas"] = 4,
+["receitas_nobres"] = 1,
 ["recrutador"] = 1,
 ["ricos"] = 4,
+["rodada"] = 4,
 ["sala_guilda"] = 1,
 ["segundo_andar"] = 1,
+["sementes_boas"] = 1,
+["silo"] = 3,
 ["subsolo"] = 1,
+["temperos"] = 5,
+["tonel"] = 5,
 ["vagas"] = 9,
 ["venda"] = 1
 },
@@ -172,7 +181,6 @@
 ["cervejaria"] = true,
 ["cozinha"] = true,
 ["cozinheiro"] = true,
-["fazenda"] = true,
 ["fazendeiro"] = true,
 ["garcom"] = true,
 ["jardim"] = true,
@@ -199,22 +207,22 @@
 ["musica"] = 0.40000000000000002,
 ["sombras"] = true
 },
-["ouro"] = 7843.6706351842731,
+["ouro"] = 16653.370987791568,
 ["parties"] = {
 
 },
 ["prox_id"] = 3,
 ["raros"] = {
-["bebida"] = 0,
-["comida"] = 0
+["bebida"] = 11,
+["comida"] = 6
 },
-["rps"] = 41578.383311199512,
+["rps"] = 66399.684660836618,
 ["sementes"] = {
-["fruta"] = 1392,
-["lupulo"] = 2616
+["fruta"] = 1289,
+["lupulo"] = 2483
 },
-["servidos"] = 7157,
-["tempo"] = 10603,
-["total"] = 43544773.006291837,
+["servidos"] = 7046,
+["tempo"] = 10518,
+["total"] = 40119414.721332438,
 ["versao"] = 2
 }

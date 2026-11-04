@@ -1,5 +1,8 @@
 {
-["arvore_v"] = 4,
+["arvore_v"] = 5,
+["arvores_vistas"] = {
+
+},
 ["brigas"] = 0,
 ["carroca"] = {
 ["presente"] = true,
@@ -10,6 +13,8 @@
 ["visitas"] = 1
 },
 ["ciclo"] = 0,
+["ciclo_fazenda"] = 0,
+["ciclo_pomar"] = 0,
 ["colhido"] = 0,
 ["compras"] = {
 
