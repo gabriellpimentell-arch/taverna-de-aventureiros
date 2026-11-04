@@ -1,8 +1,11 @@
 {
-["arvore_v"] = 2,
+["arvore_v"] = 3,
 ["brigas"] = 0,
 ["ciclo"] = 0,
 ["colhido"] = 0,
+["compras"] = {
+
+},
 ["contratados"] = {
 
 },

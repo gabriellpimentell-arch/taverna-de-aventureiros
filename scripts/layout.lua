@@ -19,8 +19,11 @@ local function ob(id, nome, x, z, cat, pai)
 end
 
 local MESAS = { { -3.6, 0.2 }, { 0.3, 0.2 }, { 4.2, 0.2 }, { -3.6, 3.4 }, { 0.3, 3.4 }, { 4.2, 3.4 }, { 9.25, -1.4 }, { 9.25, 2.4 } } -- mesas 7 e 8: a ala leste é delas, uma atrás da outra
+-- as demais não têm lugar próprio: ao comprar, o jogo procura um lugar livre e as leva para lá
+L.MESAS_MAX = require("config").limite_mesas
+for i = #MESAS + 1, L.MESAS_MAX do MESAS[i] = { 0.3, 0.2 } end
 for i, m in ipairs(MESAS) do
-  ob("mesa" .. i, "Mesa " .. i, m[1], m[2], "Móveis", i >= 7 and "@leste" or nil)
+  ob("mesa" .. i, "Mesa " .. i, m[1], m[2], "Móveis", (i == 7 or i == 8) and "@leste" or nil)
 end
 for i, m in ipairs(MESAS) do
   ob("vela" .. i, "Vela da mesa " .. i, m[1], m[2] + 0.001, "Decoração", "mesa" .. i)
@@ -84,6 +87,7 @@ ob("abobora1", "Abóbora 1", -3.6, 8.1, "Jardim", "jardim")
 ob("abobora2", "Abóbora 2", -3.1, 8.0, "Jardim", "jardim")
 
 L.ARVORES = { { 1.7, 7.2 }, { 3.4, 7.2 }, { 5.1, 7.2 }, { 6.8, 7.2 }, { 2.5, 9.3 }, { 4.2, 9.3 }, { 5.9, 9.3 }, { 7.3, 9.3 } }
+for i = #L.ARVORES + 1, require("config").limite_arvores do L.ARVORES[i] = { 4.2, 8.2 } end
 for i, a in ipairs(L.ARVORES) do ob("arvore" .. i, "Árvore " .. i, a[1], a[2], "Pomar", "pomar") end
 ob("cesto", "Cesto de frutas", 1.3, 5.9, "Pomar", "pomar")
 
@@ -91,6 +95,7 @@ ob("celeiro", "Celeiro", 15.6, 8, "Fazenda", "fazenda")
 ob("cocho", "Cocho", 11.2, 6.2, "Fazenda", "fazenda")
 ob("feno", "Feno", 13.3, 10, "Fazenda", "fazenda")
 L.VACAS = { { 9.3, 7.2, 0.4 }, { 11.4, 7.5, 2.7 }, { 12.8, 6.6, -0.5 }, { 9.5, 8.8, -0.7 }, { 11.6, 9.1, 0.3 }, { 9.7, 10.1, 3.4 }, { 12.8, 8.4, 1.5 }, { 11.5, 10.2, 5.5 } }
+for i = #L.VACAS + 1, require("config").limite_vacas do L.VACAS[i] = { 9.5 + i % 4 * 1.1, 6.6 + i % 3 * 1.5, i * 0.7 } end
 for i, v in ipairs(L.VACAS) do ob("vaca" .. i, "Vaca " .. i, v[1], v[2], "Fazenda", "fazenda") end
 
 ob("fogao", "Fogão", 14, -3.95, "Cozinha", "cozinha")

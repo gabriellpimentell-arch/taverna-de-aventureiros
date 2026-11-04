@@ -67,16 +67,54 @@ end
 local function quadros(n, dt)
   for _ = 1, n do atualizar(dt or 0.1); desenhar() end
 end
+-- Compra o nó (e o que vem antes). Mesa, garçom, canteiro, quarto, árvore e vaca: repetir compra na Loja,
+-- como comprar outro nível fazia; mesa, garçom e canteiro já vêm com a primeira unidade, como antes.
+local UNIDADE = { mesa = "mesa", garcom = "garcom", canteiro = "canteiro", quartos = "quartos", pomar = "arvore", fazenda = "vaca" }
+local PRIMEIRA = { mesa = true, garcom = true, canteiro = true }
+local function libera_no(id)
+  local no = A.POR_ID[id]
+  for _, p in ipairs(no.pre) do if J.nivel(p) < 1 then libera_no(p) end end
+  if not J.no_maximo(no) then
+    J.estado.ouro = J.custo_no(no) + 1
+    assert(J.comprar_no(id), "não comprou " .. id)
+  end
+end
 local function libera(...)
   for _, id in ipairs({ ... }) do
     local no = A.POR_ID[id]
-    for _, p in ipairs(no.pre) do if J.nivel(p) < 1 then libera(p) end end
-    -- já veio como pré-requisito de outro: nada a fazer
-    if not J.no_maximo(no) then
-      J.estado.ouro = J.custo_no(no) + 1
-      assert(J.comprar_no(id), "não comprou " .. id)
+    local tinha = J.nivel(id) > 0
+    libera_no(id)
+    local tipo = UNIDADE[id]
+    if tipo and (tinha or PRIMEIRA[id]) then
+      J.estado.ouro = 1e30
+      local ok = J.comprar_unidade(tipo)
+      -- em colocação manual a unidade pode esperar sala; aí só registra a compra, como o nível fazia
+      if not ok then
+        J.estado.compras[tipo] = J.compradas(tipo) + 1
+        J.recalcular(); J.ajustar_equipe()
+      end
+      J.estado.ouro = 0
     end
   end
+end
+
+-- toda a árvore e o antigo máximo de cada unidade
+local function comprar_tudo(ouro)
+  for _ = 1, 3 do
+    for _, no in ipairs(A.NOS) do
+      while not no.em_breve and not J.no_maximo(no) and J.no_liberado(no) do
+        J.estado.ouro = ouro or 1e60
+        if not J.comprar_no(no.id) then break end
+      end
+    end
+  end
+  for tipo, q in pairs({ mesa = 5, garcom = 4, quartos = 9, canteiro = 8, arvore = 5, vaca = 7 }) do
+    for _ = 1, q do
+      J.estado.ouro = ouro or 1e60
+      if not J.comprar_unidade(tipo) then break end
+    end
+  end
+  J.estado.ouro = ouro or 1e60
 end
 
 -- o que espera lugar na Loja, sem contar mesas (mesa é pré-requisito de muita coisa)
@@ -112,6 +150,7 @@ local o = J.estado.ouro
 ok("compra cobra o preço", J.comprar_no("mesa") and J.estado.ouro == o - 20)
 for _ = 1, 20 do J.comprar_no("mesa") end
 ok("não passa do máximo", J.nivel("mesa") == A.POR_ID.mesa.max)
+for i = 1, 5 do J.estado.ouro = 1e30; ok("compra mesa " .. i, J.comprar_unidade("mesa")) end
 ok("lugares acompanham mesas", #J.lugares == 12, #J.lugares)
 -- todo nó é alcançável
 do
@@ -449,6 +488,7 @@ end
 -- Regressões: gente, lugares, saves, tempo fora e toques -------------------------------------------
 local function tudo_comprado()
   novo()
+  comprar_tudo(1e60)
   local prog = true
   while prog do
     prog = false
@@ -479,6 +519,7 @@ do
   local x, z = banco.x, banco.z
   J.estado.ouro = 1e9
   J.comprar_no("mesa")
+  J.comprar_unidade("mesa")
   ok("sentado continua no próprio lugar ao abrir mesa", p.lugar.x == x and p.lugar.z == z and p.lugar.dono == p)
   local donos = 0
   for _, l in ipairs(J.lugares) do if l.dono then donos = donos + 1 end end
@@ -573,6 +614,7 @@ for _, c in ipairs(J.estado.contratados) do
   if c.invocado then for _ = 1, 60 do J.investir(c, "magia"); J.estado.ouro = 1e60 end end
 end
 ok("final começa", J.iniciar_final())
+libera("garcom")
 J.salvar()
 iniciar()
 ok("final continua após carregar", J.estado.final_resta ~= nil and not J.estado.fim)
@@ -754,7 +796,7 @@ do
   ao_sair()
   iniciar()
   ok("recarga mantém ouro e missões", J.estado.total == total and #J.estado.missoes == nm and not J.offline)
-  ok("recarga refaz equipe e lugares", #J.garcons == 1 and #J.lugares == 8, #J.lugares)
+  ok("recarga refaz equipe e lugares", #J.garcons == 1 and #J.lugares == 6, #J.lugares)
   quadros(20)
 end
 
@@ -853,8 +895,9 @@ do
   -- Bugs achados na revisão de caminhos e editor -----------------------------------------------------
   local function tudo_comprado()
     novo()
+  comprar_tudo(1e60)
     J.estado.ouro = 1e60
-    for _ = 1, 40 do for _, no in ipairs(A.NOS) do J.estado.ouro = 1e60; J.comprar_no(no.id) end end
+    comprar_tudo(1e60)
   end
   local function mover(id, x, z, g)
     local b, d = L.POR_ID[id], L.de(id)
@@ -1008,7 +1051,7 @@ do
   -- o nome do rank aparece para contratados e na batalha final
   novo()
   J.estado.ouro = 1e60
-  for _ = 1, 40 do for _, no in ipairs(A.NOS) do J.estado.ouro = 1e60; J.comprar_no(no.id) end end
+  comprar_tudo(1e60)
   J.pessoas, J.visitantes = {}, {}
   J.contratar()
   J.mandar_contratados()
@@ -1139,7 +1182,7 @@ do
   local L, M, Cam = require("layout"), require("mundo"), require("caminhos")
   local function limpa_layout() motor._layout = false; novo() end
   local function tudo()
-    for _ = 1, 40 do for _, no in ipairs(A.NOS) do J.estado.ouro = 1e40; J.comprar_no(no.id) end end
+    comprar_tudo(1e40)
   end
 
   -- notícias -----------------------------------------------------------------
@@ -1668,7 +1711,7 @@ do
   local L, Mu = require("layout"), require("mundo")
   local function abrir_tudo()
     J.estado.ouro = 1e60
-    for _ = 1, 40 do for _, no in ipairs(A.NOS) do J.estado.ouro = 1e60; J.comprar_no(no.id) end end
+    comprar_tudo(1e60)
     L.restaurar()
     J.ajustar_equipe()
     J.aplicar_layout()
@@ -1788,7 +1831,8 @@ do
   local function pecas() conta = 0; Mu.desenhar_cena(); return conta end
   local base = pecas()
   for _, o in ipairs(L.OBJETOS) do
-    if L.removivel(o.id) then
+    -- a vela da mesa ainda não comprada não está na cena
+    if L.removivel(o.id) and not (tonumber(o.id:match("^vela(%d+)$") or 0) > J.num_mesas()) then
       L.excluir(o.id)
       ok("excluir some da cena: " .. o.id, pecas() < base)
       if L.dados[o.id] then L.dados[o.id].oculto = nil end
@@ -1901,7 +1945,7 @@ do
   local function aberta_em_todas(id) return (L.desloc(id)) end
   local function abrir_tudo()
     J.estado.ouro = 1e60
-    for _ = 1, 40 do for _, no in ipairs(A.NOS) do J.estado.ouro = 1e60; J.comprar_no(no.id) end end
+    comprar_tudo(1e60)
     L.restaurar()
   end
   abrir_tudo()
@@ -2068,7 +2112,9 @@ do
   ok("jogo novo coloca à mão", J.manual())
   ok("a primeira mesa já vem posta", J.num_mesas() == 1)
   ok("nada pendente no começo", J.total_para_colocar() == 0)
-  comprar("mesa")
+  -- mesa que espera lugar: a da ala leste e a de save antigo. Comprar na Loja já pede o lugar.
+  local function espera_mesa() J.estado.compras.mesa = J.compradas("mesa") + 1 end
+  espera_mesa()
   ok("mesa comprada fica para colocar", J.total_para_colocar() == 1 and J.para_colocar()[1].tipo == "mesa")
   ok("mesa comprada não conta antes de posta", J.num_mesas() == 1 and #J.lugares == 2)
   quadros(3)
@@ -2079,11 +2125,11 @@ do
   ok("coloca mesa no lugar padrão", J.por_item("mesa") and J.num_mesas() == 2 and #J.lugares == 4 and J.total_para_colocar() == 0)
   ok("colocar sem ter comprado não dá", not J.por_item("mesa"))
 
-  comprar("mesa")
+  espera_mesa()
   ok("coloca mesa em lugar escolhido", J.por_item("mesa", 1.5, 3.5))
   local mx, mz = L.t("mesa3", J.POS_MESAS[3].bx, J.POS_MESAS[3].bz)
   ok("mesa vai para onde foi posta", math.abs(mx - 1.5) < 0.01 and math.abs(mz - 3.5) < 0.01, mx)
-  comprar("mesa")
+  espera_mesa()
   J.salvar()
   L.salvar()
   iniciar()
@@ -2175,6 +2221,108 @@ do
   ok("cartão abre o fantasma sem cobrar", U.apertar("loja_decor_banco") and Lj.colocando and e.ouro == 1000)
   desenhar()
   ok("cancelar não cobra", U.apertar("loja_cancelar") and not Lj.colocando and e.ouro == 1000)
+
+  -- Loja sem limite: a árvore libera, a Loja vende, o preço sobe
+  do
+    jogo_novo()
+    ok("mesa só com o nó", J.estado_unidade("mesa").motivo ~= nil and not J.comprar_unidade("mesa"))
+    J.estado.ouro = 1e20
+    ok("nó de liberação é único", A.POR_ID.garcom.max == 1 and A.POR_ID.mesa.max == 1 and A.POR_ID.quartos.max == 1 and A.POR_ID.canteiro.max == 1 and A.POR_ID.pomar.max == 1 and A.POR_ID.fazenda.max == 1)
+    libera_no("garcom")
+    ok("o nó não dá garçom sozinho", J.ef("garcons") == 0)
+    local p0 = J.preco_unidade("garcom")
+    ok("garçom sem limite de 4", (function()
+      for _ = 1, 6 do J.estado.ouro = 1e20; if not J.comprar_unidade("garcom") then return false end end
+      return J.ef("garcons") == 6 and #J.garcons == 6
+    end)())
+    ok("preço sobe rápido", J.preco_unidade("garcom") > p0 * 50)
+    -- acima do limite: conta, sem boneco, e os outros ficam mais rápidos
+    local lim = C.limite_garcons
+    J.estado.compras.garcom = lim
+    J.recalcular(); J.ajustar_equipe()
+    local i0, v0 = J.intervalo_garcom(), J.velocidade_garcom()
+    ok("no limite há um boneco por garçom", #J.garcons == lim and J.estado_unidade("garcom").sem_boneco)
+    J.estado.ouro = 1e300
+    ok("compra acima do limite", J.comprar_unidade("garcom"))
+    ok("sem boneco novo", #J.garcons == lim and J.ef("garcons") == lim + 1)
+    ok("os outros aceleram", J.intervalo_garcom() < i0 and J.velocidade_garcom() > v0)
+    -- mesas: limitadas pelo espaço, sem empilhar
+    jogo_novo()
+    libera_no("mesa")
+    local n = 0
+    while n < 40 do
+      J.estado.ouro = 1e20
+      local x, z, cheio = J.lugar_padrao("mesa")
+      if cheio then break end
+      ok("mesa nasce em lugar livre", J.comprar_unidade("mesa", x, z))
+      n = n + 1
+    end
+    ok("o salão enche antes do limite", n >= 5 and n < L.MESAS_MAX - 1, n)
+    J.estado.ouro = 1e20
+    ok("sem espaço, não vende", not J.comprar_unidade("mesa"))
+    for i = 1, J.num_mesas() do
+      local a = J.POS_MESAS[i]
+      local ax, az = L.t(a.id, a.bx, a.bz)
+      for k = i + 1, J.num_mesas() do
+        local b = J.POS_MESAS[k]
+        local bx, bz = L.t(b.id, b.bx, b.bz)
+        ok("mesas sem empilhar", math.abs(ax - bx) >= 3.1 or math.abs(az - bz) >= 1.9, i .. "," .. k)
+      end
+    end
+    local antes = J.num_mesas()
+    L.mudar_tamanho("frente", 8)
+    J.aplicar_obra()
+    J.estado.ouro = 1e20
+    ok("ampliar dá lugar a mais mesas", J.comprar_unidade("mesa") and J.num_mesas() == antes + 1)
+    ok("mesa nova tem como chegar", J.lugares_sem_rota() == 0)
+    -- quartos: limitados pela sala
+    jogo_novo()
+    libera_no("quartos")
+    ok("quarto pede a sala", J.estado_unidade("quartos").motivo ~= nil)
+    local x0, z0 = L.vaga_sala("quartos_sala", 1)
+    ok("põe a sala", J.por_sala("quartos_sala", x0, z0, 1))
+    local q = 0
+    J.estado.ouro = 1e30
+    while J.comprar_unidade("quartos") and q < 100 do J.estado.ouro = 1e30; q = q + 1 end
+    ok("quartos param no espaço", q > 0 and J.compradas("quartos") + 1 == J.limite_quartos(), q)
+    local r0 = J.ef("renda_quartos")
+    ok("cada quarto rende", r0 == (q + 1) * 6)
+    -- migração: nada se perde
+    local d = util.desserializar(util.serializar(J.estado))
+    d.arvore_v = nil; d.compras = nil; d.layout = {}
+    d.colocados = nil
+    d.nos = { mesa = 5, garcom = 4, canteiro = 8, jardim = 1, quartos = 10, pomar = 6, fazenda = 8, cervejaria = 6, segundo_andar = 1, ala_leste = 1 }
+    motor._save = util.serializar(d)
+    J.auto_colocar = true
+    iniciar()
+    local e = J.estado
+    ok("migra mesas", J.num_mesas() == 8 and J.nivel("mesa") == 1 and e.compras.mesa == 5, J.num_mesas())
+    ok("migra garçons", J.ef("garcons") == 4 and J.nivel("garcom") == 1 and #J.garcons == 4)
+    ok("migra canteiros", J.ef("canteiros") == 10 and J.nivel("canteiro") == 1)
+    ok("migra quartos", J.ef("renda_quartos") == 60 and J.nivel("quartos") == 1 and e.compras.quartos == 9)
+    ok("migra frutíferas", J.ef("frutas") == 6 and J.nivel("pomar") == 1 and e.compras.arvore == 5)
+    ok("migra animais", J.ef("vacas") == 8 and J.ef("renda_fazenda") == 480 and J.nivel("fazenda") == 1)
+    ok("migra cervejaria", J.nivel("cervejaria") == 1 and J.nivel("cerveja_melhor") == 5 and J.ef("bebida_casa") == 6)
+    ok("segundo andar traz a sala da guilda", J.nivel("sala_guilda") == 1)
+    J.salvar()
+    iniciar()
+    ok("migração só roda uma vez", J.estado.compras.mesa == 5 and J.nivel("mesa") == 1)
+    J.auto_colocar = false
+    -- miniaturas: todo item tem modelo
+    local Mu = require("mundo")
+    for _, u in ipairs(C.loja) do ok("modelo de " .. u.id, Mu.MODELOS[u.modelo] ~= nil) end
+    for t in pairs(L.TIPOS_EXTRAS) do ok("modelo de " .. t, Mu.MODELOS["decor_" .. t] ~= nil) end
+    for _, id in ipairs({ "cozinha", "cervejaria", "jardim", "pomar", "fazenda", "circulo", "quartos_sala", "sala_guilda", "mural", "mercadinho" }) do
+      ok("modelo da área " .. id, Mu.MODELOS[id] ~= nil and pcall(Mu.MODELOS[id].fn))
+    end
+    local g, c = 0, motor.miniatura_gravar
+    motor.miniatura_gravar = function() g = g + 1 end
+    Mu.miniatura("mesa", 0, 0, 40, 40)
+    Mu.gravar_miniaturas()
+    motor.miniatura_gravar = c
+    ok("miniatura vai para a fila e é gravada", g >= 1)
+    J.auto_colocar = true
+  end
 
   -- Antes do Mestre de Obras: paredes fixas, com explicação; mover continua grátis
   do
@@ -2895,7 +3043,7 @@ do
   motor._layout = false
   novo()
   J.estado.ouro = 1e60
-  for _ = 1, 40 do for _, no in ipairs(A.NOS) do J.estado.ouro = 1e60; J.comprar_no(no.id) end end
+  comprar_tudo(1e60)
   J.ajustar_equipe(); J.aplicar_obra()
   T.iniciar(); T.aba = "loja"; Lj.iniciar(); Lj.aba = "mover"
   quadros(1)

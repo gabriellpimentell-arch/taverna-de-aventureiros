@@ -12,7 +12,7 @@ local Cam = require("caminhos")
 
 local J = {}
 
-J.VERSAO_ARVORE = 2      -- sobe quando a forma da árvore muda: o save antigo passa pela migração
+J.VERSAO_ARVORE = 3      -- sobe quando a forma da árvore muda: o save antigo passa pela migração
 
 J.PORTA = { x = -6.4, z = 1.6 }
 J.RUA_Z = 1.6
@@ -21,7 +21,7 @@ J.QUADRO = { x = 79, z = 0.1 }
 J.BARRACA = { x = 73, z = 0.1 }
 
 local POS_MESAS = {}
-for i = 1, 8 do
+for i = 1, L.MESAS_MAX do
   local o = L.POR_ID["mesa" .. i]
   POS_MESAS[i] = { x = o.x, z = o.z, id = o.id, bx = o.x, bz = o.z }
 end
@@ -150,6 +150,7 @@ local function estado_inicial()
   return {
     versao = 2,
     arvore_v = J.VERSAO_ARVORE,
+    compras = {},           -- tipo da Loja -> quantas unidades foram compradas
     ouro = 0, total = 0, servidos = 0, rps = 0, tempo = 0,
     nos = {},
     missoes = {},           -- { rank, resta, contratado = id }
@@ -195,14 +196,18 @@ local function nivel_valendo(no, nv)
     if not c.salas[id] then return 0 end
   end
   if id == "cerveja_melhor" and not c.salas.cervejaria then return 0 end
-  if id == "pomar" then return 1 + math.min(c.frutas, nv - 1) end
-  if id == "fazenda" then return 1 + math.min(c.vacas, nv - 1) end
-  if id == "canteiro" then return math.min(c.canteiros, nv) end
   return nv
 end
 
 local recalcular
 function J.recalcular() recalcular() end
+local CONTADOR = { canteiro = "canteiros", arvore = "frutas", vaca = "vacas" }
+function J.unidades_valendo(tipo)
+  local n = J.estado.compras[tipo] or 0
+  local c = J.manual() and CONTADOR[tipo] and J.estado.colocados[CONTADOR[tipo]]
+  return c and math.min(n, c) or n
+end
+
 function recalcular()
   ef = {}
   for _, no in ipairs(A.NOS) do
@@ -211,6 +216,16 @@ function recalcular()
       for k, v in pairs(no.ef) do
         if k:sub(1, 2) == "x_" then ef[k] = (ef[k] or 1) * v ^ nv
         else ef[k] = (ef[k] or 0) + v * nv end
+      end
+    end
+  end
+  -- unidades vendidas na Loja: valem as já postas; o que ainda espera lugar não conta
+  for _, d in ipairs(C.loja) do
+    local n = J.unidades_valendo(d.id)
+    if n > 0 then
+      for k, v in pairs(d.ef) do
+        if k:sub(1, 2) == "x_" then ef[k] = (ef[k] or 1) * v ^ n
+        else ef[k] = (ef[k] or 0) + v * n end
       end
     end
   end
@@ -304,7 +319,18 @@ function J.comprar_no(id)
   local antes = J.total_para_colocar()
   J.estado.ouro = J.estado.ouro - J.custo_no(no)
   J.estado.nos[id] = J.nivel(id) + 1
+  local mesas_antes = J.num_mesas()
   recalcular()
+  -- colocando sozinho: mesa de presente (ala leste) também precisa de um lugar livre
+  if not J.manual() and J.num_mesas() > mesas_antes then
+    local alvo_mesas = ef.mesas
+    for i = mesas_antes + 1, J.num_mesas() do
+      ef.mesas = i - 2
+      local x, z, cheio = J.lugar_padrao("mesa")
+      if x and not cheio then L.colocar("mesa" .. i, x, z) end
+    end
+    ef.mesas = alvo_mesas
+  end
   J.ajustar_equipe()
   if AVISOS[id] then J.avisar(AVISOS[id]) end
   if J.manual() and J.total_para_colocar() > antes then J.avisar(A.POR_ID[id].nome .. ": escolha o lugar na aba Loja") end
@@ -438,6 +464,14 @@ function J.tem_escada() return L.andar_existe(1) or J.nivel("quartos") > 0 end
 
 function J.num_mesas() return math.min(1 + J.ef("mesas"), #POS_MESAS) end
 
+-- Quantos canteiros cabem à vista na fazenda de sementes: passou disso, rendem sem desenho novo
+function J.canteiros_visiveis()
+  local x0, x1, z0, z1 = L.sala_mundo("jardim")
+  local cols = math.max(1, math.floor((x1 - x0 - 1.4) / 1.1))
+  local lins = math.max(1, math.floor((z1 - z0 - 0.6) / 1.45))
+  return math.min(J.ef("canteiros"), cols * lins)
+end
+
 function J.reconstruir_lugares()
   local velhos = J.lugares or {}
   local l = {}
@@ -486,7 +520,7 @@ end
 local CASAS_GARCOM = { { -0.35, -1.6 }, { -0.35, -2.4 }, { -0.35, -3.2 }, { -1.1, -2.4 }, { -1.1, -3.2 }, { -1.1, -1.6 } }
 
 function J.ajustar_equipe()
-  local n = J.ef("garcons")
+  local n = math.min(J.ef("garcons"), C.limite_garcons)
   for i = #J.garcons + 1, n do
     -- ficam ao lado do balcão, longe de quem está sentado
     local c = CASAS_GARCOM[(i - 1) % #CASAS_GARCOM + 1]
@@ -731,13 +765,14 @@ function J.para_colocar()
   -- mercadinho e mural: o primeiro a ser posto escolhe o lugar do caminho; o segundo só entra ao lado
   if bruto("mercadinho") > 0 and not c.salas.mercadinho then r[#r + 1] = { tipo = "fora", id = "mercadinho", nome = "Mercadinho", n = 1 } end
   if bruto("prateleira") > 0 and not c.salas.mural then r[#r + 1] = { tipo = "fora", id = "mural", nome = "Mural de missões", n = 1 } end
-  local mesas = bruto("mesa") + bruto("ala_leste") * 2 - c.mesas
+  local comp = J.estado.compras
+  local mesas = (comp.mesa or 0) + bruto("ala_leste") * 2 - c.mesas
   if mesas > 0 then r[#r + 1] = { tipo = "mesa", nome = "Mesa", n = mesas } end
-  local cant = bruto("canteiro") - c.canteiros
+  local cant = (comp.canteiro or 0) - c.canteiros
   if cant > 0 then r[#r + 1] = { tipo = "canteiro", nome = "Canteiro", n = cant, requer = not c.salas.jardim and "Fazenda de sementes" or nil } end
-  local arv = bruto("pomar") - 1 - c.frutas
+  local arv = (comp.arvore or 0) - c.frutas
   if arv > 0 then r[#r + 1] = { tipo = "arvore", nome = "Árvore frutífera", n = arv, requer = not c.salas.pomar and "Árvores frutíferas" or nil } end
-  local vac = bruto("fazenda") - 1 - c.vacas
+  local vac = (comp.vaca or 0) - c.vacas
   if vac > 0 then r[#r + 1] = { tipo = "vaca", nome = "Vaca", n = vac, requer = not c.salas.fazenda and "Fazenda de animais" or nil } end
   return r
 end
@@ -760,15 +795,35 @@ local function objeto_do_item(tipo)
   if tipo == "vaca" then return "vaca" .. (J.ef("vacas") + 1) end
 end
 
--- Onde o próximo item fica se ninguém escolher outro lugar
+-- Onde o próximo item fica se ninguém escolher outro lugar: o dele, se estiver livre, ou o primeiro livre
 function J.lugar_padrao(tipo)
   local id = objeto_do_item(tipo)
-  if tipo == "mesa" then
-    local m = POS_MESAS[J.num_mesas() + 1]
-    return L.t(id, m.bx, m.bz)
-  end
   local o = id and L.POR_ID[id]
-  if o then return L.t(id, o.x, o.z) end
+  if not o then return nil end
+  local x, z = L.t(id, o.x, o.z)
+  if J.lugar_item(tipo, x, z) then return x, z end
+  local x0, x1, z0, z1
+  if tipo == "mesa" then
+    x0, x1, z0, z1 = L.salao()
+    if L.leste_aberta() and o.pai == "@leste" then x1 = x1 + 5.6 end
+  elseif tipo == "arvore" then x0, x1, z0, z1 = L.sala_mundo("pomar")
+  else x0, x1, z0, z1 = L.sala_mundo("fazenda") end
+  -- mesas seguem a grade das primeiras: sempre sobra corredor entre elas
+  if tipo == "mesa" then
+    local ox, oz = L.origem.x, L.origem.z
+    for lz = math.floor((z0 - oz - 0.2) / 3.2), math.ceil((z1 - oz - 0.2) / 3.2) do
+      for lx = math.floor((x0 - ox + 3.6) / 3.9), math.ceil((x1 - ox + 3.6) / 3.9) do
+        local gx, gz = ox - 3.6 + lx * 3.9, oz + 0.2 + lz * 3.2
+        if J.lugar_item(tipo, gx, gz) then return gx, gz end
+      end
+    end
+  end
+  for gz = z0 + 1, z1 - 0.5, 0.5 do
+    for gx = x0 + 1, x1 - 0.5, 0.5 do
+      if J.lugar_item(tipo, gx, gz) then return gx, gz end
+    end
+  end
+  return x, z, true    -- sem lugar: o fantasma nasce vermelho e o motivo aparece
 end
 
 local function perto_de_mesa(x, z, ignorar)
@@ -777,6 +832,88 @@ local function perto_de_mesa(x, z, ignorar)
     local mx, mz = L.t(m.id, m.bx, m.bz)
     if m.id ~= ignorar and math.abs(mx - x) < 3.1 and math.abs(mz - z) < 1.9 then return "Mesa " .. i end
   end
+end
+
+-- Loja: unidades à venda --------------------------------------------------------------------------
+
+J.LOJA = {}
+for _, d in ipairs(C.loja) do J.LOJA[d.id] = d end
+
+function J.compradas(tipo) return J.estado.compras[tipo] or 0 end
+
+function J.preco_unidade(tipo)
+  local d = J.LOJA[tipo]
+  return math.floor(d.custo * d.mult ^ J.compradas(tipo))
+end
+
+-- quantos quartos cabem na ala de quartos: é o motivo para ampliá-la
+function J.limite_quartos()
+  local x0, x1, z0, z1 = L.sala_mundo("quartos_sala")
+  return math.floor((x1 - x0) * (z1 - z0) / C.m2_por_quarto)
+end
+
+-- Dá para vender mais uma? Devolve o motivo se não der; `sem_boneco` = conta, mas nada novo entra em cena.
+function J.estado_unidade(tipo)
+  local d = J.LOJA[tipo]
+  local r = { preco = J.preco_unidade(tipo) }
+  if J.nivel(d.no) < 1 then r.motivo = "Libere na Árvore"; return r end
+  local sala = ({ quartos = "quartos_sala", canteiro = "jardim", arvore = "pomar", vaca = "fazenda" })[tipo]
+  if sala and not L.aberta(sala) then r.motivo = "Antes: " .. select(2, L.nome_sala(sala)); return r end
+  if tipo == "mesa" and J.num_mesas() >= L.MESAS_MAX then r.motivo = "Limite de " .. L.MESAS_MAX .. " mesas"; return r end
+  if tipo == "quartos" and J.compradas(tipo) + 1 >= J.limite_quartos() then r.motivo = "Sem espaço: amplie"; return r end
+  if tipo == "arvore" and J.ef("frutas") + 2 >= #L.ARVORES then r.sem_boneco = true end
+  if tipo == "vaca" and J.ef("vacas") >= #L.VACAS then r.sem_boneco = true end
+  if tipo == "garcom" and J.ef("garcons") >= C.limite_garcons then r.sem_boneco = true end
+  return r
+end
+
+-- Compra uma unidade. O que tem lugar precisa de lugar válido; sem x, z procura o primeiro livre.
+function J.comprar_unidade(tipo, x, z)
+  local d = J.LOJA[tipo]
+  if not d then return false, "Item desconhecido" end
+  local est = J.estado_unidade(tipo)
+  if est.motivo then return false, est.motivo end
+  local e = J.estado
+  if e.ouro < est.preco then return false, "Faltam " .. util.formatar(math.ceil(est.preco - e.ouro)) .. " de ouro" end
+  local c = e.colocados
+  if d.lugar and not est.sem_boneco then
+    local cheio
+    if not x then x, z, cheio = J.lugar_padrao(tipo) end
+    if cheio then return false, "Sem espaço: amplie com o Mestre de Obras" end
+    local ok, motivo, nx, nz = J.lugar_item(tipo, x, z)
+    if not ok then return false, motivo end
+    local id = objeto_do_item(tipo)
+    local d0 = L.dados[id]
+    local sem_rota = tipo == "mesa" and J.lugares_sem_rota()
+    L.colocar(id, nx, nz)
+    L.limitar(id)
+    L.limitar_carregados(id)
+    -- a mesa nova não pode fechar a passagem de ninguém, nem a dela
+    if sem_rota then
+      e.compras.mesa = J.compradas("mesa") + 1
+      recalcular()
+      J.aplicar_visual(); J.reconstruir_lugares(); J.montar_mapa()
+      local fechou = J.lugares_sem_rota() > sem_rota
+      e.compras.mesa = e.compras.mesa - 1
+      if fechou then
+        L.dados[id] = d0
+        recalcular()
+        J.aplicar_visual(); J.reconstruir_lugares(); J.montar_mapa()
+        return false, "Fecharia a passagem até um lugar"
+      end
+    end
+  end
+  e.ouro = e.ouro - est.preco
+  e.compras[tipo] = J.compradas(tipo) + 1
+  if J.manual() then
+    if tipo == "mesa" then c.mesas = c.mesas + 1
+    elseif CONTADOR[tipo] then c[CONTADOR[tipo]] = c[CONTADOR[tipo]] + 1 end
+  end
+  recalcular()
+  J.ajustar_equipe()
+  if d.lugar then J.aplicar_visual(); J.reconstruir_lugares(); J.montar_mapa(); L.salvar() end
+  J.salvar()
+  return true
 end
 
 -- Dá para pôr aqui? Devolve ok, motivo e o ponto já no passo de 0,25 m. Decoração: tipo = "decor", extra = tipo de TIPOS_EXTRAS.
@@ -791,12 +928,18 @@ function J.lugar_item(tipo, x, z, extra)
   if tipo == "mesa" then
     if L.andar_ativo ~= 0 then return nao("Mesas ficam no térreo") end
     local xa, xb, za, zb = L.salao()
-    if L.leste_aberta() then xb = xb + 5.6 end
+    -- a ala leste é das mesas 7 e 8; as outras ficam no salão, ou cairiam fora se a ala fechasse
+    local prox = L.POR_ID["mesa" .. math.min(J.num_mesas() + 1, L.MESAS_MAX)]
+    if L.leste_aberta() and prox.pai == "@leste" then xb = xb + 5.6 end
     if x < xa + 1.6 or x > xb - 1.6 or z < za + 0.9 or z > zb - 0.9 then return nao("Fora da taverna ou colada na parede") end
     local q = perto_de_mesa(x, z)
     if q then return nao("Muito perto da " .. q) end
     if util.distancia(x, z, J.PORTA.x, J.PORTA.z) < 2 then return nao("Bloquearia a porta") end
-    if Cam.bloqueado(x, z) or Cam.bloqueado(x - 1.25, z) or Cam.bloqueado(x + 1.25, z) then return nao("Tem um móvel neste lugar") end
+    if Cam.bloqueado(x, z) then return nao("Tem um móvel neste lugar") end
+    -- atrás do balcão há um corredor livre, mas é da equipe
+    local bx, bz = L.t("balcao", 3.05, -2.15)
+    if math.abs(x - bx) < 5 and z < bz then return nao("Atrás do balcão é da equipe") end
+    if not Cam.rota(J.PORTA.x, J.PORTA.z, x - 1.25, z) or not Cam.rota(J.PORTA.x, J.PORTA.z, x + 1.25, z) then return nao("Ninguém consegue chegar aqui") end
   elseif tipo == "arvore" then
     if L.andar_ativo ~= 0 then return nao("Árvores ficam no térreo") end
     if not dentro("pomar", 0.6) then return nao("Precisa ficar dentro das Árvores frutíferas") end
@@ -1095,7 +1238,10 @@ function J.intervalo_chegada() return C.intervalo_chegada * J.ef("x_chegada") en
 
 function J.paciencia() return C.paciencia + J.ef("paciencia") end
 
-function J.intervalo_garcom() return C.garcom_intervalo * J.ef("x_garcom") end
+-- garçons acima do limite de bonecos não entram em cena: deixam os outros mais rápidos
+function J.garcons_extras() return math.max(0, J.ef("garcons") - C.limite_garcons) end
+function J.intervalo_garcom() return C.garcom_intervalo * J.ef("x_garcom") / (1 + C.garcom_extra_intervalo * J.garcons_extras()) end
+function J.velocidade_garcom() return C.garcom_velocidade * (1 + math.min(1, C.garcom_extra_velocidade * J.garcons_extras())) end
 
 -- Pessoas ---------------------------------------------------------------------------
 
@@ -1455,7 +1601,7 @@ local function atualizar_garcom(g, dt)
           g.alvo, g.estado = nil, "parada"
         end
       end
-    elseif seguir_rota(g, dt, C.garcom_velocidade) then
+    elseif seguir_rota(g, dt, J.velocidade_garcom()) then
       if g.estado == "indo" then
         local p = g.alvo
         if p and p.estado == "esperando" then J.servir(p, true) end
@@ -2234,6 +2380,14 @@ local function migrar_arvore(e, dados)
   end
   -- quem já jogava podia fazer obras: continua podendo
   if next(nos) ~= nil then nos.mestre_obras = 1 end
+  -- os níveis viram unidades da Loja; o primeiro nível de quartos, frutíferas e animais já vinha com o nó
+  for no, tipo, gratis in string.gmatch("mesa:mesa:0 garcom:garcom:0 canteiro:canteiro:0 quartos:quartos:1 pomar:arvore:1 fazenda:vaca:1", "(%w+):(%w+):(%d)") do
+    local nv = math.floor(tonumber(nos[no]) or 0)
+    if nv > 0 then
+      nos[no] = 1
+      e.compras[tipo] = (e.compras[tipo] or 0) + nv - tonumber(gratis)
+    end
+  end
   e.arvore_v = J.VERSAO_ARVORE
 end
 
@@ -2349,6 +2503,7 @@ function J.carregar()
     if not no or nv < 1 then e.nos[id] = nil
     else e.nos[id] = math.min(math.floor(nv), no.max) end
   end
+  for _, d in ipairs(C.loja) do e.compras[d.id] = math.max(0, math.floor(saneado(e.compras[d.id], 0))) end
   limpar_contratados(e)
   -- ninguém fica preso em uma missão que sumiu do save
   local em, ids = {}, {}

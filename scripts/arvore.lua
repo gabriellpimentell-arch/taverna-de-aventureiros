@@ -24,12 +24,12 @@ A.RAMOS = {
 -- em_breve: lugar reservado na sequência; aparece como "?" e ainda não pode ser comprado.
 local n = {
   -- SALÃO -----------------------------------------------------------------------
-  { id = "mesa", ramo = "salao", p = 1, l = 0, nome = "Nova mesa", desc = "+1 mesa (2 lugares)", custo = 20, mult = 2.2, max = 5, ef = { mesas = 1 } },
+  { id = "mesa", ramo = "salao", p = 1, l = 0, nome = "Mesas", desc = "A Loja passa a vender mesas: cada uma traz 2 lugares", custo = 20, mult = 1, max = 1, ef = {} },
   { id = "balcao", pai = "mesa", ramo = "salao", p = 2, l = 1, nome = "Bancos no balcão", desc = "+4 lugares no balcão", custo = 90, mult = 1, max = 1, ef = { balcao = 1 } },
   { id = "mestre_obras", pai = "mesa", ramo = "salao", p = 2, l = -1, nome = "Mestre de Obras", desc = "Libera aumentar e diminuir a taverna e as salas na Loja", custo = 35, mult = 1, max = 1, ef = { a_obras = 1 } },
   { id = "ricos", pai = "balcao", ramo = "salao", p = 3, l = 2, nome = "Clientes ricos", desc = "Pedidos rendem +20%", custo = 4000, mult = 3.5, max = 8, ef = { x_pedido = 1.2 } },
   { id = "segundo_andar", pai = "balcao", ramo = "salao", p = 3, l = 0, nome = "Segundo andar", desc = "Abre o segundo andar, com escada e um hall para novas salas", custo = 1000, mult = 1, max = 1, ef = { a_segundo_andar = 1 } },
-  { id = "quartos", pai = "segundo_andar", ramo = "salao", p = 4, l = 1, nome = "Quartos", desc = "Libera a ala de quartos na Loja: +6 ouro por segundo", custo = 1500, mult = 2.8, max = 10, ef = { a_quartos = 1, renda_quartos = 6 } },
+  { id = "quartos", pai = "segundo_andar", ramo = "salao", p = 4, l = 1, nome = "Quartos", desc = "A ala de quartos vai para a Loja: +6 ouro por segundo, e mais quartos à venda", custo = 1500, mult = 1, max = 1, ef = { a_quartos = 1, renda_quartos = 6 } },
   { id = "sala_guilda", pai = "segundo_andar", req = "prateleira", ramo = "salao", p = 4, l = -1, nome = "Sala da guilda", desc = "Vai para a Loja: o gerente sobe e vira chefe da guilda", custo = 6000, mult = 1, max = 1, ef = { a_guilda = 1 } },
   { id = "subsolo", pai = "segundo_andar", ramo = "salao", p = 4, l = 0, nome = "Subsolo", desc = "Abre o subsolo: um andar de pedra para mudar salas de lugar", custo = 150000, mult = 1, max = 1, ef = { a_subsolo = 1 } },
   { id = "avaliacao", pai = "sala_guilda", ramo = "salao", p = 5, l = -1, nome = "Área de avaliação", desc = "Arena onde os contratados tentam subir de rank", custo = 500000, mult = 1, max = 1, ef = { a_avaliacao = 1 }, em_breve = true },
@@ -44,7 +44,7 @@ local n = {
   { id = "ala_leste", pai = "decoracao", ramo = "clientes", p = 4, l = -1, nome = "Ala leste", desc = "Abre uma ala nova e +2 mesas", custo = 60000, mult = 1, max = 1, ef = { a_leste = 1, mesas = 2 } },
 
   -- SERVIÇO --------------------------------------------------------------------------
-  { id = "garcom", pai = "mesa", ramo = "servico", p = 1, l = 0, custo = 120, mult = 3.4, max = 4, nome = "Garçom", desc = "+1 garçom que serve sozinho", ef = { garcons = 1 } },
+  { id = "garcom", pai = "mesa", ramo = "servico", p = 1, l = 0, custo = 60, mult = 1, max = 1, nome = "Garçom", desc = "A Loja passa a vender garçons, que servem sozinhos", ef = {} },
   { id = "agilidade", pai = "garcom", ramo = "servico", p = 2, l = 1, nome = "Treino da equipe", desc = "Garçons servem 15% mais rápido", custo = 350, mult = 2.2, max = 10, ef = { x_garcom = 0.85 } },
   { id = "bardo", pai = "garcom", ramo = "servico", p = 2, l = -1, nome = "Bardo", desc = "A música faz os pedidos renderem +15%", custo = 3000, mult = 3.2, max = 5, ef = { x_pedido = 1.15, bardo = 1 } },
   { id = "cozinha", pai = "garcom", ramo = "servico", p = 3, l = 0, nome = "Cozinha", desc = "Vai para a Loja. Faz pão na própria taverna: a comida custa bem menos", custo = 300, mult = 1, max = 1, ef = { a_cozinha = 1 } },
@@ -58,12 +58,12 @@ local n = {
   { id = "cerveja_melhor", pai = "cervejaria", ramo = "bebidas", p = 4, l = 1, nome = "Receita da casa", desc = "A bebida feita em casa rende mais", custo = 6000, mult = 5, max = 5, ef = { bebida_casa = 1 } },
   { id = "especiais", pai = "cervejaria", ramo = "bebidas", p = 4, l = 2, nome = "Pratos especiais", desc = "Pedidos rendem +25%", custo = 2000000, mult = 4, max = 8, ef = { x_pedido = 1.25 } },
   { id = "jardim", pai = "cervejaria", ramo = "bebidas", p = 4, l = -1, nome = "Fazenda de sementes", desc = "Vai para a Loja. Planta trigo e lúpulo: comida e bebida quase de graça", custo = 5000, mult = 1, max = 1, ef = { a_jardim = 1, canteiros = 2 } },
-  { id = "canteiro", pai = "jardim", ramo = "bebidas", p = 5, l = 0, nome = "Mais canteiros", desc = "+1 canteiro", custo = 2500, mult = 3, max = 8, ef = { canteiros = 1 } },
+  { id = "canteiro", pai = "jardim", ramo = "bebidas", p = 5, l = 0, nome = "Mais canteiros", desc = "A Loja passa a vender canteiros", custo = 1000, mult = 1, max = 1, ef = {} },
   { id = "adubo", pai = "canteiro", ramo = "bebidas", p = 6, l = 0, nome = "Adubo", desc = "Colheitas rendem +30%", custo = 5000, mult = 3.2, max = 8, ef = { x_colheita = 1.3 } },
   { id = "fazendeiro", pai = "canteiro", ramo = "bebidas", p = 6, l = 1, nome = "Fazendeiro", desc = "Cuida da fazenda de sementes: colheitas rendem +25%", custo = 4000, mult = 3.2, max = 6, ef = { fazendeiro = 1, x_colheita = 1.25 } },
   { id = "irrigacao", pai = "adubo", ramo = "bebidas", p = 7, l = 0, nome = "Irrigação", desc = "As plantas crescem 15% mais rápido", custo = 16000, mult = 3, max = 6, ef = { x_ciclo = 0.85 } },
-  { id = "pomar", pai = "jardim", ramo = "bebidas", p = 5, l = -2, nome = "Árvores frutíferas", desc = "Vai para a Loja. Frutas para tortas e sucos: colheitas +40% e pedidos +10%", custo = 30000, mult = 3.2, max = 6, ef = { a_pomar = 1, frutas = 1, x_colheita = 1.4, x_pedido = 1.1 } },
-  { id = "fazenda", pai = "pomar", ramo = "bebidas", p = 6, l = -2, nome = "Fazenda de animais", desc = "Vai para a Loja. Vacas dão carne para pratos novos: +60 ouro por segundo e pedidos +15%", custo = 350000, mult = 3.4, max = 8, ef = { a_fazenda = 1, vacas = 1, renda_fazenda = 60, x_pedido = 1.15 } },
+  { id = "pomar", pai = "jardim", ramo = "bebidas", p = 5, l = -2, nome = "Árvores frutíferas", desc = "Vai para a Loja, com mais árvores à venda. Frutas para tortas e sucos: colheitas +40% e pedidos +10%", custo = 30000, mult = 1, max = 1, ef = { a_pomar = 1, frutas = 1, x_colheita = 1.4, x_pedido = 1.1 } },
+  { id = "fazenda", pai = "pomar", ramo = "bebidas", p = 6, l = -2, nome = "Fazenda de animais", desc = "Vai para a Loja, com mais vacas à venda. Carne para pratos novos: +60 ouro por segundo e pedidos +15%", custo = 350000, mult = 1, max = 1, ef = { a_fazenda = 1, vacas = 1, renda_fazenda = 60, x_pedido = 1.15 } },
 
   -- GUILDA -----------------------------------------------------------------------------------
   { id = "prateleira", pai = "jardim", ramo = "guilda", p = 3, l = 0, nome = "Mural de missões", desc = "Vai para a Loja. Aventureiros pegam missões rank F", custo = 2500, mult = 1, max = 1, ef = { prateleira = 1, rank_max = 1 } },

@@ -210,7 +210,7 @@ local function desenhar_alca(a, ativa)
   end
 end
 
-local function alvo() return U.celular() and 56 or 48 end
+local function alvo() return U.celular() and 56 or 52 end
 local function saiu() return U.celular() and 12 or 4 end
 
 local function nome_sala(id)
@@ -319,6 +319,23 @@ function Lj.colocar_item(i)
   validar(Lj.colocando)
 end
 
+-- Unidade da Loja: o que tem lugar nasce como fantasma e só é paga ao confirmar; o resto entra na hora.
+function Lj.comprar_unidade(d)
+  local est = J.estado_unidade(d.id)
+  if est.motivo then J.avisar(est.motivo); motor.som("erro"); return end
+  if J.estado.ouro < est.preco then return end
+  if d.lugar and not est.sem_boneco then
+    L.mudar_andar(0)
+    local x, z = J.lugar_padrao(d.id)
+    Lj.colocando = { tipo = d.id, nome = d.nome, x = x or 0, z = z or 0, preco = est.preco, compra = true }
+    validar(Lj.colocando)
+    return
+  end
+  local ok, motivo = J.comprar_unidade(d.id)
+  if ok then motor.som("compra")
+  elseif motivo then J.avisar(motivo) end
+end
+
 function Lj.colocar_decoracao(tipo)
   L.mudar_andar(0)
   local x0, x1, z0, z1 = L.sala_mundo("taverna")
@@ -352,6 +369,7 @@ function Lj.confirmar()
   elseif c.fora then ok, motivo = J.por_fora(c.fora, c.fx, c.fz)
   elseif c.tipo == "sala" then ok, motivo = J.por_sala(c.id, c.fx, c.fz, L.andar_ativo)
   elseif c.tipo == "decor" then ok, motivo = J.comprar_decoracao(c.extra, c.fx, c.fz)
+  elseif c.compra then ok, motivo = J.comprar_unidade(c.tipo, c.fx, c.fz)
   else ok, motivo = J.por_item(c.tipo, c.fx, c.fz) end
   if not ok then
     if motivo then J.avisar(motivo) end
@@ -823,11 +841,20 @@ local function linha(id, y, base, topo, fim, titulo, sub, cor_sub, o, fn)
   local fundo = o.sel and "#5c3f29" or (ativo and "#3d291b" or "#2a2019")
   motor.retangulo(base, y, P.w - 24, h, fundo, 8)
   if o.sel then motor.contorno(base, y, P.w - 24, h, cor.ouro, 2, 8) end
-  motor.texto(titulo, base + 10, y + 5, 14, ativo and cor.texto or cor.texto_fraco, "esquerda", true)
+  -- imagem do próprio modelo 3D à esquerda; o texto começa depois dela
+  local tx = base + 10
+  if o.modelo then
+    local q = h - 6
+    motor.retangulo(base + 3, y + 3, q, q, "#1a110b", 6)
+    M.miniatura(o.modelo, base + 3, y + 3, q, q)
+    tx = base + 3 + q + 6
+  end
+  motor.texto(titulo, tx, y + 5, 14, ativo and cor.texto or cor.texto_fraco, "esquerda", true)
   if o.preco then
-    U.preco(o.preco, base + 8, y + 25, 14, cor_sub)
+    U.preco(o.preco, tx - 2, y + 25, 14, cor_sub)
+    if o.nota then motor.texto(o.nota, base + P.w - 34, y + 26, 13, cor.verde, "direita") end
   elseif sub then
-    motor.texto(sub, base + 10, y + 26, 14, cor_sub or cor.texto_fraco, "esquerda")
+    motor.texto(sub, tx, y + 26, 14, cor_sub or cor.texto_fraco, "esquerda")
   end
   if inteira then
     U.zona(id, { x = base, y = y, w = P.w - 24, h = h }, function()
@@ -850,10 +877,16 @@ local function lista_itens(base, topo, fim)
   local y = topo - Lj.rol.itens
   local e = J.estado
   local itens = J.para_colocar()
+  local venda = {}
+  for _, d in ipairs(C.loja) do
+    if J.nivel(d.no) > 0 then venda[#venda + 1] = d end
+  end
   if J.manual() then
-    secao("Para colocar", y, base, topo, fim)
-    y = y + 22
-    if #itens == 0 then
+    if #itens > 0 or #venda == 0 then
+      secao("Para colocar", y, base, topo, fim)
+      y = y + 22
+    end
+    if #itens == 0 and #venda == 0 then
       if y + 40 > topo and y < fim then
         y = y + U.paragrafo("Nada esperando lugar. O que comprar na Árvore aparece aqui.", base, y, P.w - 24, 14, cor.texto_fraco) + 8
       else
@@ -864,11 +897,31 @@ local function lista_itens(base, topo, fim)
       local sub = "para colocar: " .. i.n
       local c = cor.verde
       if i.requer then sub, c = "antes: " .. i.requer, "#ffb0a2" end
-      linha("loja_item_" .. (i.id or i.tipo), y, base, topo, fim, i.nome, sub, c, { ativo = not i.requer }, function()
+      linha("loja_item_" .. (i.id or i.tipo), y, base, topo, fim, i.nome, sub, c, { ativo = not i.requer, modelo = i.id or i.tipo }, function()
         if i.tipo == "sala" then Lj.colocar_sala(i.id)
         elseif i.tipo == "fora" then Lj.colocar_fora(i)
         else Lj.colocar_item(i) end
       end)
+      y = y + a
+    end
+    y = y + 6
+  end
+  -- à venda: o que a árvore já liberou, com o preço da próxima unidade
+  if #venda > 0 then
+    secao("À venda", y, base, topo, fim)
+    y = y + 22
+    for _, d in ipairs(venda) do
+      local est = J.estado_unidade(d.id)
+      local pode = not est.motivo and e.ouro >= est.preco
+      local n = J.compradas(d.id)
+      local titulo = n > 0 and (d.nome .. " (" .. n .. ")") or d.nome
+      if est.motivo then
+        linha("loja_un_" .. d.id, y, base, topo, fim, titulo, est.motivo, "#ffb0a2", { ativo = false, modelo = d.modelo }, function() end)
+      else
+        linha("loja_un_" .. d.id, y, base, topo, fim, titulo, nil, pode and cor.ouro or "#ff9a8a", { preco = est.preco, ativo = pode, modelo = d.modelo, nota = est.sem_boneco and "+ ritmo" or nil }, function()
+          Lj.comprar_unidade(d)
+        end)
+      end
       y = y + a
     end
     y = y + 6
@@ -880,7 +933,7 @@ local function lista_itens(base, topo, fim)
   table.sort(tipos, function(x, z) if x.preco ~= z.preco then return x.preco < z.preco end return x.tipo < z.tipo end)
   for _, t in ipairs(tipos) do
     local pode = e.ouro >= t.preco
-    linha("loja_decor_" .. t.tipo, y, base, topo, fim, t.nome, nil, pode and cor.ouro or "#ff9a8a", { preco = t.preco, ativo = pode }, function()
+    linha("loja_decor_" .. t.tipo, y, base, topo, fim, t.nome, nil, pode and cor.ouro or "#ff9a8a", { preco = t.preco, ativo = pode, modelo = "decor_" .. t.tipo }, function()
       Lj.colocar_decoracao(t.tipo)
     end)
     y = y + a
@@ -1014,6 +1067,7 @@ function Lj.desenhar()
   -- a sala pode ter fechado (outro save, Restaurar tudo): a seleção não fica apontando para o nada
   if Lj.sel and Lj.sel ~= "taverna" and Lj.sel ~= "porta" and not L.aberta(Lj.sel) then Lj.sel = nil end
   if Lj.colocando then validar(Lj.colocando) end
+  M.gravar_miniaturas()
   desenhar_cena()
   U.painel(P.x, P.y, P.w, P.h, "#21150ef5")
   U.zona("loja_fundo", { x = P.x, y = P.y, w = P.w, h = P.h })

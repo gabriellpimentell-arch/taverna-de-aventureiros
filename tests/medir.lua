@@ -55,7 +55,43 @@ local function relatorio(nome)
     chamadas.rota, gasto.rota, gasto.rota * 100000 / soma, gasto.separar, gasto.separar * 100000 / soma, soma / 1000))
 end
 
-if modo == "save" then
+if modo == "garcons" then
+  -- lua tests/medir.lua <raiz> garcons <quantos> [mesas]: a taverna cheia de garçons trabalhando
+  local f = assert(io.open(raiz .. "/assets/saves/completo.sav", "rb"))
+  motor._save = f:read("a")
+  f:close()
+  iniciar()
+  J.offline, J.noticia = nil, nil
+  require("config").limite_garcons = quanto
+  local L = require("layout")
+  local n_mesas = tonumber(arg[4]) or 30
+  L.mudar_tamanho("dir", 12); L.mudar_tamanho("frente", 10)
+  J.aplicar_obra()
+  J.estado.ouro = 1e300
+  J.estado.compras.garcom = quanto
+  J.recalcular()
+  local req = 0
+  while J.num_mesas() < n_mesas do
+    J.estado.ouro = 1e300
+    local ok, motivo = J.comprar_unidade("mesa")
+    if not ok then print("  parou nas " .. J.num_mesas() .. " mesas: " .. tostring(motivo)); break end
+  end
+  J.recalcular(); J.ajustar_equipe()
+  J.aplicar_layout()
+  -- chegam rápido e ficam: é o pior caso de lotação
+  math.randomseed(7)
+  J.sem_noticias = true
+  for _ = 1, 60 * 30 do J.atualizar(1 / 60); J.noticia = nil end
+  for k in pairs(gasto) do gasto[k], chamadas[k] = 0, 0 end
+  for _ = 1, 60 * (tonumber(arg[5]) or 60) do
+    medir_quadro(function() atualizar(1 / 60); desenhar() end)
+    J.noticia = nil
+  end
+  relatorio(quanto .. " garçons, " .. J.num_mesas() .. " mesas")
+  local p = 0
+  for _, g in ipairs(J.garcons) do if g.estado ~= "parada" then p = p + 1 end end
+  print("  garçons em cena: " .. #J.garcons .. "  trabalhando agora: " .. p .. "  ouro/s: " .. require("util").formatar(J.estado.rps))
+elseif modo == "save" then
   local f = assert(io.open(raiz .. "/assets/saves/completo.sav", "rb"))
   motor._save = f:read("a")
   f:close()

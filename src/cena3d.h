@@ -60,6 +60,7 @@ struct Estado {
     float fov = 28.0f;
     bool sombras = true;
     float sombraX = 3.0f, sombraZ = 0.0f, sombraRaio = 24.0f;
+    unsigned int alvoFbo = 0;   // != 0: a cor vai para esta textura (miniaturas da Loja), em vez da tela
 };
 
 static Estado E;
@@ -226,6 +227,11 @@ static void desenhar(int x, int y, int w, int h, int alturaTela) {
     rlDisableFramebuffer();
 
     // 2) cor
+    if (E.alvoFbo != 0) {
+        rlEnableFramebuffer(E.alvoFbo);
+        rlClearColor(0, 0, 0, 0);
+        rlClearScreenBuffers();
+    }
     rlViewport(x, alturaTela - y - h, w, h);
     rlSetMatrixProjection(matrizProjecao((float)w, (float)h));
     rlSetMatrixModelview(matrizVista());
@@ -262,6 +268,8 @@ static void desenhar(int x, int y, int w, int h, int alturaTela) {
     rlDisableShader();
     rlEnableBackfaceCulling();
     rlDisableDepthTest();
+    rlDrawRenderBatchActive();
+    if (E.alvoFbo != 0) rlDisableFramebuffer();
     E.pecas.clear();
 }
 

@@ -555,7 +555,7 @@ local function salao()
     end
   end
 
-  for i = 1, math.min(J.num_mesas(), 6) do
+  for i = 1, J.num_mesas() do
     local m = J.POS_MESAS[i]
     grupo(m.id)
     mesa(m.bx, m.bz)
@@ -583,15 +583,6 @@ local function ala_leste(e)
   grupo("carga_leste")
   if e > 0.9 then carga(11.5, -3.6) end
 
-  for i = 7, math.min(J.num_mesas(), 8) do
-    local m = J.POS_MESAS[i]
-    grupo(m.id)
-    mesa(m.bx, m.bz)
-    banquinho(m.bx - 1.25, m.bz)
-    banquinho(m.bx + 1.25, m.bz)
-    grupo("vela" .. i)
-    vela(m.bx, 0.82, m.bz + 0.001)
-  end
   grupo(nil)
 end
 
@@ -831,7 +822,7 @@ local function jardim(e)
   end
   -- canteiros
   grupo("canteiros")
-  local n = J.ef("canteiros")
+  local n = J.canteiros_visiveis()
   local cresce = J.estado.ciclo / J.ciclo_jardim()
   for i = 1, n do
     local col, lin = (i - 1) % 5, math.floor((i - 1) / 5)
@@ -1121,6 +1112,30 @@ function M.mover_vacas(dt)
   end
 end
 
+local function arvore_frutas(x, z, i, o, maduras)
+  if i % 2 == 1 then
+    -- macieira
+    cilindro(x, 0, z, 0.34, 1.2 * o, "#5b3a22")
+    esfera(x, 1.75 * o, z, 1.7, "#5a8f42", 1.4 * o)
+    esfera(x - 0.35, 2.15 * o, z - 0.15, 0.9, "#3f6b34", 0.7 * o)
+    if maduras then
+      for _, f in ipairs({ { 0.55, 1.95, 0.55 }, { -0.4, 2.2, 0.5 }, { 0.1, 2.35, 0.35 }, { -0.65, 1.75, 0.5 }, { 0.75, 1.6, 0.3 } }) do
+        esfera(x + f[1], f[2] * o, z + f[3], 0.18, "#c8382e")
+      end
+    end
+  else
+    -- pereira, copa alta
+    cilindro(x, 0, z, 0.3, 1.05 * o, "#5b3a22")
+    esfera(x, 1.9 * o, z, 1.3, "#3f6b34", 1.7 * o)
+    if maduras then
+      for _, f in ipairs({ { 0.45, 1.75, 0.45 }, { -0.5, 2, 0.4 }, { 0.1, 2.5, 0.45 } }) do
+        esfera(x + f[1], f[2] * o, z + f[3], 0.18, "#d9c24a")
+        cone(x + f[1], (f[2] + 0.06) * o, z + f[3], 0.1, 0.14, "#d9c24a")
+      end
+    end
+  end
+end
+
 local function pomar(e)
   if e <= 0 then return end
   local o = e + math.sin(e * math.pi) * 0.12
@@ -1131,27 +1146,7 @@ local function pomar(e)
   for i = 1, math.min(J.ef("frutas") + 2, #L.ARVORES) do
     local x, z = L.ARVORES[i][1], L.ARVORES[i][2]
     grupo("arvore" .. i)
-    if i % 2 == 1 then
-      -- macieira
-      cilindro(x, 0, z, 0.34, 1.2 * o, "#5b3a22")
-      esfera(x, 1.75 * o, z, 1.7, "#5a8f42", 1.4 * o)
-      esfera(x - 0.35, 2.15 * o, z - 0.15, 0.9, "#3f6b34", 0.7 * o)
-      if maduras then
-        for _, f in ipairs({ { 0.55, 1.95, 0.55 }, { -0.4, 2.2, 0.5 }, { 0.1, 2.35, 0.35 }, { -0.65, 1.75, 0.5 }, { 0.75, 1.6, 0.3 } }) do
-          esfera(x + f[1], f[2] * o, z + f[3], 0.18, "#c8382e")
-        end
-      end
-    else
-      -- pereira, copa alta
-      cilindro(x, 0, z, 0.3, 1.05 * o, "#5b3a22")
-      esfera(x, 1.9 * o, z, 1.3, "#3f6b34", 1.7 * o)
-      if maduras then
-        for _, f in ipairs({ { 0.45, 1.75, 0.45 }, { -0.5, 2, 0.4 }, { 0.1, 2.5, 0.45 } }) do
-          esfera(x + f[1], f[2] * o, z + f[3], 0.18, "#d9c24a")
-          cone(x + f[1], (f[2] + 0.06) * o, z + f[3], 0.1, 0.14, "#d9c24a")
-        end
-      end
-    end
+    arvore_frutas(x, z, i, o, maduras)
   end
   -- cesto de vime
   grupo("cesto")
@@ -1751,34 +1746,136 @@ local function poeira_briga(p)
 end
 
 -- Decoração comprada na Loja
+local function modelo_decoracao(t, x, z)
+  if t == "barril" then barril(x, z)
+  elseif t == "caixote" then
+    caixa(x, 0, z, 0.8, 0.7, 0.8, MAD_MED)
+    caixa(x, 0.7, z, 0.84, 0.06, 0.84, TAMPO)
+  elseif t == "planta" then
+    cilindro(x, 0, z, 0.42, 0.42, "#8a5a33")
+    peca("esfera", x, 0.72, z, 0.72, 0.72, 0.72, 0, "#4f8a3c")
+  elseif t == "vela" then
+    cilindro(x, 0, z, 0.1, 1.1, FERRO)
+    cilindro(x, 0, z, 0.36, 0.05, FERRO)
+    vela(x, 1.1, z)
+  elseif t == "tapete" then tapete(x, z, 2.6, 1.7)
+  elseif t == "estante" then
+    caixa(x, 0, z, 1.5, 2.0, 0.42, MAD_ESC)
+    for k = 0, 2 do caixa(x, 0.45 + k * 0.6, z + 0.2, 1.3, 0.06, 0.1, TAMPO) end
+  elseif t == "banco" then banquinho(x, z)
+  elseif t == "quadro" then
+    caixa(x, 1.6, z, 1.0, 0.8, 0.06, MAD_ESC)
+    caixa(x, 1.68, z + 0.02, 0.84, 0.64, 0.05, "#c9a24a")
+  end
+end
+
 local function extras()
   for _, o in ipairs(L.OBJETOS) do
     if o.extra then
       grupo(o.id)
-      local x, z, t = o.x, o.z, o.extra
-      if t == "barril" then barril(x, z)
-      elseif t == "caixote" then
-        caixa(x, 0, z, 0.8, 0.7, 0.8, MAD_MED)
-        caixa(x, 0.7, z, 0.84, 0.06, 0.84, TAMPO)
-      elseif t == "planta" then
-        cilindro(x, 0, z, 0.42, 0.42, "#8a5a33")
-        peca("esfera", x, 0.72, z, 0.72, 0.72, 0.72, 0, "#4f8a3c")
-      elseif t == "vela" then
-        cilindro(x, 0, z, 0.1, 1.1, FERRO)
-        cilindro(x, 0, z, 0.36, 0.05, FERRO)
-        vela(x, 1.1, z)
-      elseif t == "tapete" then tapete(x, z, 2.6, 1.7)
-      elseif t == "estante" then
-        caixa(x, 0, z, 1.5, 2.0, 0.42, MAD_ESC)
-        for k = 0, 2 do caixa(x, 0.45 + k * 0.6, z + 0.2, 1.3, 0.06, 0.1, TAMPO) end
-      elseif t == "banco" then banquinho(x, z)
-      elseif t == "quadro" then
-        caixa(x, 1.6, z, 1.0, 0.8, 0.06, MAD_ESC)
-        caixa(x, 1.68, z + 0.02, 0.84, 0.64, 0.05, "#c9a24a")
-      end
+      modelo_decoracao(o.extra, o.x, o.z)
     end
   end
   grupo(nil)
+end
+
+-- Miniaturas da Loja ------------------------------------------------------------------
+-- Cada item é o próprio modelo do jogo, em torno da origem. d = distância da câmera; h = altura que ela olha.
+local CANTEIRO_FOLHAS = { { -0.3, "#5a8f42" }, { 0, "#c9a24a" }, { 0.3, "#5a8f42" } }
+local MODELOS = {
+  mesa = { d = 8.5, h = 0.6, fn = function()
+    mesa(0, 0); banquinho(-1.25, 0); banquinho(1.25, 0); vela(0, 0.82, 0.001)
+  end },
+  garcom = { d = 5.5, h = 1.0, fn = function()
+    M.boneco({ x = 0, z = 0, giro = 0.5, fase = 0, pele = "#e0ac7e", tipo = { nome = "comum", corpo = "#f0e6d2", perna = "#3a3028", braco = "#e2d7c2" }, levando = true })
+  end },
+  quarto = { d = 7.5, h = 0.4, fn = function() cama(0, 0, TAPETE) end },
+  canteiro = { d = 5, h = 0.3, fn = function()
+    caixa(0, 0, 0, 1.0, 0.14, 1.1, "#5a3d26")
+    for _, f in ipairs(CANTEIRO_FOLHAS) do
+      peca("cone", f[1], 0.12, 0, 0.26, 0.7, 0.26, 0, f[2])
+      peca("esfera", f[1], 0.55, 0.1, 0.12, 0.12, 0.12, 0, "#e8c04a")
+    end
+  end },
+  arvore = { d = 9, h = 1.5, fn = function() arvore_frutas(0, 0, 1, 1, true) end },
+  vaca = { d = 7, h = 0.7, fn = function() vaca(0, 0, 0.6, 0) end },
+  -- áreas: o móvel que diz o que é cada uma
+  cozinha = { d = 7, h = 0.7, fn = function()
+    caixa(0, 0, 0, 1.4, 0.85, 0.8, PEDRA_ESC)
+    caixa(0, 0.85, 0, 1.5, 0.08, 0.9, "#2b2523")
+    brilho("caixa", -0.3, 0.28, 0.41, 0.36, 0.2, 0.06, FOGO, 1.3)
+    cilindro(-0.3, 0.93, 0, 0.5, 0.3, COBRE)
+    cilindro(0.45, 0.93, -0.2, 0.26, 0.9, FERRO)
+  end },
+  cervejaria = { d = 7, h = 0.6, fn = function() barril(-0.55, 0); barril(0.55, 0.1); cilindro(0, 0, -0.9, 1.0, 1.2, COBRE) end },
+  jardim = { d = 7, h = 0.2, fn = function()
+    for i = -1, 1, 2 do
+      caixa(i * 0.6, 0, 0, 1.0, 0.14, 1.1, "#5a3d26")
+      for k = -1, 1 do peca("cone", i * 0.6 + k * 0.3, 0.12, 0, 0.26, 0.6, 0.26, 0, "#5a8f42") end
+    end
+  end },
+  pomar = { d = 9, h = 1.5, fn = function() arvore_frutas(0, 0, 2, 1, true) end },
+  fazenda = { d = 7.5, h = 0.7, fn = function() vaca(0, 0, -0.6, 0); caixa(0, 0, -1.2, 2.6, 0.7, 0.1, MAD_MED) end },
+  circulo = { d = 8, h = 0.5, fn = function()
+    cilindro(0, 0, 0, 2.4, 0.05, FUNDO_MAGIA)
+    cilindro(0, 0.03, 0, 1.3, 0.05, VIOLETA)
+    for _, q in ipairs({ { -1, -1 }, { 1, -1 }, { -1, 1 }, { 1, 1 } }) do
+      cilindro(q[1], 0, q[2], 0.34, 0.9, PEDRA_CLARA)
+      brilho("esfera", q[1], 1.0, q[2], 0.2, 0.2, 0.2, CIANO, 1.5)
+    end
+  end },
+  quartos_sala = { d = 7.5, h = 0.4, fn = function() cama(0, 0, "#3d5a8a") end },
+  sala_guilda = { d = 7, h = 0.9, fn = function()
+    caixa(0, 0, 0, 2, 0.75, 1, TAMPO)
+    caixa(0, 0.75, 0, 2.1, 0.08, 1.1, MAD_ESC)
+    caixa(0, 1.0, -0.9, 1, 1.5, 0.05, AZUL_GUILDA)
+    caixa(0, 2.5, -0.87, 1.1, 0.08, 0.05, OURO)
+  end },
+  mural = { d = 6.5, h = 1.2, fn = function()
+    caixa(-0.75, 0, 0, 0.12, 2.0, 0.12, MAD_ESC); caixa(0.75, 0, 0, 0.12, 2.0, 0.12, MAD_ESC)
+    caixa(0, 0.9, 0, 1.7, 1.0, 0.08, MAD_MED)
+    caixa(-0.35, 1.2, 0.06, 0.45, 0.55, 0.02, PERGAMINHO); caixa(0.35, 1.05, 0.06, 0.45, 0.55, 0.02, PERGAMINHO)
+  end },
+  mercadinho = { d = 8, h = 1.0, fn = function()
+    caixa(0, 0, 0, 2.2, 0.9, 0.8, MAD_MED)
+    caixa(0, 0.9, 0, 2.3, 0.08, 0.9, TAMPO)
+    caixa(-1, 0, 0.3, 0.1, 2.2, 0.1, MAD_ESC); caixa(1, 0, 0.3, 0.1, 2.2, 0.1, MAD_ESC)
+    caixa(0, 2.2, 0.1, 2.6, 0.12, 1.3, "#b5483a")
+    esfera(-0.4, 1.1, 0, 0.32, "#c9a24a"); barril(0.55, -0.05, 0.4)
+  end },
+  mesa_item = { d = 8.5, h = 0.6, fn = function() mesa(0, 0); banquinho(-1.25, 0); banquinho(1.25, 0) end },
+}
+for t in pairs(L.TIPOS_EXTRAS) do
+  local d = { barril = 4.5, caixote = 4.5, planta = 4.5, vela = 4.5, tapete = 9, estante = 8.5, banco = 3.5, quadro = 7 }
+  local h = { estante = 1, quadro = 2, tapete = 0.1, vela = 0.7, planta = 0.5, barril = 0.5, caixote = 0.4, banco = 0.2 }
+  MODELOS["decor_" .. t] = { d = d[t] or 6, h = h[t] or 0.5, fn = function() modelo_decoracao(t, 0, 0) end }
+end
+M.MODELOS = MODELOS
+
+-- Desenha a miniatura se já estiver pronta; senão, entra na fila e fica para os próximos quadros.
+function M.miniatura(chave, x, y, w, h)
+  if not MODELOS[chave] then return false end
+  if motor.miniatura(chave, x, y, w, h) then return true end
+  M.fila_miniaturas = M.fila_miniaturas or {}
+  M.fila_miniaturas[chave] = true
+  return false
+end
+
+-- Renderiza o que está na fila, fora de qualquer recorte. Poucas por quadro: cada uma só acontece uma vez.
+function M.gravar_miniaturas()
+  local fila = M.fila_miniaturas
+  if not fila then return end
+  local feitas = 0
+  for chave in pairs(fila) do
+    local m = MODELOS[chave]
+    grupo(nil)
+    m.fn()
+    motor.miniatura_gravar(chave, m.d * 0.5, m.h + m.d * 0.55, m.d * 0.7, 0, m.h, 0, 28)
+    fila[chave] = nil
+    feitas = feitas + 1
+    if feitas >= 3 then break end
+  end
+  if next(fila) == nil then M.fila_miniaturas = nil end
 end
 
 -- Desenho ------------------------------------------------------------------------------

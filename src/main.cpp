@@ -358,6 +358,59 @@ static int l_cena_desenhar(lua_State*) {
     return 0;
 }
 
+// Miniaturas da Loja: o próprio modelo 3D, renderizado uma vez numa textura e reaproveitado.
+static std::map<std::string, RenderTexture2D> g_miniaturas;
+
+// motor.miniatura_gravar(chave, cam_x, cam_y, cam_z, alvo_x, alvo_y, alvo_z, fov): usa as peças pedidas desde o
+// último cena_desenhar. A câmera, as luzes e as sombras da cena voltam a ser as de antes.
+static int l_miniatura_gravar(lua_State* L) {
+    std::string chave = luaL_checkstring(L, 1);
+    cena3d::Estado& E = cena3d::E;
+    const int TAM = 128;
+    auto it = g_miniaturas.find(chave);
+    RenderTexture2D rt = it != g_miniaturas.end() ? it->second : LoadRenderTexture(TAM, TAM);
+    SetTextureFilter(rt.texture, TEXTURE_FILTER_BILINEAR);
+    g_miniaturas[chave] = rt;
+
+    Vector3 camP = E.camPos, camA = E.camAlvo;
+    float fov = E.fov;
+    bool sombras = E.sombras;
+    cena3d::Luz luzes[cena3d::MAX_LUZES];
+    for (int i = 0; i < cena3d::MAX_LUZES; i++) { luzes[i] = E.luzes[i]; E.luzes[i].alcance = 0; }
+    E.camPos = Vector3{num(L, 2), num(L, 3), num(L, 4)};
+    E.camAlvo = Vector3{num(L, 5), num(L, 6), num(L, 7)};
+    E.fov = numOpc(L, 8, 28);
+    E.sombras = false;
+
+    EndScissorMode();
+    EndMode2D();
+    Matrix proj = rlGetMatrixProjection();
+    Matrix vista = rlGetMatrixModelview();
+    E.alvoFbo = rt.id;
+    cena3d::desenhar(0, 0, TAM, TAM, TAM);
+    E.alvoFbo = 0;
+    rlSetMatrixProjection(proj);
+    rlSetMatrixModelview(vista);
+    rlViewport(0, 0, GetScreenWidth(), GetScreenHeight());
+    reiniciarModo2D();
+
+    E.camPos = camP; E.camAlvo = camA; E.fov = fov; E.sombras = sombras;
+    for (int i = 0; i < cena3d::MAX_LUZES; i++) E.luzes[i] = luzes[i];
+    return 0;
+}
+
+// motor.miniatura(chave, x, y, w, h) -> true se já existe e foi desenhada
+static int l_miniatura(lua_State* L) {
+    auto it = g_miniaturas.find(luaL_checkstring(L, 1));
+    if (it == g_miniaturas.end()) { lua_pushboolean(L, false); return 1; }
+    Texture2D t = it->second.texture;
+    // textura de framebuffer nasce de cabeça para baixo
+    DrawTexturePro(t, Rectangle{0, 0, (float)t.width, -(float)t.height},
+                   Rectangle{num(L, 2), num(L, 3), num(L, 4), num(L, 5)}, Vector2{0, 0}, 0, WHITE);
+    lua_pushboolean(L, true);
+    return 1;
+}
+
 static int l_projetar(lua_State* L) {
     float sx = 0, sy = 0;
     bool ok = cena3d::projetar(Vector3{num(L, 1), num(L, 2), num(L, 3)}, LARGURA, ALTURA, sx, sy);
@@ -532,6 +585,7 @@ static void registrarApi(lua_State* L) {
         {"cena_sombra", l_cena_sombra}, {"cena_camera", l_cena_camera}, {"cena_luz", l_cena_luz},
         {"peca", l_peca},           {"cena_desenhar", l_cena_desenhar},
         {"projetar", l_projetar},   {"fps", l_fps},
+        {"miniatura_gravar", l_miniatura_gravar}, {"miniatura", l_miniatura},
         {"minimizar", l_minimizar}, {"sair", l_sair},
         {"alternar_tela_cheia", l_alternar_tela_cheia}, {"tela_cheia", l_tela_cheia},
         {"mouse_baixo", l_mouse_baixo}, {"roda", l_roda},

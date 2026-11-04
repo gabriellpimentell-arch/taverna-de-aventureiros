@@ -462,7 +462,9 @@ local function tela_arvore(entrando)
       local fase = fase_anim(no, 0.25, 0.15)
       local esc = escala_nascendo(fase)
       local r = (est == "pista" and raio_pista or raio) * esc
-      ocupado[#ocupado + 1] = { x = x - raio - 3, y = y - raio - 3, w = raio * 2 + 6, h = raio * 2 + 6 }
+      -- o selo "Novo" fica em cima do nó: nome nenhum vai para lá
+      local topo_selo = a.novos[no.id] and 16 or 0
+      ocupado[#ocupado + 1] = { x = x - raio - 3, y = y - raio - 3 - topo_selo, w = raio * 2 + 6, h = raio * 2 + 6 + topo_selo }
       if fase > 0 then
         motor.circulo(x, y, r + 3, "#00000080")
         if est == "pista" then
@@ -776,8 +778,14 @@ local function tela_producao()
   local linhas = { { "Mais canteiros", "canteiro" }, { "Adubo", "adubo" }, { "Irrigação", "irrigacao" } }
   for i, l in ipairs(linhas) do
     local y = AREA.y + 186 + (i - 1) * 50
-    motor.texto(l[1] .. " (nível " .. J.nivel(l[2]) .. ")", px, y + 10, 14, cor.texto)
-    atalho_no(l[2], px + 280, y, 136)
+    if l[2] == "canteiro" and J.nivel("canteiro") > 0 then
+      -- canteiro novo agora se compra na Loja
+      motor.texto("Mais canteiros", px, y + 10, 14, cor.texto)
+      U.botao("ir_loja_canteiro", px + 280, y, 136, 40, "Ver na Loja", { tam = 13 }, function() T.aba = "loja" end)
+    else
+      motor.texto(l[1] .. " (nível " .. J.nivel(l[2]) .. ")", px, y + 10, 14, cor.texto)
+      atalho_no(l[2], px + 280, y, 136)
+    end
   end
 
   U.painel(AREA.x + 460, AREA.y + 56, 476, 340)
@@ -794,7 +802,7 @@ local function tela_producao()
   local tb = nb > 0 and ("Bebida rende x" .. string.format("%.2f", C.bonus_bebida_casa + C.bonus_bebida_nivel * (nb - 1)):gsub("%.", ",") .. " usando o estoque") or "Faça as próprias bebidas com o que você colhe"
   motor.texto(tb, qx, AREA.y + 202, 14, cor.texto_fraco)
   motor.texto("Cervejaria (nível " .. J.nivel("cervejaria") .. ")", qx, AREA.y + 234, 14, cor.texto)
-  atalho_no("cervejaria", qx + 308, AREA.y + 224, 136)
+  atalho_no(J.nivel("cervejaria") > 0 and "cerveja_melhor" or "cervejaria", qx + 308, AREA.y + 224, 136)
 
   motor.texto("Cardápio (nível " .. J.nivel("cardapio") .. ")", qx, AREA.y + 296, 14, cor.texto)
   atalho_no("cardapio", qx + 308, AREA.y + 286, 136)

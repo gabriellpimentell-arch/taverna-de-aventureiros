@@ -31,6 +31,26 @@ C.obra_metro_cresce = 0.02
 C.obra_devolucao = 0.5         -- quanto volta do que foi pago por um metro, ao diminuir
 C.preco_decoracao = { banco = 15, caixote = 20, planta = 25, barril = 30, vela = 40, quadro = 50, tapete = 60, estante = 80 }
 
+-- Loja: a árvore libera a função uma vez; aqui mora o preço de cada unidade.
+-- preço = custo * mult ^ (quantas já foram compradas). ef: o que cada unidade dá, como nos nós da árvore.
+-- lugar = true: o jogador escolhe onde fica. limite: quantos bonecos ou objetos entram em cena
+-- (acima dele a compra continua valendo, sem objeto novo; garçom fica mais rápido).
+C.loja = {
+  { id = "mesa", nome = "Mesa", no = "mesa", custo = 20, mult = 2.2, ef = { mesas = 1 }, lugar = true, modelo = "mesa" },
+  { id = "garcom", nome = "Garçom", no = "garcom", custo = 120, mult = 2.2, ef = { garcons = 1 }, modelo = "garcom" },
+  { id = "quartos", nome = "Quarto", no = "quartos", custo = 4200, mult = 2.8, ef = { renda_quartos = 6 }, modelo = "quarto" },
+  { id = "canteiro", nome = "Canteiro", no = "canteiro", custo = 2500, mult = 2.6, ef = { canteiros = 1 }, modelo = "canteiro" },
+  { id = "arvore", nome = "Árvore frutífera", no = "pomar", custo = 96000, mult = 2.6, ef = { frutas = 1, x_colheita = 1.4, x_pedido = 1.1 }, lugar = true, modelo = "arvore" },
+  { id = "vaca", nome = "Vaca", no = "fazenda", custo = 1190000, mult = 2.8, ef = { vacas = 1, renda_fazenda = 60, x_pedido = 1.15 }, lugar = true, modelo = "vaca" },
+}
+C.limite_mesas = 40            -- objetos prontos em layout.lua: fora isso, o limite é o espaço
+C.limite_arvores = 20
+C.limite_vacas = 20
+C.limite_garcons = 40          -- bonecos em cena; medido com tests/medir.lua (ver docs/plano-obras.md)
+C.garcom_extra_intervalo = 0.05   -- cada garçom acima do limite tira 5% da espera dos outros, somando
+C.garcom_extra_velocidade = 0.02  -- e 2% de velocidade, até o dobro
+C.m2_por_quarto = 3.5          -- quartos cabem na área da sala: ampliar dá lugar a mais
+
 -- Equipe -------------------------------------------------------------------------
 C.garcom_intervalo = 4.0
 C.garcom_velocidade = 3.4

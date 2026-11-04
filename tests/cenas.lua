@@ -8,12 +8,24 @@ local function comprar_tudo_ate(lista)
     local no = A.POR_ID[id]
     for _, p in ipairs(no.pre) do if J.nivel(p) < 1 then comprar_tudo_ate({ p }) end end
     J.estado.ouro = 1e40
-    J.comprar_no(id)
+    if J.nivel(id) > 0 and J.LOJA[id] then J.comprar_unidade(id)
+    else
+      J.comprar_no(id)
+      if id == "garcom" or id == "mesa" then J.estado.ouro = 1e40; J.comprar_unidade(id) end
+    end
   end
 end
 local function tudo()
-  for _ = 1, 40 do
-    for _, no in ipairs(A.NOS) do J.estado.ouro = 1e40; J.comprar_no(no.id) end
+  for _ = 1, 3 do
+    for _, no in ipairs(A.NOS) do
+      while not no.em_breve and not J.no_maximo(no) and J.no_liberado(no) do
+        J.estado.ouro = 1e40
+        if not J.comprar_no(no.id) then break end
+      end
+    end
+  end
+  for tipo, q in pairs({ mesa = 5, garcom = 4, quartos = 9, canteiro = 8, arvore = 5, vaca = 7 }) do
+    for _ = 1, q do J.estado.ouro = 1e40; if not J.comprar_unidade(tipo) then break end end
   end
 end
 J.sem_noticias = true
@@ -37,13 +49,15 @@ local passos = {
   -- Loja com o jogo rodando: jogo novo com colocação manual. Conferir: painel à direita, fantasma, etiqueta, selo.
   { 1.2, function()
       local S = require("saves"); J.auto_colocar = false; S.novo("jogo2.sav"); T.iniciar(); J.noticia = nil
-      comprar_tudo_ate({ "mesa", "mesa", "garcom", "cozinha", "cervejaria", "prateleira", "mercadinho" }); J.estado.ouro = 900; J.estado.mantimentos.comida = 20; J.estado.mantimentos.bebida = 20
+      comprar_tudo_ate({ "garcom", "cozinha", "cervejaria" }); J.estado.ouro = 900; J.estado.mantimentos.comida = 20; J.estado.mantimentos.bebida = 20
       T.aba = "loja" end, "40_loja_itens" },
   { 0.3, function() Lj().colocar_sala("cozinha") end, "41_colocar_sala_verde" },
   { 0.3, function() local c = Lj().colocando; c.x = c.x - 40 end, "42_colocar_sala_vermelha" },
-  { 0.3, function() local c = Lj().colocando; c.x, c.z = require("layout").vaga_sala("cozinha", 0); assert(Lj().confirmar()); Lj().colocar_item({ tipo = "mesa", nome = "Mesa" }) end, "43_colocar_mesa" },
+  { 0.3, function() local c = Lj().colocando; c.x, c.z = require("layout").vaga_sala("cozinha", 0); assert(Lj().confirmar()); Lj().comprar_unidade(J.LOJA.mesa) end, "43_colocar_mesa" },
   { 0.6, function() assert(Lj().confirmar()); Lj().colocar_decoracao("planta") end, "44_decoracao" },
-  { 0.6, function() Lj().confirmar(); Lj().aba = "comodos"; Lj().selecionar("cozinha") end, "45_comodos" },
+  -- sem Mestre de Obras: sem alças, painel explica; depois as obras abrem
+  { 0.6, function() Lj().confirmar(); Lj().aba = "comodos"; Lj().selecionar("cozinha") end, "45a_paredes_fixas" },
+  { 0.3, function() J.estado.ouro = 900; J.comprar_no("mestre_obras"); J.estado.ouro = 900 end, "45_comodos" },
   { 0.3, function()
       local L = require("layout"); local a; for _, h in ipairs(Lj().alcas()) do if h.p.chave == "coz_l" then a = h end end
       segurar(a.x, a.y); T.tocar(a.x, a.y); mover(a.x + 90, a.y) end, "46_alca_aumenta" },
@@ -54,7 +68,9 @@ local passos = {
       local px, py = motor.projetar((x0 + x1) / 2 - 7, 0, zb + 5); mover(px, py) end, "49_mover_verde" },
   { 0.3, function() largar(true); Lj().selecionar("porta"); local px, py = 480, 300; segurar(px, py); T.tocar(px, py)
       local L = require("layout"); local x0, x1, z0, z1 = L.sala_mundo("taverna"); local qx, qy = motor.projetar((x0 + x1) / 2 - 2, 0, z1 + 0.5); mover(qx, qy) end, "50_porta" },
-  { 0.3, function() largar(true); Lj().iniciar(); T.aba = "loja"; Lj().aba = "itens"; comprar_tudo_ate({ "mesa", "mesa", "balcao", "quartos", "segundo_andar" }) end, "51_itens_varios" },
+  { 0.5, function() largar(true); Lj().iniciar(); T.aba = "loja"; Lj().aba = "itens"; comprar_tudo_ate({ "balcao", "quartos", "prateleira", "mercadinho", "pomar", "fazenda" }); J.estado.ouro = 5e6 end, "51_itens_varios" },
+  { 0.5, function() Lj().rolar_lista(-240) end, "51b_itens_rolados" },
+  { 0.5, function() Lj().rolar_lista(-300) end, "51c_decoracao" },
   -- aba Mover: item selecionado, fantasma verde e vermelho, decoração com Excluir
   { 0.4, function() Lj().aba = "mover"; Lj().item = "balcao" end, "53_mover_selecionado" },
   { 0.3, function() local L = require("layout"); local o, dx, dz = L.POR_ID.balcao, L.desloc("balcao"); local px, py = motor.projetar(o.x + dx, 0.5, o.z + dz)
@@ -70,14 +86,14 @@ local passos = {
   { 0.2, function() T.arv.sel = nil; J.estado.ouro = 400; J.comprar_no("mesa") end, "03b_arvore_nascendo" },
   { 1, function() J.estado.ouro = 400; J.comprar_no("garcom"); J.comprar_no("cardapio") end, "03c_arvore_revelou" },
   { 0.5, function() T.arv.sel = "cozinheiro"; comprar_tudo_ate({ "cozinha" }) end, "03d_arvore_pista" },
-  { 0.6, function() T.arv.sel = nil; comprar_tudo_ate({ "jardim", "prateleira" }); J.estado.ouro = 1500 end, "03e_arvore_media" },
-  { 7, function() T.aba = "taverna"; comprar_tudo_ate({ "mesa", "balcao", "garcom", "prateleira", "placa" }); J.estado.ouro = 1200; J.estado.rps = 14; J.estado.servidos = 30 end, "04_meio" },
+  { 0.8, function() T.arv.sel = nil; comprar_tudo_ate({ "jardim", "prateleira" }); J.estado.ouro = 1500 end, "03e_arvore_media" },
+  { 7, function() T.aba = "taverna"; comprar_tudo_ate({ "balcao", "garcom", "prateleira", "placa" }); J.estado.ouro = 1200; J.estado.rps = 14; J.estado.servidos = 30 end, "04_meio" },
   { 0.1, function() J.relogio_aventureiro = 99 end, "04b_indo_quadro" },
   { 2.2, function() end, "04c_no_quadro" },
   { 1.0, function() end, "04d_papel" },
   { 1.0, function() end, "04e_com_papel" },
   { 1, function() T.aba = "missoes" end, "05_missoes" },
-  { 7, function() T.aba = "taverna"; comprar_tudo_ate({ "mercadinho", "merc_e", "jardim", "cozinheiro", "cervejaria", "bardo", "canteiro", "canteiro", "ala_leste" }); J.estado.ouro = 88000; J.estado.rps = 320 end, "06_areas" },
+  { 7, function() T.aba = "taverna"; comprar_tudo_ate({ "mercadinho", "merc_e", "jardim", "cozinheiro", "cervejaria", "bardo", "canteiro", "ala_leste" }); J.estado.ouro = 1e40; J.comprar_unidade("canteiro"); J.estado.ouro = 88000; J.estado.rps = 320 end, "06_areas" },
   { 1, function() T.aba = "mercadinho" end, "07_mercadinho" },
   { 1, function() T.aba = "producao" end, "08_producao" },
   { 1, function() comprar_tudo_ate({ "venda", "pocoes", "armaduras" }); J.estado.ouro = 2e6; T.aba = "mercadinho" end, "09_venda" },

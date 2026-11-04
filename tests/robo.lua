@@ -6,8 +6,9 @@ local R = {}
 J.auto_colocar = true   -- o robô não escolhe lugar: tudo vai para o padrão
 
 -- desbloqueios importantes: como uma pessoa, junta ouro para eles se não demorar demais
-local CHAVE = { "fornecedor", "cozinha", "cervejaria", "prateleira", "mercadinho", "jardim", "rank_e", "merc_e", "rank_d", "cozinha", "cozinheiro", "cervejaria", "merc_d", "rank_c", "recrutador", "merc_c", "venda", "rank_b", "party", "merc_b", "rank_a", "heroi", "propaganda", "merc_a", "rank_s", "invocacao", "merc_s", "rank_ss", "merc_ss" }
+local CHAVE = { "fornecedor", "mesa", "garcom", "cozinha", "cervejaria", "prateleira", "mercadinho", "jardim", "rank_e", "merc_e", "rank_d", "cozinha", "cozinheiro", "cervejaria", "merc_d", "rank_c", "recrutador", "merc_c", "venda", "rank_b", "party", "merc_b", "rank_a", "heroi", "propaganda", "merc_a", "rank_s", "invocacao", "merc_s", "rank_ss", "merc_ss" }
 
+local sem_lugar = {}
 local function comprar_melhor()
   -- como uma pessoa: sem despensa e sem fornecedor, guarda o ouro para ela
   local em = J.estado.mantimentos
@@ -25,6 +26,20 @@ local function comprar_melhor()
   local melhor
   for _, no in ipairs(A.NOS) do
     if J.pode_comprar_no(no) and (not melhor or J.custo_no(no) < J.custo_no(melhor)) then melhor = no end
+  end
+  -- a Loja entra na mesma conta: compra o mais barato de tudo, como sempre fez com os níveis
+  local tipo, preco = nil, melhor and J.custo_no(melhor) or math.huge
+  for _, d in ipairs(C.loja) do
+    local est = J.estado_unidade(d.id)
+    if not est.motivo and est.preco <= J.estado.ouro and est.preco < preco and not ((sem_lugar[d.id] or 0) > J.estado.tempo) then
+      tipo, preco = d.id, est.preco
+    end
+  end
+  if tipo then
+    if J.comprar_unidade(tipo) then return true end
+    -- não coube: procurar lugar custa caro, então só tenta de novo depois de um tempo
+    sem_lugar[tipo] = J.estado.tempo + 600
+    return true
   end
   if melhor then return J.comprar_no(melhor.id) end
   return false
@@ -89,7 +104,7 @@ function R.jogar(limite_horas, passo, marcos, cada)
       end
     end
     -- serve um cliente de vez em quando, como uma pessoa faria
-    if not J.estado.nos.garcom or (t % 3) < passo then
+    if J.ef("garcons") < 1 or (t % 3) < passo then
       for _, p in ipairs(J.pessoas) do
         if p.estado == "esperando" then J.servir(p) break end
         if p.estado == "brigando" then J.separar_briga(p) break end

@@ -22,7 +22,7 @@ Tudo no jogo se faz com um toque (celular) ou um clique (desktop): não há pers
 - **Sistema**: configurações (música, efeitos, tela cheia, sombras, FPS), minimizar, estatísticas, créditos, salvar, apagar progresso com confirmação e sair. Esc abre e fecha o menu.
 - **Tela inicial**: continuar, novo jogo, jogos salvos (3 vagas) e 3 saves de teste: começo, metade e tudo 100%.
 - **Novidades**: quando algo importante pode ser liberado, o jogo pausa e mostra uma tela com os benefícios e o botão para liberar.
-- **Loja**, com o jogo rodando: a aba Itens põe no mapa o que foi liberado na árvore e vende decoração; a aba Cômodos move as salas de graça e muda o tamanho pagando por metro; a aba Mover leva qualquer item da cena para outro lugar, de graça. Só a decoração pode ser excluída. Cada save guarda a própria construção.
+- **Loja**, com o jogo rodando: a aba Itens põe no mapa o que foi liberado na árvore e vende, sem limite e com preço crescente, mesas, garçons, quartos, canteiros, árvores, vacas e decoração, cada um com a miniatura do modelo; a aba Cômodos move as salas de graça e, depois do Mestre de Obras, muda o tamanho pagando por metro; a aba Mover leva qualquer item da cena para outro lugar, de graça. Só a decoração pode ser excluída. Cada save guarda a própria construção.
 - **Lado de fora**: o mercadinho e o mural de missões ficam num caminho de pedras, que o jogador coloca e move inteiro. Quem vem pegar missão ou vender espólio fica nele e não entra na taverna.
 - **Mesmo comportamento nas duas plataformas**: o motor traduz toque e clique para a mesma ação genérica, e o Lua nunca sabe qual foi.
 - **Botões grandes**: alvos de toque com pelo menos 48 px, pensando no polegar.
@@ -74,7 +74,7 @@ O gerente fica atrás do balcão e, no começo, vai até o cliente a cada toque.
 A aba Loja abre um painel lateral com o jogo rodando.
 - **Itens:** o que a árvore libera fica "para colocar"; decoração é paga em ouro.
 - **Cômodos:** mover salas e a porta é grátis, em qualquer lado da taverna. Salas internas encostam com 2 m de parede comum; áreas externas ficam sempre fora. Aumentar custa ouro; diminuir devolve 50% do pago por aquele metro.
-- **Andares:** segundo andar (quartos e sala do chefe da guilda) e subsolo, na árvore. Salas internas podem ir para qualquer andar.
+- **Andares:** segundo andar (quartos e sala da guilda, cada um com nó próprio) e subsolo, na árvore. Salas internas podem ir para qualquer andar.
 
 ## Economia
 
@@ -109,7 +109,7 @@ Uma área nova da taverna, construída e melhorada do rank F ao SS.
 
 ## Árvore de habilidades
 
-Todas as melhorias ficam na árvore: comprar uma habilidade abre as próximas. Os ramos são:
+Todas as melhorias ficam na árvore, que começa quase toda escondida: comprar uma habilidade revela as próximas, e o que falta aparece como "?" ou toco de linha. Os ramos são:
 
 | Ramo | O que melhora |
 | --- | --- |
