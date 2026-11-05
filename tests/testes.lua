@@ -3963,6 +3963,131 @@ do
   novo()
 end
 
+-- Parte 4: quartos e hóspedes ----------------------------------------------------------------------
+do
+  local L = require("layout")
+  local C = require("config")
+  novo()
+  J.auto_colocar = true
+  local e = J.estado
+  ok("quartos pedem o mural", A.POR_ID.quartos.req == "prateleira")
+  ok("duplo vem depois do individual", A.POR_ID.quarto_duplo.pai == "quartos")
+  ok("herói vem depois do duplo", A.POR_ID.quarto_heroi.pai == "quarto_duplo" and A.POR_ID.quarto_heroi.req == "heroi")
+  local Mu = require("mundo")
+  for _, id in ipairs({ "quartos", "quarto_duplo", "quarto_heroi" }) do ok("miniatura de " .. id, Mu.MODELOS[J.LOJA[id].modelo] ~= nil) end
+  ok("duplo sem o nó não vende", J.estado_unidade("quarto_duplo").motivo == "Libere na Árvore")
+  libera_no("prateleira"); libera_no("quartos")
+  local function pronta()
+    if not L.aberta("quartos_sala") then local x, z = L.vaga_sala("quartos_sala", 1); assert(J.por_sala("quartos_sala", x, z, 1)) end
+  end
+  pronta()
+  ok("nó traz um quarto", #J.lista_quartos() == 1 and #(J.plano_quartos()) == 1)
+  ok("sem hóspede não há renda", J.renda_quartos() == 0 and J.ef("renda_quartos") == 6)
+  -- o caminho inteiro de um hóspede
+  local chave = J.reservar_cama()
+  ok("reserva a cama", chave ~= nil and J.camas_em_uso() == 1)
+  ok("não há segunda cama", J.reservar_cama() == nil)
+  J.hospede_entra(J.TIPOS_POR_NOME("mago"), nil, chave)
+  local viu, passou_escada, no_chao_dormindo = {}, false, false
+  for _ = 1, 20 * 300 do
+    J.atualizar(0.05); J.noticia = nil
+    local h = J.hospedes[1]
+    for _, p in ipairs(J.pessoas) do if p.estado == "indo_escada" or p.estado == "na_escada" then viu[p.estado] = true end end
+    if h then
+      viu[h.estado] = true
+      if h.estado == "dormindo" then
+        viu.renda = J.renda_quartos()
+        viu.ocup = select(1, J.ocupacao_quartos())
+        local c = J.plano_quartos()[1].camas[1]
+        no_chao_dormindo = h.x == c.x and h.z == c.z and h.andar == 1
+      end
+    end
+    if viu.esperando_escada and not h then
+      for _, p in ipairs(J.pessoas) do if p.foi_hospede then passou_escada = true end end
+      break
+    end
+  end
+  ok("vai à escada", viu.indo_escada and viu.na_escada)
+  ok("sobe, dorme e acorda", viu.subiu and viu.dormindo and viu.acordou and viu.esperando_escada)
+  ok("dorme na cama, no segundo andar", no_chao_dormindo)
+  ok("dormindo paga o quarto", viu.renda == 6 and viu.ocup == 1)
+  ok("desce e sai pela porta", passou_escada)
+  ok("a cama fica livre", J.camas_em_uso() == 0 and J.a_caminho == 0 and J.renda_quartos() == 0)
+  -- tipos e espaço
+  libera_no("quarto_duplo")
+  e.ouro = 1e30
+  ok("vende duplo", J.comprar_unidade("quarto_duplo"))
+  local salas = J.plano_quartos()
+  ok("duplo tem duas camas", #salas == 2 and #salas[2].camas == 2 and J.ef("renda_quartos") == 24)
+  local x0a, z0a = salas[1].x, salas[1].z
+  e.ouro = 1e30; J.comprar_unidade("quartos")
+  salas = J.plano_quartos()
+  ok("quarto novo não muda os outros de lugar", salas[1].x == x0a and salas[1].z == z0a)
+  local xa, xb, za, zb = L.sala_mundo("quartos_sala")
+  for i, q in ipairs(salas) do
+    ok("quarto dentro da sala", q.x >= xa and q.x + q.w <= xb and q.z >= za and q.z + q.d <= zb, i)
+    for j = i + 1, #salas do
+      local w = salas[j]
+      ok("quartos não se sobrepõem", q.x + q.w <= w.x + 1e-6 or w.x + w.w <= q.x + 1e-6 or q.z + q.d <= w.z + 1e-6 or w.z + w.d <= q.z + 1e-6)
+    end
+  end
+  local n = 0
+  while true do e.ouro = 1e30; if not J.comprar_unidade("quartos") then break end; n = n + 1; if n > 50 then break end end
+  ok("Loja para no espaço", n < 50 and J.estado_unidade("quartos").motivo == "Sem espaço: amplie")
+  local x1a, _, z1a = L.sala_mundo("quartos_sala")
+  L.mudar_tamanho("quartos_l", 6); J.aplicar_obra()
+  ok("ampliar dá lugar", J.estado_unidade("quartos").motivo == nil)
+  -- quarto de herói: só para herói
+  libera_no("quarto_heroi"); e.ouro = 1e30
+  ok("vende o quarto de herói", J.comprar_unidade("quarto_heroi"))
+  J.limpar_hospedes()
+  local heroi_q
+  for _, q in ipairs((J.plano_quartos())) do if q.so_heroi then heroi_q = q end end
+  ok("herói vai para o quarto dele", J.reservar_cama({ heroi = true }) == heroi_q.camas[1].chave)
+  J.limpar_hospedes()
+  for _ = 1, 40 do J.a_caminho = 0; J.reservar_cama() end
+  ok("comum não usa o quarto de herói", not J.camas[heroi_q.camas[1].chave])
+  ok("limite de hóspedes", J.camas_em_uso() <= C.limite_hospedes)
+  J.limpar_hospedes()
+  for _ = 1, 40 do J.reservar_cama() end
+  ok("fila curta na escada", J.a_caminho == C.fila_escada)
+  J.limpar_hospedes()
+  -- renda proporcional: duas camas, uma dormindo = metade do duplo
+  local dq
+  for _, q in ipairs((J.plano_quartos())) do if #q.camas == 2 then dq = q end end
+  J.hospedes = { { estado = "dormindo", chave_cama = dq.camas[1].chave } }
+  local base = J.ef("renda_quartos")
+  local vis = 0
+  for _, q in ipairs((J.plano_quartos())) do vis = vis + q.renda end
+  ok("meio duplo, meia renda", math.abs(J.renda_quartos() - 9 * base / vis) < 1e-6)
+  J.limpar_hospedes()
+
+  -- migração: save antigo com muitos quartos e com as camas no layout
+  novo()
+  J.auto_colocar = true
+  libera_no("prateleira"); libera_no("quartos"); pronta()
+  local d = util.desserializar(util.serializar(J.estado))
+  d.compras.quartos = 14
+  d.quartos_ordem = nil
+  d.layout = d.layout or {}
+  d.layout.cama1 = { x = 1, z = 1 }; d.layout.bau_quartos = { x = 1, z = 1 }
+  motor._save = util.serializar(d)
+  iniciar()
+  ok("migra: nenhum quarto perdido", J.compradas("quartos") == 14 and #J.lista_quartos() == 15 and J.ef("renda_quartos") == 90)
+  local s2, f2 = J.plano_quartos()
+  ok("migra: o que não coube continua contando", #s2 + #f2 == 15 and #f2 > 0)
+  J.hospedes = {}
+  for _, q in ipairs(s2) do J.hospedes[#J.hospedes + 1] = { estado = "dormindo", chave_cama = q.camas[1].chave } end
+  ok("migra: lotado rende tudo", math.abs(J.renda_quartos() - 90) < 1e-6)
+  J.limpar_hospedes()
+  J.salvar(); iniciar()
+  ok("ordem dos quartos vai no save", #J.estado.quartos_ordem == 15)
+  ok("layout antigo com camas abre", L.aberta("quartos_sala"))
+  desenhar()
+  motor._save = false
+  novo()
+end
+
 -- Jogo completo: robô chega ao final ---------------------------------------------------------------
 if arg[3] ~= "rapido" then
   novo()

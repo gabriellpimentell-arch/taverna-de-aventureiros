@@ -26,7 +26,9 @@
 ["garcom"] = 4,
 ["mesa"] = 5,
 ["porco"] = 4,
-["quartos"] = 9,
+["quarto_duplo"] = 1,
+["quarto_heroi"] = 1,
+["quartos"] = 2,
 ["vaca"] = 7
 },
 ["contratados"] = {
@@ -396,6 +398,8 @@
 ["pomar"] = 1,
 ["prateleira"] = 1,
 ["propaganda"] = 1,
+["quarto_duplo"] = 1,
+["quarto_heroi"] = 1,
 ["quartos"] = 1,
 ["racao"] = 5,
 ["rank_a"] = 1,
@@ -438,6 +442,7 @@
 ["jardim"] = true,
 ["mercadinho"] = true,
 ["mesa"] = true,
+["ordem_sacerdotes"] = true,
 ["party"] = true,
 ["pomar"] = true,
 ["prateleira"] = true,
@@ -512,11 +517,32 @@
 }
 },
 ["prox_id"] = 26,
+["quartos_ordem"] = {
+[1] = "quartos",
+[2] = "quartos",
+[3] = "quartos",
+[4] = "quarto_duplo"
+},
 ["raros"] = {
 ["bebida"] = 0,
 ["comida"] = 0
 },
+["receitas"] = {
+["cardapio"] = {
+
+},
+["descobertas"] = {
+
+},
+["feitas"] = {
+
+},
+["tentadas"] = {
+
+}
+},
 ["rps"] = 200000000,
+["sacerdotes"] = 4,
 ["sementes"] = {
 ["fruta"] = 0,
 ["lupulo"] = 0

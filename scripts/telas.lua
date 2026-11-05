@@ -1348,6 +1348,7 @@ local function janela_stats()
     { "Clientes servidos", fmt(e.servidos) },
     { "Brigas separadas", fmt(e.brigas) },
     { "Missões concluídas", fmt(e.feitas) },
+    { "Hóspedes dormindo", (function() local d, c = J.ocupacao_quartos(); return d .. " de " .. c .. " camas" end)() },
     { "Espólios comprados", fmt(e.espolios) },
     { "Alimentos colhidos", fmt(e.colhido) },
     { "Contratados", fmt(#e.contratados) },

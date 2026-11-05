@@ -58,8 +58,9 @@ for _ = 1, 3 do
   end
 end
 -- o equivalente ao antigo máximo de cada coisa: 5 mesas e a ala leste, 4 garçons...
-for tipo, q in pairs({ mesa = 5, garcom = 4, quartos = 9, canteiro = 8, arvore = 5, vaca = 7, porco = 4, galinha = 6, fazendeiro = 3, fazendeiro_arvores = 2, fazendeiro_animais = 2 }) do
-  for _ = 1, q do e.ouro = 1e16; assert(J.comprar_unidade(tipo)) end
+-- em ordem: os quartos ocupam a sala na ordem de compra
+for _, par in ipairs({ { "mesa", 5 }, { "garcom", 4 }, { "quartos", 2 }, { "quarto_duplo", 1 }, { "quarto_heroi", 1 }, { "canteiro", 8 }, { "arvore", 5 }, { "vaca", 7 }, { "porco", 4 }, { "galinha", 6 }, { "fazendeiro", 3 }, { "fazendeiro_arvores", 2 }, { "fazendeiro_animais", 2 } }) do
+  for _ = 1, par[2] do e.ouro = 1e16; assert(J.comprar_unidade(par[1]), par[1]) end
 end
 for _, n in ipairs(J.NOTICIAS) do e.noticias[n.id] = true end
 e.noticias._final = true

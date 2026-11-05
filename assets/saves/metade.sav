@@ -3,28 +3,29 @@
 ["arvores_vistas"] = {
 
 },
-["brigas"] = 77,
+["brigas"] = 161,
 ["carroca"] = {
 ["presente"] = true,
-["resta"] = 72,
+["resta"] = 41,
 ["vendidos"] = {
 ["raro_especiaria"] = true,
 ["raro_hidromel"] = true
 },
-["visitas"] = 36
+["visitas"] = 67
 },
-["ciclo"] = 1.5,
+["ciclo"] = 11,
 ["ciclo_fazenda"] = 0,
-["ciclo_pomar"] = 4.5,
-["colhido"] = 59837.833828125047,
+["ciclo_pomar"] = 11,
+["colhido"] = 139181.13370117193,
 ["compras"] = {
 ["arvore"] = 2,
-["canteiro"] = 6,
+["canteiro"] = 5,
 ["fazendeiro"] = 4,
 ["fazendeiro_arvores"] = 3,
 ["garcom"] = 10,
 ["mesa"] = 6,
-["quartos"] = 5
+["quarto_duplo"] = 1,
+["quartos"] = 3
 },
 ["contratados"] = {
 [1] = {
@@ -33,20 +34,20 @@
 ["em_missao"] = true,
 ["fama"] = 0,
 ["id"] = 1,
-["magia"] = 13,
-["missoes"] = 79,
+["magia"] = 14,
+["missoes"] = 180,
 ["nome"] = "Bruno",
 ["pele"] = "#f1c9a5",
 ["tipo"] = "guerreiro"
 },
 [2] = {
 ["arma"] = 14,
-["armadura"] = 14,
+["armadura"] = 15,
 ["em_missao"] = true,
 ["fama"] = 0,
 ["id"] = 2,
-["magia"] = 13,
-["missoes"] = 71,
+["magia"] = 14,
+["missoes"] = 170,
 ["nome"] = "Lia",
 ["pele"] = "#e0ac7e",
 ["tipo"] = "mago"
@@ -54,61 +55,61 @@
 },
 ["divida"] = 0,
 ["emprestimos"] = 1,
-["espolios"] = 375,
+["espolios"] = 895,
 ["estoques"] = {
 ["carne_porco"] = 0,
 ["carne_vaca"] = 0,
-["frutas"] = 3035.5,
-["lupulo"] = 3034.5,
+["frutas"] = 2774.625,
+["lupulo"] = 2782.125,
 ["ovos"] = 0,
-["trigo"] = 3035.5
+["trigo"] = 2776.875
 },
 ["fama"] = 0,
-["feitas"] = 797,
+["feitas"] = 1836,
 ["feitas_rank"] = {
-[1] = 10,
-[2] = 63,
-[3] = 131,
-[4] = 485,
-[5] = 108
+[1] = 21,
+[2] = 150,
+[3] = 283,
+[4] = 1057,
+[5] = 325
 },
 ["fim"] = false,
 ["invocados_feitos"] = 0,
-["lucro_espolios"] = 198316.57199999949,
+["lucro_espolios"] = 452743.07999999705,
 ["mantimentos"] = {
-["bebida"] = 201,
-["comida"] = 202
+["bebida"] = 215,
+["comida"] = 216
 },
 ["missoes"] = {
 [1] = {
+["contratado"] = 1,
 ["rank"] = 5,
-["resta"] = 5.2075000000000031
+["resta"] = 0.20750000000000313
 },
 [2] = {
 ["rank"] = 5,
-["resta"] = 14.207500000000003
+["resta"] = 5.4575000000000031
 },
 [3] = {
 ["rank"] = 5,
-["resta"] = 23.207500000000003
+["resta"] = 14.457500000000003
 },
 [4] = {
 ["rank"] = 5,
-["resta"] = 32.207500000000003
+["resta"] = 23.457500000000003
 },
 [5] = {
-["contratado"] = 1,
 ["rank"] = 5,
-["resta"] = 40.457500000000003
+["resta"] = 32.457500000000003
 },
 [6] = {
-["contratado"] = 2,
 ["rank"] = 5,
-["resta"] = 40.707500000000003
+["resta"] = 41.457500000000003
 },
 [7] = {
+["contratado"] = 2,
 ["rank"] = 5,
-["resta"] = 41.207500000000003
+["resta"] = 47.207500000000003
 }
 },
 ["nos"] = {
@@ -116,10 +117,10 @@
 ["agilidade"] = 9,
 ["ala_leste"] = 1,
 ["balcao"] = 1,
-["bardo"] = 5,
+["bardo"] = 4,
 ["caixas"] = 3,
 ["canteiro"] = 1,
-["cardapio"] = 14,
+["cardapio"] = 13,
 ["cardapio_maior"] = 3,
 ["cerveja_melhor"] = 3,
 ["cervejaria"] = 1,
@@ -155,6 +156,7 @@
 ["poda"] = 4,
 ["pomar"] = 1,
 ["prateleira"] = 1,
+["quarto_duplo"] = 1,
 ["quartos"] = 1,
 ["rank_b"] = 1,
 ["rank_c"] = 1,
@@ -172,7 +174,7 @@
 ["subsolo"] = 1,
 ["temperos"] = 5,
 ["tonel"] = 5,
-["vagas"] = 9,
+["vagas"] = 8,
 ["venda"] = 1
 },
 ["noticias"] = {
@@ -207,22 +209,60 @@
 ["musica"] = 0.40000000000000002,
 ["sombras"] = true
 },
-["ouro"] = 16653.370987791568,
+["ouro"] = 8549.6139456667006,
 ["parties"] = {
 
 },
 ["prox_id"] = 3,
+["quartos_ordem"] = {
+[1] = "quartos",
+[2] = "quartos",
+[3] = "quartos",
+[4] = "quarto_duplo",
+[5] = "quartos"
+},
 ["raros"] = {
-["bebida"] = 11,
-["comida"] = 6
+["bebida"] = 8,
+["comida"] = 0
 },
-["rps"] = 66399.684660836618,
+["receitas"] = {
+["cardapio"] = {
+[1] = "sidra",
+[2] = "torta_frutas",
+[3] = "cerveja_trigo",
+[4] = "suco",
+[5] = "pao"
+},
+["descobertas"] = {
+["cerveja_trigo"] = true,
+["pao"] = true,
+["sidra"] = true,
+["suco"] = true,
+["torta_frutas"] = true
+},
+["feitas"] = {
+["cerveja_trigo"] = 876,
+["pao"] = 792,
+["sidra"] = 3862,
+["torta_frutas"] = 3663
+},
+["tentadas"] = {
+["frutas+frutas"] = true,
+["frutas+lupulo"] = true,
+["frutas+trigo"] = true,
+["lupulo+lupulo"] = true,
+["lupulo+trigo"] = true,
+["trigo+trigo"] = true
+}
+},
+["rps"] = 73606.640864303321,
+["sacerdotes"] = 0,
 ["sementes"] = {
-["fruta"] = 1289,
-["lupulo"] = 2483
+["fruta"] = 3056,
+["lupulo"] = 6126
 },
-["servidos"] = 7046,
-["tempo"] = 10518,
-["total"] = 40119414.721332438,
+["servidos"] = 13938,
+["tempo"] = 19849,
+["total"] = 192298936.26037765,
 ["versao"] = 2
 }

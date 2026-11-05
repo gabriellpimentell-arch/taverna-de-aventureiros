@@ -565,7 +565,8 @@ local function salao()
   -- quartos: escada e porta no fundo
   grupo("quartos")
   if J.tem_escada() then
-    for i = 0, 5 do caixa(-5.2 + i * 0.22, 0, -3.9, 0.3, 0.24 + i * 0.24, 0.8, "#6a4426") end
+    for i = 0, 7 do caixa(-5.75 + i * 0.22, 0, -3.85, 0.3, 0.24 + i * 0.24, 1.2, "#6a4426") end
+    caixa(-4.97, 0, -3.2, 1.9, 0.9, 0.07, MAD_ESC)
     caixa(-4.0, 1.5, -4.46, 1.0, 1.9, 0.08, "#3a2415")
   end
 
@@ -1618,12 +1619,36 @@ end
 
 -- Andares ------------------------------------------------------------------------------
 
-local function cama(x, z, cobre)
-  caixa(x, 0, z, 1.25, 0.32, 2.1, MAD_ESC)
-  caixa(x, 0.32, z + 0.03, 1.13, 0.16, 1.98, PERGAMINHO)
-  caixa(x, 0.46, z + 0.32, 1.17, 0.06, 1.38, cobre)
-  caixa(x, 0.48, z - 0.72, 0.8, 0.12, 0.42, ESPUMA)
-  caixa(x, 0, z - 1.03, 1.25, 1.05, 0.1, MAD_MED)
+-- s = 1: cabeceira no lado do fundo da cena; s = -1: virada. l: largura (a do herói é maior)
+local function cama(x, z, cobre, s, l)
+  s, l = s or 1, l or 1.25
+  caixa(x, 0, z, l, 0.32, 2.1, MAD_ESC)
+  caixa(x, 0.32, z + 0.03 * s, l - 0.12, 0.16, 1.98, PERGAMINHO)
+  caixa(x, 0.46, z + 0.32 * s, l - 0.08, 0.06, 1.38, cobre)
+  caixa(x, 0.48, z - 0.72 * s, l - 0.45, 0.12, 0.42, ESPUMA)
+  caixa(x, 0, z - 1.03 * s, l, 1.05, 0.1, MAD_MED)
+end
+
+-- um quarto: tapete, paredes baixas com vão no corredor, e a cama
+local function quarto(q)
+  local x, z, w, d = q.x, q.z, q.w, q.d
+  caixa(x + w / 2, 0, z + d / 2, w - 0.14, 0.02, d - 0.14, q.so_heroi and "#5a4a7a" or "#6a4c30")
+  local cor = q.so_heroi and "#3a2a55" or PAREDE
+  local fundo = q.virada == 1 and z or z + d
+  local frente = q.virada == 1 and z + d or z
+  -- a câmera vem da frente: na fileira de baixo, a parede de trás fica na frente da cama e precisa ser baixa
+  caixa(x + w / 2, 0, fundo, w, q.virada == 1 and 1.1 or 0.3, 0.08, cor)
+  caixa(x + 0.04, 0, z + d / 2, 0.08, 0.5, d, cor)
+  caixa(x + w - 0.04, 0, z + d / 2, 0.08, 0.5, d, cor)
+  local vao0 = q.porta_x - 0.36
+  caixa(x + vao0 / 2 - x / 2, 0, frente, vao0 - x, 0.5, 0.08, cor)
+  caixa(q.porta_x + 0.39, 0, frente, 0.06, 0.5, 0.08, cor)
+  for _, c in ipairs(q.camas) do
+    cama(c.x, c.z, q.coberta, 1, q.so_heroi and 1.9 or 1.25)
+  end
+  if q.so_heroi then
+    caixa(q.camas[1].x, 1.05, q.camas[1].z - 1.03, 1.9, 0.1, 0.12, OURO)
+  end
 end
 
 local function quartos_sala(e)
@@ -1632,17 +1657,16 @@ local function quartos_sala(e)
   local x0, x1, z0, z1 = L.sala_mundo("quartos_sala")
   casca_sala("quartos_sala", x0, x1, z0, z1, o, { piso1 = "#7a5a3a", piso2 = "#715335", parede = PAREDE, parede_lado = "#47301f",
     rodape = "#2f1e13", viga = VIGA, folha = MAD_MED, acento = OURO })
-  for i = 1, 4 do
-    grupo("cama" .. i)
-    local b = L.POR_ID["cama" .. i]
-    cama(b.x, b.z, ({ TAPETE, "#3d5a8a", "#3d5a8a", TAPETE })[i])
+  if e > 0.9 then
+    for _, q in ipairs((J.plano_quartos())) do quarto(q) end
   end
-  grupo("bau_quartos")
-  local b = L.POR_ID.bau_quartos
-  caixa(b.x, 0, b.z, 1, 0.5, 0.6, MAD_MED)
-  caixa(b.x, 0.5, b.z, 1.04, 0.1, 0.64, TAMPO)
-  caixa(b.x, 0.28, b.z + 0.31, 0.16, 0.2, 0.03, OURO)
-  grupo(nil)
+end
+
+-- quem dorme: cabeça no travesseiro, corpo sob a coberta, respirando
+local function dormindo(h, cobre)
+  local r = math.sin(M.tempo * 1.6 + h.fase) * 0.02
+  esfera(h.x, 0.74, h.z - 0.66, 0.42, h.pele)
+  peca("esfera", h.x, 0.54, h.z + 0.28, 0.86, 0.36 + r, 1.3, 0, cobre)
 end
 
 local function sala_guilda(e)
@@ -1685,12 +1709,12 @@ end
 -- escada encostada no fundo: sobe degrau a degrau; `desce` escurece, como um vão no piso
 local function escada(x, z, desce, c1, c2)
   if desce then
-    caixa(x, 0, z, 2.6, 0.03, 1.5, VIGA)
+    caixa(x, 0, z, 3.2, 0.03, 1.8, VIGA)
     for i = 0, 5 do
-      caixa(x - 1.1 + i * 0.44, 0.025, z, 0.4, 0.02, 1.22, ({ "#21170e", "#33251a", "#4a3626", "#624a33", "#7c6043", "#967855" })[i + 1])
+      caixa(x - 1.4 + i * 0.56, 0.025, z, 0.52, 0.02, 1.5, ({ "#21170e", "#33251a", "#4a3626", "#624a33", "#7c6043", "#967855" })[i + 1])
     end
-    caixa(x, 0, z - 0.72, 2.6, 0.75, 0.07, MAD_ESC)
-    caixa(x, 0, z + 0.72, 2.6, 0.75, 0.07, MAD_ESC)
+    caixa(x, 0, z - 0.87, 3.2, 0.75, 0.07, MAD_ESC)
+    caixa(x, 0, z + 0.87, 3.2, 0.75, 0.07, MAD_ESC)
   else
     for i = 0, 7 do caixa(x - 1.12 + i * 0.32, 0, z, 0.34, 0.2 + i * 0.3, 1.3, i % 2 == 0 and c1 or c2) end
     caixa(x + 1.45, 0, z, 0.5, 2.6, 1.5, "#161009")
@@ -2058,6 +2082,11 @@ local MODELOS = {
     M.boneco({ x = 0, z = 0, giro = 0.5, fase = 0, pele = "#e0ac7e", tipo = { nome = "comum", corpo = "#f0e6d2", perna = "#3a3028", braco = "#e2d7c2" }, levando = true })
   end },
   quarto = { d = 7.5, h = 0.4, fn = function() cama(0, 0, TAPETE) end },
+  quarto_duplo = { d = 8, h = 0.4, fn = function() cama(-0.72, 0, "#3d5a8a"); cama(0.72, 0, "#3d5a8a") end },
+  quarto_heroi = { d = 8, h = 0.5, fn = function()
+    cama(0, 0, "#6a3fa0", 1, 1.9)
+    caixa(0, 1.05, -1.03, 1.9, 0.1, 0.12, OURO)
+  end },
   canteiro = { d = 5, h = 0.3, fn = function()
     caixa(0, 0, 0, 1.0, 0.14, 1.1, "#5a3d26")
     for _, f in ipairs(CANTEIRO_FOLHAS) do
@@ -2298,6 +2327,18 @@ function M.desenhar_cena()
   end
   if ativo == 0 then
     for _, p in ipairs(J.visitantes) do M.boneco(p) end
+  elseif ativo == 1 and a.quartos > 0.9 then
+    for _, h in ipairs(J.hospedes) do
+      if h.estado == "dormindo" then
+        local cobre = "#a33d3a"
+        for _, q in ipairs((J.plano_quartos())) do
+          for _, c in ipairs(q.camas) do if c.chave == h.chave_cama then cobre = q.coberta end end
+        end
+        dormindo(h, cobre)
+      else
+        M.boneco(h)
+      end
+    end
   end
   for _, g in ipairs(J.garcons) do
     if (g.andar or 0) == ativo then garcom(g) end
@@ -2330,6 +2371,17 @@ end
 function M.desenhar_baloes()
   local e = util.limitar(1 / M.quadro.escala * M.zoom, 0.72, 1.1)
   local ativo = L.andar_ativo
+  if ativo == 1 then
+    for _, h in ipairs(J.hospedes) do
+      if h.estado == "dormindo" then
+        local x, y = motor.projetar(h.x, 1.1, h.z)
+        if x then
+          local b = (M.tempo * 0.7 + h.fase) % 1
+          motor.texto("z", x + 6 + b * 8, y - b * 16, 15 + math.floor(b * 6), "#e8f0ff", "centro", true)
+        end
+      end
+    end
+  end
   for _, p in ipairs(J.pessoas) do
     if (p.andar or 0) ~= ativo then goto proxima end
     if p.estado == "menestrel_canta" then

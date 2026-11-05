@@ -863,7 +863,7 @@ function J.montar_mapa()
   end
   caixa("carga", 5.5, 4.1, 1.4, 0.8)
   if J.ef("bardo") > 0 then circulo("bardo", -5.1, -1.25, 0.32) end
-  if J.tem_escada() then caixa("quartos", -4.65, -3.9, 1.4, 0.8) end
+  if J.tem_escada() then caixa("quartos", -4.97, -3.85, 1.9, 1.3) end
   local sa, sb, sc, sd = L.salao()
   local xmax = sb - 0.2
   if J.ef("a_leste") > 0 then
@@ -984,6 +984,7 @@ function J.aplicar_layout()
     if p.estado == "menestrel_indo" then J.comecar_historia(p.historia) end
   end
   J.pessoas = {}
+  J.limpar_hospedes()
   J.reconstruir_lugares()
   J.montar_mapa()
   J.versao_layout, J.origem_x, J.origem_z = L.versao, L.origem.x, L.origem.z
@@ -1146,10 +1147,103 @@ function J.preco_unidade(tipo)
   return math.floor(J.curva_preco(d.custo * d.mult ^ J.compradas(tipo)))
 end
 
--- quantos quartos cabem na ala de quartos: é o motivo para ampliá-la
+-- Quartos: a ordem de compra é guardada para nenhum quarto mudar de lugar quando outro chega ------------
+
+local TIPOS_QUARTO = { "quartos", "quarto_duplo", "quarto_heroi" }
+
+local function quartos_comprados(tipo)
+  local n = J.compradas(tipo)
+  if tipo == "quartos" and J.nivel("quartos") > 0 then n = n + 1 end -- o primeiro vem com o nó
+  return n
+end
+
+-- A lista em ordem. Save sem ela, ou de antes dos tipos, ganha aqui: as compras continuam sendo a verdade.
+function J.lista_quartos()
+  local e = J.estado
+  if type(e.quartos_ordem) ~= "table" then e.quartos_ordem = {} end
+  local l, n = e.quartos_ordem, {}
+  for i = #l, 1, -1 do
+    local t = l[i]
+    n[t] = (n[t] or 0) + 1
+    if not C.tipos_quarto[t] or n[t] > quartos_comprados(t) then
+      n[t] = n[t] - 1
+      table.remove(l, i)
+    end
+  end
+  for _, t in ipairs(TIPOS_QUARTO) do
+    for _ = (n[t] or 0) + 1, quartos_comprados(t) do l[#l + 1] = t end
+  end
+  return l
+end
+
+-- Distribui a lista na sala. Fileiras: 1 e 2 dividem um corredor; a 3 encosta nas costas da 2, e assim por diante.
+local function distribuir_quartos(lista, x0, x1, z0, z1)
+  local D, K = C.quarto_fundo, C.quarto_corredor
+  local fileiras = {}
+  local i = 0
+  while true do
+    local par = math.floor(i / 2)
+    local base = z0 + par * (2 * D + K)
+    local z = i % 2 == 0 and base or base + D + K
+    if z + D > z1 + 1e-6 then break end
+    fileiras[#fileiras + 1] = { z = z, x = x0 + 0.1, corredor = base + D + K / 2, costas_no_fundo = i % 2 == 0 }
+    i = i + 1
+  end
+  local salas, fora = {}, {}
+  for idx, tipo in ipairs(lista) do
+    local d = C.tipos_quarto[tipo]
+    local coube
+    for _, f in ipairs(fileiras) do
+      if f.x + d.largura <= x1 - 0.1 + 1e-6 then
+        local q = { indice = idx, tipo = tipo, x = f.x, z = f.z, w = d.largura, d = D, corredor = f.corredor, virada = f.costas_no_fundo and 1 or -1,
+          porta_x = f.x + d.largura - 0.42, renda = d.renda, so_heroi = d.so_heroi, coberta = d.coberta, camas = {} }
+        -- a cabeceira fica sempre do lado do fundo da cena: se virada, esconderia quem dorme
+        local zc = f.costas_no_fundo and f.z + 1.2 or f.z + D - 1.15
+        for k = 1, d.camas do
+          q.camas[k] = { chave = idx .. ":" .. k, x = f.x + (d.so_heroi and 1.1 or 0.75 + (k - 1) * 1.4), z = zc }
+        end
+        f.x = f.x + d.largura
+        salas[#salas + 1] = q
+        coube = true
+        break
+      end
+    end
+    if not coube then fora[#fora + 1] = idx end
+  end
+  return salas, fora
+end
+
+local plano_cache = {}
+-- Os quartos que têm lugar na sala, e os índices dos que não couberam (sala diminuída ou save antigo)
+function J.plano_quartos()
+  if not L.aberta("quartos_sala") then return {}, {} end
+  local lista = J.lista_quartos()
+  local x0, x1, z0, z1 = L.sala_mundo("quartos_sala")
+  local c = plano_cache
+  local igual = c.x0 == x0 and c.x1 == x1 and c.z0 == z0 and c.z1 == z1 and c.n == #lista and c.lista == lista
+  if not igual then
+    c.x0, c.x1, c.z0, c.z1, c.n, c.lista = x0, x1, z0, z1, #lista, lista
+    c.salas, c.fora = distribuir_quartos(lista, x0, x1, z0, z1)
+  end
+  return c.salas, c.fora
+end
+
+function J.cabe_quarto(tipo)
+  if not L.aberta("quartos_sala") then return false end
+  local l = {}
+  for i, t in ipairs(J.lista_quartos()) do l[i] = t end
+  l[#l + 1] = tipo
+  local x0, x1, z0, z1 = L.sala_mundo("quartos_sala")
+  local _, fora = distribuir_quartos(l, x0, x1, z0, z1)
+  return #fora == 0
+end
+
+-- quantos quartos individuais cabem na sala vazia
 function J.limite_quartos()
   local x0, x1, z0, z1 = L.sala_mundo("quartos_sala")
-  return math.floor((x1 - x0) * (z1 - z0) / C.m2_por_quarto)
+  local l = {}
+  for i = 1, 200 do l[i] = "quartos" end
+  return #(distribuir_quartos(l, x0, x1, z0, z1))
 end
 
 -- Dá para vender mais uma? Devolve o motivo se não der; `sem_boneco` = conta, mas nada novo entra em cena.
@@ -1157,14 +1251,14 @@ function J.estado_unidade(tipo)
   local d = J.LOJA[tipo]
   local r = { preco = J.preco_unidade(tipo) }
   if J.nivel(d.no) < 1 then r.motivo = "Libere na Árvore"; return r end
-  local sala = d.sala or ({ quartos = "quartos_sala", canteiro = "jardim", arvore = "pomar", vaca = "fazenda", porco = "fazenda", galinha = "fazenda" })[tipo]
+  local sala = d.sala or ({ quartos = "quartos_sala", quarto_duplo = "quartos_sala", quarto_heroi = "quartos_sala", canteiro = "jardim", arvore = "pomar", vaca = "fazenda", porco = "fazenda", galinha = "fazenda" })[tipo]
   if sala and not L.aberta(sala) then r.motivo = "Antes: " .. select(2, L.nome_sala(sala)); return r end
   if d.max then
     if J.compradas(tipo) >= d.max then r.motivo = "Já está no máximo"; return r end
     if J.compradas(tipo) >= 1 then r.sem_boneco = true end
   end
   if tipo == "mesa" and J.num_mesas() >= L.MESAS_MAX then r.motivo = "Limite de " .. L.MESAS_MAX .. " mesas"; return r end
-  if tipo == "quartos" and J.compradas(tipo) + 1 >= J.limite_quartos() then r.motivo = "Sem espaço: amplie"; return r end
+  if C.tipos_quarto[tipo] and not J.cabe_quarto(tipo) then r.motivo = "Sem espaço: amplie"; return r end
   if tipo == "arvore" and J.ef("frutas") + 2 >= #L.ARVORES then r.sem_boneco = true end
   if tipo == "vaca" and J.ef("vacas") >= #L.VACAS then r.sem_boneco = true end
   if tipo == "porco" and J.ef("porcos") >= #L.PORCOS then r.sem_boneco = true end
@@ -1747,9 +1841,188 @@ local function atravessar_vao(p, dt)
   if p.estado == "saindo" then p.removido = true end
 end
 
+-- Hóspedes ---------------------------------------------------------------------------------
+-- Quem volta de missão reserva uma cama, entra, vai à escada, some no térreo, aparece lá em cima, dorme e volta.
+-- Lá em cima não há colisão nem busca de rota: é uma lista de pontos, e a lista fica fora de J.pessoas.
+
+function J.limpar_hospedes()
+  J.hospedes, J.camas, J.a_caminho, J.escada_t = {}, {}, 0, 0
+end
+
+local function pe_da_escada() return L.t("quartos", -5.0, -2.9) end
+local function topo_da_escada() return L.t("escada_cima", -2.5, -3.6) end
+
+function J.camas_em_uso()
+  local n = 0
+  for _ in pairs(J.camas) do n = n + 1 end
+  return n
+end
+
+function J.reservar_cama(c)
+  if not L.aberta("quartos_sala") or not L.andar_existe(1) then return nil end
+  if J.a_caminho >= C.fila_escada or J.camas_em_uso() >= C.limite_hospedes then return nil end
+  local heroi = c and (c.heroi or c.invocado)
+  local salas = J.plano_quartos()
+  for passo = heroi and 1 or 2, 2 do
+    for _, q in ipairs(salas) do
+      if (passo == 1) == (q.so_heroi == true) and (heroi or not q.so_heroi) then
+        for _, cama in ipairs(q.camas) do
+          if not J.camas[cama.chave] then
+            J.camas[cama.chave] = true
+            J.a_caminho = J.a_caminho + 1
+            return cama.chave
+          end
+        end
+      end
+    end
+  end
+  return nil
+end
+
+local function achar_cama(chave)
+  for _, q in ipairs((J.plano_quartos())) do
+    for _, cama in ipairs(q.camas) do
+      if cama.chave == chave then return cama, q end
+    end
+  end
+end
+
+-- Quem está cansado entra pela porta da taverna
+function J.hospede_entra(tipo, c, chave)
+  local p = nova_pessoa(tipo)
+  p.estado, p.chave_cama, p.contratado, p.sem_briga = "indo_escada", chave, c, true
+  if c then p.pele = c.pele end
+  J.pessoas[#J.pessoas + 1] = p
+  J.caminho(p, pe_da_escada())
+  return p
+end
+
+-- o caminho no andar de cima: do alto da escada até a porta da ala, o corredor e a cama
+local function pontos_ate_a_cama(q, cama)
+  local x0, x1, z0, z1 = L.sala_mundo("quartos_sala")
+  local r = {}
+  for _, d in ipairs(L.portas(1)) do
+    if d.dono == "quartos_sala" or d.vizinho == "quartos_sala" then
+      if d.eixo == "z" then
+        local s = (x0 + x1) / 2 > d.plano and 1 or -1
+        r[1] = { x = d.plano - s * 0.6, z = d.c }
+        r[2] = { x = d.plano + s * 0.6, z = d.c }
+        r[3] = { x = d.plano + s * 0.6, z = q.corredor }
+      else
+        local s = (z0 + z1) / 2 > d.plano and 1 or -1
+        r[1] = { x = d.c, z = d.plano - s * 0.6 }
+        r[2] = { x = d.c, z = d.plano + s * 0.6 }
+        r[3] = { x = d.c, z = q.corredor }
+      end
+      break
+    end
+  end
+  r[#r + 1] = { x = q.porta_x, z = q.corredor }
+  r[#r + 1] = { x = q.porta_x, z = cama.z }
+  r[#r + 1] = { x = cama.x + (q.so_heroi and 1.1 or 0.75), z = cama.z }
+  return r
+end
+
+-- passou pela escada: some no térreo e aparece em cima, ou o contrário
+local function chegar_em_cima(p)
+  J.a_caminho = math.max(0, J.a_caminho - 1)
+  local cama, q = achar_cama(p.chave_cama)
+  if not cama then J.camas[p.chave_cama] = nil; return end
+  local tx, tz = topo_da_escada()
+  J.hospedes[#J.hospedes + 1] = { x = tx, z = tz, y = 0, giro = 0, fase = p.fase, t = 0, tipo = p.tipo, pele = p.pele, chapeu = p.chapeu,
+    contratado = p.contratado, chave_cama = p.chave_cama, estado = "subiu", andando = true, andar = 1, rota = pontos_ate_a_cama(q, cama) }
+end
+
+local function descer(h)
+  local x, z = pe_da_escada()
+  local p = { x = x, y = 0, z = z, giro = 0, fase = h.fase, t = 0, tipo = h.tipo, pele = h.pele, chapeu = h.chapeu, contratado = h.contratado,
+    pedido = "bebida", rota = {}, andando = true, estado = "saindo", sem_briga = true, foi_hospede = true }
+  J.pessoas[#J.pessoas + 1] = p
+  J.caminho(p, soleira_da_porta(0))
+end
+
+local function atualizar_hospedes(dt)
+  J.escada_t = math.max(0, J.escada_t - dt)
+  for i = #J.hospedes, 1, -1 do
+    local h = J.hospedes[i]
+    h.t = h.t + dt
+    if h.estado == "dormindo" then
+      local cama = achar_cama(h.chave_cama)
+      -- a sala diminuiu e a cama sumiu: acorda; senão, a cama pode ter mudado de lugar junto com a sala
+      if cama then h.x, h.z = cama.x, cama.z end
+      if not cama or h.t >= h.sono then
+        J.camas[h.chave_cama] = nil
+        h.estado, h.andando, h.t = "acordou", true, 0
+        local q = select(2, achar_cama(h.chave_cama))
+        h.rota = {}
+        if cama and q then
+          local volta = pontos_ate_a_cama(q, cama)
+          for k = #volta - 1, 1, -1 do h.rota[#h.rota + 1] = volta[k] end
+        end
+        local tx, tz = topo_da_escada()
+        h.rota[#h.rota + 1] = { x = tx, z = tz }
+      end
+    elseif h.estado == "esperando_escada" then
+      if J.escada_t <= 0 then
+        J.escada_t = C.escada_passo
+        descer(h)
+        table.remove(J.hospedes, i)
+      end
+    else
+      local a = h.rota[1]
+      if a then
+        if andar(h, a.x, a.z, C.velocidade_pessoa, dt) then table.remove(h.rota, 1) end
+      elseif h.estado == "subiu" then
+        h.estado, h.andando, h.t, h.sono = "dormindo", false, 0, C.tempo_sono * (0.8 + math.random() * 0.4)
+      else
+        h.estado, h.andando = "esperando_escada", false
+      end
+    end
+  end
+end
+
+-- dormindo / camas que existem na sala
+function J.ocupacao_quartos()
+  local dormindo, camas = 0, 0
+  for _, h in ipairs(J.hospedes or {}) do if h.estado == "dormindo" then dormindo = dormindo + 1 end end
+  for _, q in ipairs((J.plano_quartos())) do camas = camas + #q.camas end
+  return dormindo, camas
+end
+
+-- A renda de cada quarto vale pela parte das camas com alguém dormindo agora.
+-- Quem não coube na sala rende pela média dos outros: comprado em save antigo não se perde.
+function J.renda_quartos()
+  local total = J.ef("renda_quartos")
+  if total <= 0 then return 0 end
+  local dorme = {}
+  for _, h in ipairs(J.hospedes or {}) do if h.estado == "dormindo" then dorme[h.chave_cama] = true end end
+  local r, vistos = 0, 0
+  for _, q in ipairs((J.plano_quartos())) do
+    local n = 0
+    for _, cama in ipairs(q.camas) do if dorme[cama.chave] then n = n + 1 end end
+    r = r + q.renda * n / #q.camas
+    vistos = vistos + q.renda
+  end
+  if vistos <= 0 then return 0 end
+  return r * total / vistos
+end
+
 local function atualizar_pessoa(p, dt)
   p.t = p.t + dt
   if p.vao then return atravessar_vao(p, dt) end
+  if p.estado == "indo_escada" then
+    if seguir_rota(p, dt, C.velocidade_pessoa) or p.t > 40 then
+      p.estado, p.andando, p.fantasma = "na_escada", false, nil
+    end
+    return
+  elseif p.estado == "na_escada" then
+    if J.escada_t <= 0 then
+      J.escada_t = C.escada_passo
+      chegar_em_cima(p)
+      p.removido = true
+    end
+    return
+  end
   if p.estado == "entrando" then
     if seguir_rota(p, dt, C.velocidade_pessoa) then
       p.estado, p.t, p.andando, p.sentado = "esperando", 0, false, true
@@ -1832,8 +2105,9 @@ local function novo_visitante(tipo, estado, parada_x, parada_z)
 end
 
 local function ir_embora(p)
-  local _, fim = pontas_da_faixa()
-  p.estado, p.andando, p.rota = "saindo", true, { { x = fim, z = p.z } }
+  local ini, fim = pontas_da_faixa()
+  -- quem vai dormir volta pelo começo da faixa, o lado da porta da taverna
+  p.estado, p.andando, p.rota = "saindo", true, { { x = p.chave_cama and ini or fim, z = p.z } }
 end
 
 local function atualizar_visitante(p, dt)
@@ -1849,6 +2123,8 @@ local function atualizar_visitante(p, dt)
       J.vender_espolio(p)
       p.estado, p.t, p.giro = "vendendo", 0, math.pi
     else
+      -- quem reservou cama deu a volta e entra pela porta da taverna
+      if p.chave_cama then J.hospede_entra(p.tipo, p.contratado, p.chave_cama) end
       p.removido = true
     end
   elseif p.estado == "pegando" then
@@ -2088,17 +2364,21 @@ local function concluir_missao(m)
   -- A comemoração fica para o próximo cliente: é ele quem se senta. Com o caminho lotado, só o ouro entra.
   local vende = J.mercadinho_aberto() and r <= J.ef("mercadinho")
   local tipo = c and J.TIPOS_POR_NOME(c.tipo) or tipo_de(util.escolher({ "guerreiro", "mago", "arqueiro", "clerigo" }))
+  -- volta cansado: com cama livre, dorme na taverna (quem tem espólio vende antes)
+  local chave = J.reservar_cama(c)
   local p
   if vende then p = novo_visitante(tipo, "indo_barraca", J.BARRACA.x + (math.random() - 0.5) * 3.2, J.BARRACA.z)
-  else p = novo_visitante(tipo, "saindo", select(2, pontas_da_faixa()), J.QUADRO.z) end
+  elseif not chave then p = novo_visitante(tipo, "saindo", select(2, pontas_da_faixa()), J.QUADRO.z) end
   if p then
     p.contratado = c
     if c then p.pele = c.pele end
     p.leva_espolio = vende and r or nil
+    p.chave_cama = chave
     J.ganhar(v, J.QUADRO.x, 2.3, J.QUADRO.z)
   else
-    J.ganhar(v)
+    if chave then J.ganhar(v, J.QUADRO.x, 2.3, J.QUADRO.z) else J.ganhar(v) end
     if vende then J.vender_espolio({ leva_espolio = r }) end
+    if chave then J.hospede_entra(tipo, c, chave) end
   end
   if lugar_livre() then J.festas = math.min((J.festas or 0) + 1, 20) end
   J.som("missao")
@@ -2166,7 +2446,7 @@ function J.renda_venda()
   return t
 end
 
-function J.renda_passiva() return J.ef("renda_quartos") + J.ef("renda_fazenda") + J.renda_venda() end
+function J.renda_passiva() return J.renda_quartos() + J.ef("renda_fazenda") + J.renda_venda() end
 
 -- Jardim ---------------------------------------------------------------------------------
 
@@ -2580,6 +2860,7 @@ function J.iniciar()
   J.pronto = false
   J.estado = estado_inicial()
   J.pessoas = {}
+  J.limpar_hospedes()
   J.visitantes = {}
   J.festas = 0
   J.garcons = {}
@@ -2681,6 +2962,7 @@ function J.atualizar(dt)
 
   J.limite_buscas = Cam.buscas + math.ceil(BUSCAS_POR_SEGUNDO * dt)
   for _, p in ipairs(J.pessoas) do atualizar_pessoa(p, dt) end
+  atualizar_hospedes(dt)
   for i = #J.pessoas, 1, -1 do
     if J.pessoas[i].removido then table.remove(J.pessoas, i) end
   end

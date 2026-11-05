@@ -73,7 +73,22 @@
 ["bebida"] = 0,
 ["comida"] = 0
 },
+["receitas"] = {
+["cardapio"] = {
+
+},
+["descobertas"] = {
+
+},
+["feitas"] = {
+
+},
+["tentadas"] = {
+
+}
+},
 ["rps"] = 0,
+["sacerdotes"] = 0,
 ["sementes"] = {
 ["fruta"] = 0,
 ["lupulo"] = 0

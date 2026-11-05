@@ -25,7 +25,7 @@ local function tudo()
       end
     end
   end
-  for tipo, q in pairs({ mesa = 5, garcom = 4, quartos = 9, canteiro = 8, arvore = 5, vaca = 7, porco = 4, galinha = 6, fazendeiro = 2, fazendeiro_arvores = 2, fazendeiro_animais = 2 }) do
+  for tipo, q in pairs({ mesa = 5, garcom = 4, quartos = 2, quarto_duplo = 1, quarto_heroi = 1, canteiro = 8, arvore = 5, vaca = 7, porco = 4, galinha = 6, fazendeiro = 2, fazendeiro_arvores = 2, fazendeiro_animais = 2 }) do
     for _ = 1, q do J.estado.ouro = 1e40; if not J.comprar_unidade(tipo) then break end end
   end
 end
@@ -149,11 +149,24 @@ local novas = {
   { 0.8, function() T.arv.arvore = "principal"; T.aba = "invocacao"; J.estado.ouro = 1e14 end, "77_sacerdotes_nenhum" },
   { 5, function() J.estado.ouro = 1e14; J.contratar_sacerdote(); J.estado.ouro = 1e14; J.contratar_sacerdote() end, "78_sacerdotes_dois" },
   { 1, function() T.aba = "taverna" end, "79_circulo_pilares" },
+  -- Parte 4: escada maior no térreo, hóspedes indo, gente dormindo; miniaturas na Loja
+  { 2.5, function() local L = require("layout"); L.mudar_andar(0); M.iniciar(); M.zoom_alvo = 2.2; local x, z = L.t("quartos", -5, -3); M.pan_x = x - M.quadro.x + 2; M.pan_z = z - M.quadro.z + 1; for _ = 1, 3 do local c = J.reservar_cama(); if c then J.hospede_entra(J.TIPOS_POR_NOME("mago"), nil, c) end end end, "80_terreo_escada_maior" },
+  { 9, function() end, "81_terreo_na_escada" },
+  { 2.5, function() local L = require("layout"); L.mudar_andar(1); M.iniciar(); M.zoom_alvo = 1.8; local x, z = L.t("escada_cima", -4.3, -3.6); M.pan_x = x - M.quadro.x + 2; M.pan_z = z - M.quadro.z + 1 end, "82_hall_escada" },
+  { 16, function() local L = require("layout"); L.mudar_andar(1); M.iniciar(); T.aba = "taverna"; for _ = 1, 3 do local c = J.reservar_cama(); if c then J.hospede_entra(J.TIPOS_POR_NOME("mago"), nil, c) end end; M.zoom_alvo = 2.4; local x0, x1, z0, z1 = L.sala_mundo("quartos_sala"); M.pan_x = (x0 + x1) / 2 - M.quadro.x; M.pan_z = (z0 + z1) / 2 - M.quadro.z; for _ = 1, 2 do local c = J.reservar_cama(); if c then J.hospede_entra(J.TIPOS_POR_NOME("guerreiro"), nil, c) end end end, "83_segundo_andar_dormindo" },
+  { 12, function() end, "83b_segundo_andar_dormindo" },
+  { 0.8, function() M.zoom_alvo = 1; M.pan_x, M.pan_z = 0, 0; T.aba = "loja"; Lj().aba = "itens"; J.estado.ouro = 5e12; Lj().rolar_lista(-120) end, "84_loja_quartos" },
 }
 -- CENAS_SO=loja: só as capturas da Loja (mais rápido para conferir)
 local so = os.getenv("CENAS_SO")
 if so == "novas" then
   passos = novas
+elseif so == "quartos" then
+  -- só a preparação e o segundo andar
+  passos = {}
+  for _, p in ipairs(novas) do
+    if p[3] == "70_arvore_cozinha" or p[3]:match("^8[3-4]") then passos[#passos + 1] = p end
+  end
 elseif so then
   local l = {}
   for _, p in ipairs(passos) do

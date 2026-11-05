@@ -30,6 +30,7 @@ cronometrar(Cam, "separar")
 
 local quadros = {}
 local pico_gente, pico_fora, pico_rota, pico_rotas = 0, 0, 0, 0
+local pico_hospedes, pico_escada, pico_caminho, soma_ocup, n_ocup = 0, 0, 0, 0, 0
 local function medir_quadro(fn)
   local r0, n0 = gasto.rota, chamadas.rota
   local c = os.clock()
@@ -39,6 +40,14 @@ local function medir_quadro(fn)
   pico_rotas = math.max(pico_rotas, chamadas.rota - n0)
   if #J.pessoas > pico_gente then pico_gente = #J.pessoas end
   if J.visitantes and #J.visitantes > pico_fora then pico_fora = #J.visitantes end
+  pico_hospedes = math.max(pico_hospedes, J.camas_em_uso())
+  pico_caminho = math.max(pico_caminho, J.a_caminho)
+  local fila = 0
+  for _, p in ipairs(J.pessoas) do if p.estado == "na_escada" then fila = fila + 1 end end
+  for _, h in ipairs(J.hospedes) do if h.estado == "esperando_escada" then fila = fila + 1 end end
+  pico_escada = math.max(pico_escada, fila)
+  local d, c = J.ocupacao_quartos()
+  if c > 0 then soma_ocup, n_ocup = soma_ocup + d / c, n_ocup + 1 end
 end
 
 local function relatorio(nome)
@@ -51,6 +60,8 @@ local function relatorio(nome)
   print(string.format("%s: %d quadros  media %.3f ms  p99 %.2f ms  max %.2f ms  acima de 16,7 ms: %d  pico de gente %d",
     nome, n, soma / n, pct(0.99), quadros[n], acima, pico_gente))
   print(string.format("  pior quadro em rotas: %.2f ms, %d rotas no mesmo quadro  gente lá fora: %d", pico_rota, pico_rotas, pico_fora))
+  print(string.format("  hóspedes: pico de %d camas em uso, %d a caminho, fila na escada %d, ocupação média %.0f%%",
+    pico_hospedes, pico_caminho, pico_escada, n_ocup > 0 and soma_ocup / n_ocup * 100 or 0))
   print(string.format("  rotas: %d chamadas, %.3f s (%.0f%% do total)  separar: %.3f s (%.0f%%)  total %.3f s",
     chamadas.rota, gasto.rota, gasto.rota * 100000 / soma, gasto.separar, gasto.separar * 100000 / soma, soma / 1000))
 end

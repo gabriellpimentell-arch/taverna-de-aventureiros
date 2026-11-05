@@ -127,8 +127,6 @@ ob("pilar4", "Pilar 4", 27.61, -1.14, "Círculo", "circulo")
 
 -- Salas de cima: cada uma tem coordenadas de origem próprias, longe de tudo
 ob("quartos_sala", "Quartos", 43.5, -1.5, "Áreas", "@quartos")
-for i = 1, 4 do ob("cama" .. i, "Cama " .. i, 41.5 + (i - 1) % 2 * 3.6, -3 + (i > 2 and 2.9 or 0), "Quartos", "quartos_sala") end
-ob("bau_quartos", "Baú", 43.3, 0.8, "Quartos", "quartos_sala")
 ob("sala_guilda", "Sala da guilda", 53, -1.5, "Áreas", "@guilda")
 ob("mesa_guilda", "Mesa do chefe", 53, -1.9, "Guilda", "sala_guilda")
 ob("cadeira_guilda", "Cadeira do chefe", 53, -3, "Guilda", "sala_guilda")

@@ -69,7 +69,9 @@ C.curva_preco = { de = 800, ate = 8000, fator = 2.5, alto = 30000, expoente = 0.
 C.loja = {
   { id = "mesa", nome = "Mesa", no = "mesa", custo = 20, mult = 2.2, ef = { mesas = 1 }, lugar = true, modelo = "mesa" },
   { id = "garcom", nome = "Garçom", no = "garcom", custo = 120, mult = 2.2, ef = { garcons = 1 }, modelo = "garcom" },
-  { id = "quartos", nome = "Quarto", no = "quartos", custo = 4200, mult = 2.8, ef = { renda_quartos = 6 }, modelo = "quarto" },
+  { id = "quartos", nome = "Quarto individual", no = "quartos", custo = 4200, mult = 2.8, ef = { renda_quartos = 6 }, modelo = "quarto" },
+  { id = "quarto_duplo", nome = "Quarto duplo", no = "quarto_duplo", custo = 30000, mult = 2.8, ef = { renda_quartos = 18 }, modelo = "quarto_duplo" },
+  { id = "quarto_heroi", nome = "Quarto de herói", no = "quarto_heroi", custo = 2000000, mult = 3, ef = { renda_quartos = 300 }, modelo = "quarto_heroi" },
   { id = "canteiro", nome = "Canteiro", no = "canteiro", custo = 2500, mult = 2.6, ef = { canteiros = 1 }, modelo = "canteiro" },
   { id = "arvore", nome = "Árvore frutífera", no = "pomar", custo = 96000, mult = 2.6, ef = { frutas = 1, x_pedido = 1.1 }, lugar = true, modelo = "arvore" },
   { id = "vaca", nome = "Vaca", no = "curral", custo = 1190000, mult = 2.8, ef = { vacas = 1, renda_fazenda = 60, x_pedido = 1.15 }, lugar = true, modelo = "vaca" },
@@ -88,7 +90,21 @@ C.limite_galinhas = 16
 C.limite_garcons = 40          -- bonecos em cena; medido com tests/medir.lua (ver docs/plano-obras.md)
 C.garcom_extra_intervalo = 0.05   -- cada garçom acima do limite tira 5% da espera dos outros, somando
 C.garcom_extra_velocidade = 0.02  -- e 2% de velocidade, até o dobro
-C.m2_por_quarto = 3.5          -- quartos cabem na área da sala: ampliar dá lugar a mais
+
+-- Quartos: entram em fileiras dentro da sala, com um corredor entre duas fileiras; ampliar dá lugar a mais.
+-- A renda de cada um (o ef acima) é multiplicada pela parte das camas com alguém dormindo.
+-- so_heroi: só herói e invocado dormem ali. Quem não coube em save antigo rende pela ocupação média, sem boneco.
+C.tipos_quarto = {
+  quartos = { largura = 2.2, camas = 1, renda = 6, coberta = "#a33d3a" },
+  quarto_duplo = { largura = 3.4, camas = 2, renda = 18, coberta = "#3d5a8a" },
+  quarto_heroi = { largura = 3.2, camas = 1, renda = 300, so_heroi = true, coberta = "#6a3fa0" },
+}
+C.quarto_fundo = 2.5           -- profundidade de um quarto
+C.quarto_corredor = 1.0        -- corredor entre duas fileiras
+C.tempo_sono = 45              -- segundos dormindo, 20% para mais ou para menos
+C.limite_hospedes = 12         -- camas em uso ao mesmo tempo: bonecos e rotas têm custo
+C.fila_escada = 6              -- quantos podem estar a caminho da escada: passou disso, vai embora
+C.escada_passo = 0.8           -- segundos entre uma pessoa e outra na escada
 
 -- Equipe -------------------------------------------------------------------------
 C.garcom_intervalo = 4.0
