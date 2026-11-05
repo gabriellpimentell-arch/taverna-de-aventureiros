@@ -259,7 +259,16 @@ function J.nivel(id)
   return J.estado.nos[id] or 0
 end
 
-function J.custo_no(no) return math.floor(no.custo * no.mult ^ J.nivel(no.id)) end
+-- aplica C.curva_preco: preços baixos ficam como estão, os altos sobem até `fator` vezes
+function J.curva_preco(p)
+  local c = C.curva_preco
+  if p <= c.de then return p end
+  if p >= c.alto then return p * c.fator * (p / c.alto) ^ c.expoente end
+  if p >= c.ate then return p * c.fator end
+  return p * (1 + (c.fator - 1) * math.log(p / c.de) / math.log(c.ate / c.de))
+end
+
+function J.custo_no(no) return math.floor(J.curva_preco(no.custo * no.mult ^ J.nivel(no.id))) end
 
 -- Árvore de ambiente: abre ao colocar a sala. A principal está sempre aberta.
 function J.arvore_aberta(id)
@@ -1134,7 +1143,7 @@ function J.compradas(tipo) return J.estado.compras[tipo] or 0 end
 
 function J.preco_unidade(tipo)
   local d = J.LOJA[tipo]
-  return math.floor(d.custo * d.mult ^ J.compradas(tipo))
+  return math.floor(J.curva_preco(d.custo * d.mult ^ J.compradas(tipo)))
 end
 
 -- quantos quartos cabem na ala de quartos: é o motivo para ampliá-la
@@ -2288,7 +2297,10 @@ end
 
 function J.custo_investir(c, id)
   local d = C.investir[id]
-  return math.floor(d.custo * d.mult ^ (c[id] or 0) * (c.invocado and 100 or 1))
+  local base = d.custo * d.mult ^ (c[id] or 0)
+  -- invocado já custa 100 vezes mais: com a curva por cima, o fim do jogo levava 13 horas só nisso
+  if c.invocado then return math.floor(base * 100) end
+  return math.floor(J.curva_preco(base))
 end
 
 function J.investir(c, id)

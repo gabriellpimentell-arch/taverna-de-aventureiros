@@ -56,6 +56,12 @@ C.obra_metro_cresce = 0.02
 C.obra_devolucao = 0.5         -- quanto volta do que foi pago por um metro, ao diminuir
 C.preco_decoracao = { banco = 15, caixote = 20, planta = 25, barril = 30, vela = 40, quadro = 50, tapete = 60, estante = 80 }
 
+-- Curva de preços: o que custa até `de` fica igual; de `ate` em diante custa `fator` vezes mais; no meio,
+-- sobe aos poucos. Acima de `alto`, o preço ainda ganha (preço / alto) ^ `expoente`: a renda do fim cresce
+-- mais que os custos, e só um fator fixo quase não alongava o jogo (2,5 vezes o preço = 1,34 vez o tempo).
+-- Vale para nós, Loja e equipamento, a qualquer nível. Medido com tests/robo_novo.lua.
+C.curva_preco = { de = 800, ate = 8000, fator = 2.5, alto = 30000, expoente = 0.2 }
+
 -- Loja: a árvore libera a função uma vez; aqui mora o preço de cada unidade.
 -- preço = custo * mult ^ (quantas já foram compradas). ef: o que cada unidade dá, como nos nós da árvore.
 -- lugar = true: o jogador escolhe onde fica. limite: quantos bonecos ou objetos entram em cena
@@ -159,7 +165,7 @@ C.bonus_bebida_casa = 1.6
 C.bonus_bebida_nivel = 0.25
 
 -- Contratados ------------------------------------------------------------------------------
-C.contratar_custo = 60000
+C.contratar_custo = 150000
 C.contratar_mult = 4
 C.investir = {
   armadura = { nome = "Armadura", custo = 8000, mult = 1.45, poder = 12 },
@@ -176,11 +182,11 @@ C.rank_para_heroi = 6          -- A
 
 -- Invocação ------------------------------------------------------------------------------------
 -- Sumos sacerdotes: contratados um a um; cada um vai a um pilar do círculo. Com todos, o círculo ativa.
-C.sacerdote_custo = 2e8
+C.sacerdote_custo = 3e9
 C.sacerdote_mult = 1.8
 C.sacerdotes = { "Irmã Odília", "Frei Anselmo", "Irmã Berenice", "Frei Tadeu" }
 C.sacerdote_caminhada = 3      -- segundos até chegar ao pilar, que então acende
-C.invocar_custo = 1.5e9
+C.invocar_custo = 2.2e10
 C.invocar_mult = 3
 C.poder_invocado = 2200
 C.invocados = {

@@ -137,9 +137,24 @@ local passos = {
   { 0.5, function() T.modal = nil; J.offline = { ganho = 48250, segundos = 11520 } end, "19_offline" },
   { 0.5, function() J.offline = nil; J.estado.fim = true end, "20_final" },
 }
+-- CENAS_SO=novas: árvores por ambiente, receitas, sacerdotes e o segundo andar
+local novas = {
+  { 0.5, function() local S = require("saves"); S.novo("jogo4.sav"); T.iniciar(); J.noticia = nil; tudo(); J.estado.ouro = 5e12; T.aba = "arvore"; T.arv.arvore = "cozinha" end, "70_arvore_cozinha" },
+  { 0.8, function() T.arv.arvore = "cervejaria" end, "71_arvore_cervejaria" },
+  { 0.8, function() T.arv.arvore = "jardim" end, "72_arvore_sementes" },
+  { 0.8, function() T.arv.arvore = "pomar" end, "73_arvore_frutiferas" },
+  { 0.8, function() T.arv.arvore = "fazenda" end, "74_arvore_animais" },
+  { 0.8, function() T.arv.arvore = "invocacao" end, "75_arvore_invocacao" },
+  { 0.8, function() T.arv.arvore = "receitas"; for _, d in ipairs(require("config").estoques) do J.estado.estoques[d.id] = 50 end; J.combinar("trigo", "lupulo"); J.combinar("trigo", "ovos") end, "76_receitas" },
+  { 0.8, function() T.arv.arvore = "principal"; T.aba = "invocacao"; J.estado.ouro = 1e14 end, "77_sacerdotes_nenhum" },
+  { 5, function() J.estado.ouro = 1e14; J.contratar_sacerdote(); J.estado.ouro = 1e14; J.contratar_sacerdote() end, "78_sacerdotes_dois" },
+  { 1, function() T.aba = "taverna" end, "79_circulo_pilares" },
+}
 -- CENAS_SO=loja: só as capturas da Loja (mais rápido para conferir)
 local so = os.getenv("CENAS_SO")
-if so then
+if so == "novas" then
+  passos = novas
+elseif so then
   local l = {}
   for _, p in ipairs(passos) do
     if p[3]:match("^[45][0-9]") then l[#l + 1] = p end
