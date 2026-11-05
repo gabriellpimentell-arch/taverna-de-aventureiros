@@ -23,7 +23,7 @@ local function comprar_melhor()
     local no = A.POR_ID[id]
     if J.nivel(id) == 0 and J.no_liberado(no) then
       if J.estado.ouro >= J.custo_no(no) then return J.comprar_no(id) end
-      if J.custo_no(no) / rps < 240 then return false end
+      if J.custo_no(no) / rps < 900 then return false end
     end
   end
   local melhor
