@@ -3987,6 +3987,9 @@ do
   local chave = J.reservar_cama()
   ok("reserva a cama", chave ~= nil and J.camas_em_uso() == 1)
   ok("não há segunda cama", J.reservar_cama() == nil)
+  -- quem volta de outra missão não pode pegar a cama durante a medição
+  local reservar_de_verdade = J.reservar_cama
+  J.reservar_cama = function() return nil end
   J.hospede_entra(J.TIPOS_POR_NOME("mago"), nil, chave)
   local viu, passou_escada, no_chao_dormindo = {}, false, false
   for _ = 1, 20 * 300 do
@@ -4013,6 +4016,7 @@ do
   ok("dormindo paga o quarto", viu.renda == 6 and viu.ocup == 1)
   ok("desce e sai pela porta", passou_escada)
   ok("a cama fica livre", J.camas_em_uso() == 0 and J.a_caminho == 0 and J.renda_quartos() == 0)
+  J.reservar_cama = reservar_de_verdade
   -- tipos e espaço
   libera_no("quarto_duplo")
   e.ouro = 1e30

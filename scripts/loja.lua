@@ -1,5 +1,5 @@
 -- =============================================================================
--- Loja: itens e cômodos com o jogo rodando.
+-- Loja: itens, cômodos e quartos com o jogo rodando.
 --  LOJA: painel lateral com o jogo rodando.
 --  Aba Itens: põe o que foi comprado na árvore e compra decoração.
 --  Aba Cômodos: seleciona, arrasta a sala de graça e puxa as alças pagando por metro.
