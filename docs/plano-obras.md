@@ -96,4 +96,21 @@ Pronto em `layout.lua` e `mundo.lua`; a Loja usa estas funções sem tocar em de
 
 ## Parte 3: situação
 - **Sumos sacerdotes**: prontos, no commit `7730d88`, sem decisões registradas aqui.
-- **Interrupção**: a parte parou por limite de uso durante o rebalanceamento. O alvo do robô é de 20 a 25 horas, e ele termina em 10,5. Falta também conferir as três telas novas em imagem.
+- **Telas conferidas em imagem**: as seis árvores de ambiente, receitas e sacerdotes estão corretas; nada foi corrigido nelas.
+
+## Parte 3: rebalanceamento (decisões sem o dono)
+- **Curva de preços** (`C.curva_preco`): até 800 de ouro, nada muda; de 8 mil em diante, custa 2,5 vezes mais; acima de 30 mil, ainda ganha (preço / 30 mil) ^ 0,2. Vale para os nós, a Loja e o equipamento de contratados. Um fator fixo não bastava: 2,5 vezes o preço deu só 1,34 vez o tempo.
+- **Valores à parte**: contratar custa 150 mil; sacerdote, 3 bi; invocar, 22 bi; cervejaria, 750 em vez de 1.200.
+- **Equipamento de invocado**: fica fora da curva, porque já custa 100 vezes mais. Com a curva, o fim do jogo gastava cerca de 13 horas só nisso.
+- **Medições do robô** (limite de 3 rodadas): 9,6 h antes; 12,8 h com o fator fixo; 33,2 h com a curva, com o círculo de invocação às 18,7 h. O ajuste do equipamento veio depois e **não foi medido**: pela conta, o fim do jogo cai para 2 a 4 horas, e o total fica entre 21 e 23 h. Falta confirmar com uma rodada.
+
+## Parte 4: quartos e hóspedes (decisões sem o dono)
+- **Tipos**: individual (1 cama, 6 de renda), duplo (2 camas, 18) e herói (1 cama, 300, só para herói e invocado). O nó Quartos individuais agora pede o mural de missões: sem missão não há hóspede nem renda. Duplo vem depois do individual; herói, depois do duplo e do Caminho do herói.
+- **Lugar**: o quarto entra sozinho na ala, em fileiras com corredor, na ordem de compra. O jogador não escolhe a posição; ampliar a ala dá mais espaço. Em 7 x 6 m cabem 6 individuais.
+- **Renda**: cada quarto rende pela parte das camas com alguém dormindo naquele momento. Quarto vazio não rende.
+- **Hóspede**: quem volta de missão reserva a cama e, se tiver espólio, vende antes. Entra pela porta, vai à escada, some, aparece no hall, dorme cerca de 45 s e faz o caminho de volta. No andar de cima anda em linha reta entre pontos, sem colisão e sem busca de rota.
+- **Limites**: 12 camas em uso e 6 pessoas a caminho; passou disso, vai embora como antes. A escada passa uma pessoa a cada 0,8 s.
+- **Medido** (`tests/medir.lua . save 120`, save completo): média de 4,25 ms por quadro, contra 4,19 ms antes da parte; 34 pessoas no pico, contra 29; fila de no máximo 1 na escada; ocupação média de 38%.
+- **Migração**: a compra `quartos` segue valendo como individual e nada se perde. A lista `quartos_ordem` nasce sozinha ao carregar. O que não couber fica sem boneco e rende pela ocupação média dos outros, mas a Loja só vende outro quarto depois de ampliar. As camas e o baú antigos saíram do layout.
+- **Saves prontos**: regenerados. O Completo traz 3 individuais, 1 duplo e 1 de herói, que é o que cabe na ala padrão.
+- **Limitações**: o hóspede não bate em nada lá em cima; com a ala presa a outra sala, ou com a porta fora do corredor, ele pode atravessar uma parede baixa. Quem está no andar de cima não vai para o save: ao carregar, as camas voltam vazias.

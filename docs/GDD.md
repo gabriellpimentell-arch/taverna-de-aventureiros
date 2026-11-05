@@ -74,7 +74,8 @@ O gerente fica atrás do balcão e, no começo, vai até o cliente a cada toque.
 A aba Loja abre um painel lateral com o jogo rodando.
 - **Itens:** o que a árvore libera fica "para colocar"; decoração é paga em ouro.
 - **Cômodos:** mover salas e a porta é grátis, em qualquer lado da taverna. Salas internas encostam com 2 m de parede comum; áreas externas ficam sempre fora. Aumentar custa ouro; diminuir devolve 50% do pago por aquele metro.
-- **Andares:** segundo andar (quartos e sala da guilda, cada um com nó próprio) e subsolo, na árvore. Salas internas podem ir para qualquer andar.
+- **Andares:** segundo andar (ala de quartos e sala da guilda, cada uma com nó próprio) e subsolo, na árvore. Salas internas podem ir para qualquer andar.
+- **Quartos:** a Loja vende quartos individuais, duplos e de herói, liberados nessa ordem pela árvore. Eles entram sozinhos na ala, até o espaço acabar; ampliar a ala dá lugar a mais.
 
 ## Economia
 
@@ -85,6 +86,7 @@ A aba Loja abre um painel lateral com o jogo rodando.
 | Consumo | Clientes e aventureiros comem e bebem | Desde o início |
 | Missões | Quem contratou a missão paga; a taverna só recebe quando o aventureiro volta com ela concluída, não quando ele a pega | Prateleira de missões |
 | Espólios | A taverna compra os espólios dos aventureiros e eles são revendidos sozinhos, com pouco lucro no início | Mercadinho |
+| Quartos | Quem volta de missão sobe a escada e dorme. Cada quarto rende pela parte das camas ocupadas; o de herói só recebe heróis e invocados | Quartos individuais, depois do mural |
 | Venda | Poções, armaduras e armas vendidas no mercadinho aumentam muito o lucro | Aba de venda |
 | Produção própria | Três fazendas enchem estoques por ingrediente: sementes (trigo e lúpulo), árvores (frutas) e animais (carne de vaca, carne de porco e ovos). A cozinha e a cervejaria servem esses estoques, e cada fazenda tem o próprio fazendeiro, comprado na Loja | Plantação |
 
@@ -138,7 +140,7 @@ O jogo começa simples e libera uma coisa de cada vez, para cada desbloqueio vir
 9. **Invocação isekai**: heróis de outro mundo, com atributos maiores que os dos contratados.
 10. **Missão final SSS**: uma party de 4 heróis invocados derrota o Lorde Demônio e o jogo acaba.
 
-O ritmo exato (quanto ouro para cada etapa) fica para o balanceamento, já nos scripts em Lua.
+O alvo de ritmo é de 20 a 25 horas até o final, com a cervejaria entre 15 e 25 minutos. A alavanca é `C.curva_preco`, em `scripts/config.lua`; as medições estão em `docs/plano-obras.md`.
 
 ## Aventureiros e heróis
 

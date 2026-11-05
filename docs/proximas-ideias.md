@@ -9,12 +9,12 @@ Este documento descreve como o jogo deve ficar depois das próximas entregas. O 
 | Pesquisa da árvore | Pronta | `docs/referencia-arvore-mecanica.md` e `docs/referencia-arvore-tela.md` |
 | 1. Base | Pronta | Publicada |
 | 2. Produção | Pronta | Publicada |
-| 3. Árvores e receitas | Falta o rebalanceamento | Ramo `parte-1`, sem publicar |
-| 4. Vida na taverna | Não começou | Hoje há só o nó Quartos |
+| 3. Árvores e receitas | Pronta, com o rebalanceamento sem conferência final | Ramo `parte-1`, sem publicar |
+| 4. Vida na taverna | Pronta | Ramo `parte-1`, sem publicar |
 | 5. Estrutura | Não começou | Hoje a área de avaliação é só um nó não comprável |
 | Conferência final | Não começou | Robô, imagens, GDD e resumo |
 
-**Medido no ramo `parte-1`:** testes rápidos com 0 falhas em uma rodada. O robô termina um jogo novo em 10,5 horas de jogo; o alvo é de 20 a 25 horas. Em `tests/robo.lua`, há um ajuste sem commit, feito durante esse rebalanceamento.
+**Medido no ramo `parte-1`:** testes rápidos com 0 falhas em uma rodada; `garçom não entra no móvel` falhou uma vez em outra rodada e não voltou com a mesma semente. Cervejaria aos 24,5 min (alvo: 15 a 25). O limite de 3 rodadas do robô acabou antes de medir o ajuste final: as rodadas deram 9,6 h, 12,8 h e 33,2 h. Depois disso, o equipamento dos invocados saiu da curva de preços, e a estimativa por conta é de 21 a 23 h (alvo: 20 a 25). **Falta rodar o robô uma vez para confirmar**, já com a Parte 4.
 
 ## A direção do jogo
 
