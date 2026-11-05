@@ -2,6 +2,20 @@
 
 Este documento descreve como o jogo deve ficar depois das próximas entregas. O dono autorizou a produção contínua, sem pedir aprovação entre as partes.
 
+## Situação em 5 de novembro de 2026
+
+| Parte | Situação | Onde está |
+| --- | --- | --- |
+| Pesquisa da árvore | Pronta | `docs/referencia-arvore-mecanica.md` e `docs/referencia-arvore-tela.md` |
+| 1. Base | Pronta | Publicada |
+| 2. Produção | Pronta | Publicada |
+| 3. Árvores e receitas | Falta o rebalanceamento | Ramo `parte-1`, sem publicar |
+| 4. Vida na taverna | Não começou | Hoje há só o nó Quartos |
+| 5. Estrutura | Não começou | Hoje a área de avaliação é só um nó não comprável |
+| Conferência final | Não começou | Robô, imagens, GDD e resumo |
+
+**Medido no ramo `parte-1`:** testes rápidos com 0 falhas em uma rodada. O robô termina um jogo novo em 10,5 horas de jogo; o alvo é de 20 a 25 horas. Em `tests/robo.lua`, há um ajuste sem commit, feito durante esse rebalanceamento.
+
 ## A direção do jogo
 
 A Taverna é um jogo incremental de cliques: o jogador nunca controla personagens, só toca nas coisas e toma decisões. O prazer central deve ser a sensação de que tudo está quase terminado, até que algo novo se abre e o jogo ganha outra camada. Cada novidade precisa parecer uma recompensa, e não mais uma obrigação.

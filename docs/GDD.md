@@ -7,7 +7,7 @@
 Taverna de Aventureiros é um jogo incremental 2D em que uma taverna pequena cresce aos poucos até virar uma guilda de aventureiros, como as de anime, e a história termina com a derrota do Lorde Demônio.
 
 - **Gênero**: incremental/idle com leve gestão.
-- **Plataformas**: Android (APK/AAB) e desktop (Windows), com o mesmo código.
+- **Plataformas**: o foco é o PC (Windows). O Android está pausado: o processo continua no repositório, e o APK só é gerado à mão.
 - **Público**: jogadores casuais de celular e a comunidade de incrementais da Steam.
 - **Fantasia central**: ver uma taverna simples virar a guilda que salva o mundo.
 - **Ritmo**: o jogo é contínuo, sem runs: a taverna não abre e fecha em sessões, porque os aventureiros precisam sair em missão e voltar depois.
@@ -215,5 +215,5 @@ O jogo usa um motor em C++ com raylib e toda a lógica em scripts Lua, compilado
 - [x] Implementar as mecânicas deste documento (branch `jogo-3d`, para avaliação).
 - [ ] Testar no Windows e ajustar o balanceamento (o robô de teste é a primeira referência de ritmo).
 - [ ] Trocar a árvore pelas imagens de referência, quando chegarem.
-- [x] Versão Android (APK) na horizontal, igual à do PC, com o Modo Layout sem NPCs.
-- [ ] Testar o APK no aparelho (S24 FE).
+- [x] Versão Android (APK) na horizontal, igual à do PC (pausada).
+- [ ] Testar o APK no aparelho (S24 FE), se o Android voltar.

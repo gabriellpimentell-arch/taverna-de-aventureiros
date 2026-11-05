@@ -93,3 +93,7 @@ Pronto em `layout.lua` e `mundo.lua`; a Loja usa estas funções sem tocar em de
 - **Nós da cozinha**: Cortes nobres e Receitas de porco liberam 6 receitas; Temperos e Panela grande favorecem as outras. Combinação bloqueada diz o nó que falta, em vez de dizer que não existe.
 - **Sem total de receitas**: a lista mostra só o descoberto, como a árvore, sem "3 de 12".
 - **Bebida sem cervejaria**: receita de bebida vale só com a cozinha, para quem ordenar as salas de outro jeito.
+
+## Parte 3: situação
+- **Sumos sacerdotes**: prontos, no commit `7730d88`, sem decisões registradas aqui.
+- **Interrupção**: a parte parou por limite de uso durante o rebalanceamento. O alvo do robô é de 20 a 25 horas, e ele termina em 10,5. Falta também conferir as três telas novas em imagem.
